@@ -58,7 +58,7 @@ const HOURS_END_MIN = 50;
 const HOURS_DAY = "9am - 6:50pm";
 
 // Delays humanos (segundos)
-const DELAY_MIN = 10;
+const DELAY_MIN = 15;
 const DELAY_MAX = 60;
 
 // Tienda
@@ -77,7 +77,7 @@ const DELIVERY_DAYS = process.env.DELIVERY_DAYS || "8 días hábiles";
 const WARRANTY_DAYS = process.env.WARRANTY_DAYS || "30 días contra defectos de fábrica";
 
 // Catálogo
-const CATALOG_URL = process.env.CATALOG_URL || "https://lavacacr.com";
+const CATALOG_URL = process.env.CATALOG_URL || "https://www.lavacacr.com";
 
 // Persistencia
 const AUTH_FOLDER = path.join(process.cwd(), "auth_baileys");
@@ -329,6 +329,9 @@ function getSession(waId) {
       client_zone: null,
       delivery_method: null,
       sinpe_reference: null,
+      // Control de mensajes
+      saludo_enviado: false,
+      catalogo_enviado: false,
       last_activity: Date.now() 
     });
   }
@@ -348,6 +351,8 @@ function resetSession(session) {
   session.client_zone = null;
   session.delivery_method = null;
   session.sinpe_reference = null;
+  session.saludo_enviado = false;
+  session.catalogo_enviado = false;
   pendingQuotes.delete(session.waId);
 }
 
@@ -733,11 +738,29 @@ async function handleIncomingMessage(msg) {
   // ESTADO NEW - Mensajes iniciales
   // ============================================
 
-  // Saludo o pregunta por productos → Enviar catálogo
-  if (/^(hola|buenas|buenos|pura vida|hey|tienen|hay|busco|quiero|necesito)/.test(lower) || 
-      /faldas?|blusas?|vestidos?|jeans|pantalon|bolsos?|fajas?|ropa/.test(lower)) {
+  // Primer mensaje = SOLO saludo (espera respuesta)
+  if (!session.saludo_enviado && /^(hola|buenas|buenos|pura vida|hey)/.test(lower)) {
+    session.saludo_enviado = true;
+    saveDataToDisk();
     await sendTextWithTyping(waId, frase("saludos", waId));
+    return;
+  }
+
+  // Segundo mensaje o pregunta por productos = enviar catálogo (si no se ha enviado)
+  if (!session.catalogo_enviado && (
+      session.saludo_enviado || 
+      /tienen|hay|busco|quiero|necesito|faldas?|blusas?|vestidos?|jeans|pantalon|bolsos?|fajas?|ropa|catalogo|productos/.test(lower)
+  )) {
+    session.saludo_enviado = true;
+    session.catalogo_enviado = true;
+    saveDataToDisk();
     await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
+    return;
+  }
+
+  // Ya envió catálogo, cliente sigue preguntando cosas generales
+  if (session.catalogo_enviado && /tienen|hay|busco|quiero|necesito/.test(lower)) {
+    await sendTextWithTyping(waId, `Revisá el catálogo y si te gusta algo, dale al botón 'Me interesa' 🙌\n\n${CATALOG_URL}`);
     return;
   }
 
@@ -779,8 +802,15 @@ async function handleIncomingMessage(msg) {
     return; 
   }
 
-  // Fallback: Enviar catálogo
-  await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
+  // Fallback: Si no entendió y no ha enviado catálogo, enviarlo
+  if (!session.catalogo_enviado) {
+    session.catalogo_enviado = true;
+    saveDataToDisk();
+    await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
+  } else {
+    // Ya envió catálogo, dar respuesta genérica
+    await sendTextWithTyping(waId, "Si te interesa algo del catálogo, dale al botón 'Me interesa' y con gusto te ayudo 🙌");
+  }
 }
 
 /**
