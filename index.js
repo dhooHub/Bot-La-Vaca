@@ -1,0 +1,948 @@
+/** ============================
+ * TICO-bot Lite (Baileys)
+ * index.js — La Vaca CR - Ropa y Accesorios
+ *
+ * FLUJO:
+ * 1. Cliente saluda → Bot envía link catálogo
+ * 2. Cliente da "Me interesa" desde web → Llega producto+precio+código
+ * 3. Bot pregunta talla/color
+ * 4. Cliente responde → Bot: "Dame un toque"
+ * 5. Dueño confirma stock → Pregunta zona → Envío → SINPE → Venta
+ *
+ * ANTI-BANEO:
+ * ✅ Delay humano (10-60 segundos)
+ * ✅ Cola de mensajes (uno a la vez)
+ * ✅ Typing indicator
+ * ✅ Horario 9am - 6:50pm
+ * ✅ Variedad de frases
+ * 
+ * ============================ */
+
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const fs = require("fs");
+const path = require("path");
+const QRCode = require("qrcode");
+const pino = require("pino");
+
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+} = require("@whiskeysockets/baileys");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+const logger = pino({ level: "silent" });
+
+app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json());
+
+/**
+ ============================
+ CONFIGURACIÓN
+ ============================
+ */
+const PORT = process.env.PORT || 3000;
+const PANEL_PIN = process.env.PANEL_PIN || "1234";
+const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
+
+// Horario (Costa Rica UTC-6)
+const HOURS_START = 9;
+const HOURS_END_HOUR = 18;
+const HOURS_END_MIN = 50;
+const HOURS_DAY = "9am - 6:50pm";
+
+// Delays humanos (segundos)
+const DELAY_MIN = 10;
+const DELAY_MAX = 60;
+
+// Tienda
+const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
+const STORE_ADDRESS = process.env.STORE_ADDRESS || "";
+const MAPS_URL = process.env.MAPS_URL || "";
+
+// SINPE
+const SINPE_NUMBER = process.env.SINPE_NUMBER || "";
+const SINPE_NAME = process.env.SINPE_NAME || "";
+
+// Envíos
+const SHIPPING_GAM = process.env.SHIPPING_GAM || "₡2,500";
+const SHIPPING_RURAL = process.env.SHIPPING_RURAL || "₡3,500";
+const DELIVERY_DAYS = process.env.DELIVERY_DAYS || "8 días hábiles";
+const WARRANTY_DAYS = process.env.WARRANTY_DAYS || "30 días contra defectos de fábrica";
+
+// Catálogo
+const CATALOG_URL = process.env.CATALOG_URL || "https://lavacacr.com";
+
+// Persistencia
+const AUTH_FOLDER = path.join(process.cwd(), "auth_baileys");
+const DATA_FOLDER = process.cwd();
+
+/**
+ ============================
+ ESTADO GLOBAL
+ ============================
+ */
+let sock = null;
+let qrCode = null;
+let connectionStatus = "disconnected";
+let connectedPhone = "";
+let botPaused = false;
+
+// Cola de mensajes
+const messageQueue = [];
+let isProcessingQueue = false;
+
+const sessions = new Map();
+const profiles = new Map();
+const pendingQuotes = new Map();
+let chatHistory = [];
+const MAX_CHAT_HISTORY = 500;
+
+const account = {
+  metrics: {
+    chats_total: 0,
+    quotes_sent: 0,
+    intent_yes: 0,
+    intent_no: 0,
+    delivery_envio: 0,
+    delivery_recoger: 0,
+    sinpe_confirmed: 0,
+    estados_sent: 0,
+    mensajes_enviados: 0,
+  },
+};
+
+/**
+ ============================
+ HELPERS
+ ============================
+ */
+function hasPhysicalLocation() { return STORE_TYPE === "fisica_con_envios" || STORE_TYPE === "fisica_solo_recoger"; }
+function offersShipping() { return STORE_TYPE === "virtual" || STORE_TYPE === "fisica_con_envios"; }
+function offersPickup() { return STORE_TYPE === "fisica_con_envios" || STORE_TYPE === "fisica_solo_recoger"; }
+
+function normalizePhone(input) {
+  const d = String(input || "").replace(/[^\d]/g, "").replace(/@.*/, "");
+  if (d.length === 8) return "506" + d;
+  if (d.startsWith("506") && d.length === 11) return d;
+  return d;
+}
+
+function toJid(phone) { return normalizePhone(phone) + "@s.whatsapp.net"; }
+function fromJid(jid) { return jid ? jid.replace(/@.*/, "") : ""; }
+
+function formatPhone(waId) {
+  const d = normalizePhone(waId);
+  if (d.length === 11 && d.startsWith("506")) return `${d.slice(0, 3)} ${d.slice(3, 7)}-${d.slice(7)}`;
+  return waId;
+}
+
+function getCostaRicaTime() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const cr = new Date(utc - (6 * 60 * 60 * 1000));
+  return { hour: cr.getHours(), minute: cr.getMinutes() };
+}
+
+function isStoreOpen() {
+  const { hour, minute } = getCostaRicaTime();
+  if (hour < HOURS_START) return false;
+  if (hour > HOURS_END_HOUR) return false;
+  if (hour === HOURS_END_HOUR && minute >= HOURS_END_MIN) return false;
+  return true;
+}
+
+function norm(s = "") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function getHumanDelay() { return (Math.floor(Math.random() * (DELAY_MAX - DELAY_MIN + 1)) + DELAY_MIN) * 1000; }
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// Extraer precio de texto (ej: "₡11 000" → 11000)
+function extractPrice(text) {
+  const match = String(text).match(/₡?\s*([\d\s,\.]+)/);
+  if (match) {
+    return parseInt(match[1].replace(/[\s,\.]/g, '')) || 0;
+  }
+  return 0;
+}
+
+/**
+ ============================
+ PERSISTENCIA
+ ============================
+ */
+function saveDataToDisk() {
+  try {
+    fs.writeFileSync(path.join(DATA_FOLDER, "ticobot_data.json"), JSON.stringify({
+      account, botPaused,
+      profiles: Array.from(profiles.values()),
+      sessions: Array.from(sessions.values()),
+    }, null, 2));
+  } catch (e) { console.log("⚠️ Error guardando:", e.message); }
+}
+
+function loadDataFromDisk() {
+  try {
+    const file = path.join(DATA_FOLDER, "ticobot_data.json");
+    if (!fs.existsSync(file)) return;
+    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (data.account) Object.assign(account, data.account);
+    if (data.profiles) data.profiles.forEach(p => profiles.set(p.waId, p));
+    if (data.sessions) data.sessions.forEach(s => sessions.set(s.waId, s));
+    if (data.botPaused !== undefined) botPaused = data.botPaused;
+    console.log("📂 Datos cargados");
+  } catch (e) { console.log("⚠️ Error cargando:", e.message); }
+}
+
+setInterval(saveDataToDisk, 5 * 60 * 1000);
+
+/**
+ ============================
+ FRASES TICAS (VARIADAS)
+ ============================
+ */
+const FRASES = {
+  revisando: [
+    "Dame un toque, voy a revisar 👍",
+    "Dejame chequearlo, ya te digo 👌",
+    "Un momento, voy a fijarme 🙌",
+    "Ya te confirmo, dame un ratito 😊",
+    "Voy a revisar de una vez 👍",
+    "Permíteme un momento, lo verifico 🙌",
+    "Dame chance, ya lo busco 😊",
+    "Un segundito, lo reviso 👌",
+    "Ya miro y te cuento 🙌",
+    "Dejame ver qué hay, ya te digo 👍",
+  ],
+  saludos: [
+    "¡Hola! Pura vida 🙌 ¿En qué te ayudo?",
+    "¡Hola! Con gusto te atiendo 😊",
+    "¡Buenas! Pura vida 🙌",
+    "¡Hola! ¿Cómo estás? 😊",
+    "¡Qué tal! Bienvenid@ 🙌",
+    "¡Hola! Qué gusto saludarte 👋",
+    "¡Buenas! ¿En qué te puedo servir? 😊",
+    "¡Hola! Aquí estamos para ayudarte 🙌",
+    "¡Pura vida! ¿Qué ocupás? 😊",
+    "¡Hola! Bienvenid@ 🐄",
+  ],
+  catalogo: [
+    "Te paso el link con los productos disponibles para venta en línea. Si te gusta algo, le das click al botón 'Me interesa' 🙌",
+    "Aquí te dejo el catálogo con lo disponible. Si ves algo que te guste, dale al botón 'Me interesa' 😊",
+    "Te comparto el link de nuestros productos. Si algo te llama la atención, tocá 'Me interesa' 🙌",
+  ],
+  pedir_talla: [
+    "¿Qué talla, tamaño o color lo necesitás? 👕",
+    "¿En qué talla y color lo ocupás? 😊",
+    "¿Qué talla/color te gustaría? 👗",
+    "¿Me decís la talla y el color que buscás? 🙌",
+  ],
+  si_hay: [
+    "¡Sí lo tenemos disponible! 🎉",
+    "¡Qué dicha, sí hay! 🙌",
+    "¡Perfecto, lo tenemos! 😊",
+    "¡Sí está disponible! 🎉",
+    "¡Claro que sí, hay en stock! 🙌",
+  ],
+  confirmacion: [
+    "¡Buenísimo! 🙌", "¡Perfecto! 🎉", "¡Excelente! 👍", "¡Genial! 🙌",
+    "¡Dale! 😊", "¡Qué bien! 🎉", "¡Tuanis! 🙌", "¡Listo! 👍",
+  ],
+  no_quiere: [
+    "Con gusto 🙌 Si ves algo más en el catálogo, me avisás.",
+    "Está bien 🙌 Cualquier cosa aquí estamos.",
+    "No hay problema 👍 Si ocupás algo, me escribís.",
+    "Dale 🙌 Si te interesa otra cosa, con gusto.",
+    "Perfecto 🙌 Aquí estamos para cuando gustés.",
+  ],
+  no_hay: [
+    "No tenemos ese disponible en este momento 😔 ¿Querés ver otra opción en el catálogo?",
+    "Uy, ese no nos queda 🙌 Pero hay más opciones en el catálogo.",
+    "Qué lástima, no lo tenemos 😔 ¿Te interesa ver algo más?",
+    "Ese se nos agotó 😔 Revisá el catálogo por si hay algo similar.",
+  ],
+  pedir_zona: [
+    "¿De qué provincia y lugar nos escribís? 📍",
+    "¿De qué parte del país sos? 📍",
+    "Para calcular el envío, ¿de dónde sos? 📍",
+    "¿Me decís de qué zona sos? 📍",
+    "¿De dónde te lo enviaríamos? 📍",
+  ],
+  nocturno: [
+    "¡Hola! 🌙 Ya cerramos por hoy. Mañana a las 9am te atiendo con gusto 😊",
+    "Pura vida 🌙 Estamos fuera de horario. Te respondo mañana temprano 🙌",
+    "¡Buenas noches! 🌙 Nuestro horario es de 9am a 6:50pm. Mañana te ayudo 😊",
+    "Hola 🌙 Ya cerramos. Dejame tu consulta y mañana te confirmo 🙌",
+  ],
+  gracias: [
+    "¡Gracias a vos! 🙌", "¡Con mucho gusto! 😊", "¡Pura vida! 🙌",
+    "¡Gracias por la confianza! 💪", "¡Tuanis! 🙌", "¡Para servirte! 😊",
+  ],
+  espera_zona: [
+    "¡Anotado! 📝 Dame un momento para calcular el envío 🙌",
+    "Perfecto 📝 Ya reviso cuánto sale a tu zona 😊",
+    "Listo 📝 Dejame calcular el envío 🙌",
+  ],
+  espera_vendedor: [
+    "Ya estoy revisando, un momento 🙌",
+    "Dame chance, estoy verificando 😊",
+    "Un momento, ya te confirmo 🙌",
+  ],
+};
+
+const lastUsedFrase = new Map();
+function frase(tipo, sessionId = "global") {
+  const opciones = FRASES[tipo] || [""];
+  const key = `${tipo}_${sessionId}`;
+  const last = lastUsedFrase.get(key);
+  const disponibles = opciones.filter(f => f !== last);
+  const elegida = disponibles.length > 0 ? disponibles[Math.floor(Math.random() * disponibles.length)] : opciones[0];
+  lastUsedFrase.set(key, elegida);
+  return elegida;
+}
+
+/**
+ ============================
+ SESIONES Y PERFILES
+ ============================
+ */
+function getSession(waId) {
+  const id = normalizePhone(waId);
+  if (!sessions.has(id)) {
+    sessions.set(id, { 
+      waId: id, 
+      state: "NEW", 
+      // Producto (desde web)
+      producto: null,
+      precio: null,
+      codigo: null,
+      foto_url: null,
+      // Talla/color del cliente
+      talla_color: null,
+      // Envío
+      shipping_cost: null,
+      client_zone: null,
+      delivery_method: null,
+      sinpe_reference: null,
+      last_activity: Date.now() 
+    });
+  }
+  const s = sessions.get(id);
+  s.last_activity = Date.now();
+  return s;
+}
+
+function resetSession(session) {
+  session.state = "NEW"; 
+  session.producto = null;
+  session.precio = null;
+  session.codigo = null;
+  session.foto_url = null;
+  session.talla_color = null;
+  session.shipping_cost = null;
+  session.client_zone = null;
+  session.delivery_method = null;
+  session.sinpe_reference = null;
+  pendingQuotes.delete(session.waId);
+}
+
+function getProfile(waId) {
+  const id = normalizePhone(waId);
+  if (!profiles.has(id)) profiles.set(id, { waId: id, name: "", blocked: false, purchases: 0, created_at: new Date().toISOString() });
+  return profiles.get(id);
+}
+
+/**
+ ============================
+ HISTORIAL Y PENDIENTES
+ ============================
+ */
+function addToChatHistory(waId, direction, text, imageUrl = null) {
+  const entry = { 
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), 
+    waId: normalizePhone(waId), 
+    direction, 
+    text, 
+    imageUrl,
+    timestamp: new Date().toISOString() 
+  };
+  chatHistory.push(entry);
+  if (chatHistory.length > MAX_CHAT_HISTORY) chatHistory = chatHistory.slice(-MAX_CHAT_HISTORY);
+  io.emit("new_message", entry);
+  return entry;
+}
+
+function addPendingQuote(session) {
+  const quote = { 
+    waId: session.waId, 
+    producto: session.producto,
+    precio: session.precio,
+    codigo: session.codigo,
+    foto_url: session.foto_url,
+    talla_color: session.talla_color,
+    created_at: new Date().toISOString() 
+  };
+  pendingQuotes.set(session.waId, quote);
+  io.emit("new_pending", quote);
+}
+
+/**
+ ============================
+ DETECTAR MENSAJE DE LA WEB
+ ============================
+ */
+function parseWebMessage(text) {
+  // Detectar si viene de la web: "Estoy interesado/a en este producto"
+  if (!text.includes("interesado") || !text.includes("producto")) return null;
+  
+  const result = {
+    producto: null,
+    precio: null,
+    codigo: null,
+    foto_url: null,
+  };
+  
+  // Extraer nombre del producto (línea después de emoji 👗 o similar)
+  const productoMatch = text.match(/[👗🎽👕👖👜💼🧥]\s*(.+)/);
+  if (productoMatch) result.producto = productoMatch[1].trim();
+  
+  // Extraer precio
+  const precioMatch = text.match(/Precio:\s*₡?\s*([\d\s,\.]+)/i);
+  if (precioMatch) result.precio = parseInt(precioMatch[1].replace(/[\s,\.]/g, '')) || 0;
+  
+  // Extraer código
+  const codigoMatch = text.match(/Código:\s*(\w+)/i);
+  if (codigoMatch) result.codigo = codigoMatch[1].trim();
+  
+  // Extraer URL de foto
+  const fotoMatch = text.match(/(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp))/i);
+  if (fotoMatch) result.foto_url = fotoMatch[1];
+  
+  return result;
+}
+
+/**
+ ============================
+ BAILEYS - CONEXIÓN
+ ============================
+ */
+async function connectWhatsApp() {
+  connectionStatus = "connecting";
+  io.emit("connection_status", { status: connectionStatus });
+  if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+  const { version } = await fetchLatestBaileysVersion();
+
+  sock = makeWASocket({
+    version,
+    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+    logger,
+    printQRInTerminal: false,
+    browser: ["TICObot", "Chrome", "1.0.0"],
+    syncFullHistory: false,
+  });
+
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    if (qr) {
+      qrCode = await QRCode.toDataURL(qr);
+      connectionStatus = "qr";
+      io.emit("qr_code", { qr: qrCode });
+      io.emit("connection_status", { status: connectionStatus });
+      console.log("📱 QR listo");
+    }
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+      console.log("❌ Desconectado:", reason);
+      connectionStatus = "disconnected"; qrCode = null; connectedPhone = "";
+      io.emit("connection_status", { status: connectionStatus });
+      if (reason !== DisconnectReason.loggedOut) { setTimeout(connectWhatsApp, 3000); }
+      else { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); }
+    }
+    if (connection === "open") {
+      connectionStatus = "connected"; qrCode = null;
+      connectedPhone = sock.user?.id?.split(":")[0] || "";
+      io.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
+      console.log("✅ Conectado:", connectedPhone);
+    }
+  });
+
+  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (type !== "notify") return;
+    for (const msg of messages) {
+      if (msg.key.fromMe || msg.key.remoteJid?.endsWith("@g.us")) continue;
+      messageQueue.push(msg);
+      processQueue();
+    }
+  });
+}
+
+/**
+ ============================
+ COLA DE MENSAJES
+ ============================
+ */
+async function processQueue() {
+  if (isProcessingQueue || messageQueue.length === 0) return;
+  isProcessingQueue = true;
+  while (messageQueue.length > 0) {
+    const msg = messageQueue.shift();
+    try { await handleIncomingMessage(msg); } catch (e) { console.log("❌ Error:", e.message); }
+  }
+  isProcessingQueue = false;
+}
+
+/**
+ ============================
+ ENVIAR CON TYPING + DELAY
+ ============================
+ */
+async function sendTextWithTyping(waId, text) {
+  if (!sock || connectionStatus !== "connected") return false;
+  try {
+    const jid = toJid(waId);
+    const delay = getHumanDelay();
+    console.log(`⏳ Esperando ${Math.round(delay/1000)}s...`);
+    
+    await sock.sendPresenceUpdate("composing", jid);
+    await sleep(delay);
+    await sock.sendPresenceUpdate("paused", jid);
+    await sock.sendMessage(jid, { text });
+    
+    addToChatHistory(waId, "out", text);
+    account.metrics.mensajes_enviados += 1;
+    console.log(`📤 ${formatPhone(waId)}: ${text.slice(0, 50)}...`);
+    return true;
+  } catch (e) { console.log("❌ Error:", e.message); return false; }
+}
+
+async function sendTextDirect(waId, text) {
+  if (!sock || connectionStatus !== "connected") return false;
+  try {
+    const jid = toJid(waId);
+    await sock.sendPresenceUpdate("composing", jid);
+    await sleep(2000);
+    await sock.sendPresenceUpdate("paused", jid);
+    await sock.sendMessage(jid, { text });
+    addToChatHistory(waId, "out", text);
+    account.metrics.mensajes_enviados += 1;
+    return true;
+  } catch (e) { return false; }
+}
+
+async function sendButtons(waId, text, buttons) {
+  let msg = text + "\n\n";
+  buttons.forEach((b, i) => { msg += `${i + 1}. ${b.title}\n`; });
+  msg += "\nResponde con el número 👆";
+  return sendTextWithTyping(waId, msg);
+}
+
+/**
+ ============================
+ ESTADOS
+ ============================
+ */
+async function postStatus(imageBuffer, caption = "") {
+  if (!sock || connectionStatus !== "connected") return { success: false, message: "No conectado" };
+  try {
+    await sock.sendMessage("status@broadcast", { image: imageBuffer, caption });
+    account.metrics.estados_sent += 1;
+    saveDataToDisk();
+    return { success: true, message: "Estado publicado" };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+async function postStatusText(text) {
+  if (!sock || connectionStatus !== "connected") return { success: false, message: "No conectado" };
+  try {
+    await sock.sendMessage("status@broadcast", { text });
+    account.metrics.estados_sent += 1;
+    saveDataToDisk();
+    return { success: true, message: "Estado publicado" };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+/**
+ ============================
+ HANDLER MENSAJES
+ ============================
+ */
+async function handleIncomingMessage(msg) {
+  const waId = fromJid(msg.key.remoteJid);
+  const session = getSession(waId);
+  const profile = getProfile(waId);
+
+  let text = "";
+  if (msg.message?.conversation) text = msg.message.conversation;
+  else if (msg.message?.extendedTextMessage?.text) text = msg.message.extendedTextMessage.text;
+  else if (msg.message?.imageMessage?.caption) text = msg.message.imageMessage.caption;
+
+  addToChatHistory(waId, "in", text || "(mensaje)");
+  console.log(`📥 ${formatPhone(waId)}: ${text || "(mensaje)"}`);
+
+  if (profile.blocked) return;
+  if (botPaused) { console.log("⏸️ Bot pausado"); return; }
+
+  account.metrics.chats_total += 1;
+
+  // Fuera de horario
+  if (!isStoreOpen()) { 
+    await sendTextWithTyping(waId, frase("nocturno", waId)); 
+    return; 
+  }
+
+  // Normalizar respuestas numéricas
+  const numResp = text.trim();
+  if (numResp === "1") text = "si";
+  if (numResp === "2") text = "no";
+  const lower = norm(text);
+
+  // ============================================
+  // DETECTAR MENSAJE DESDE LA WEB ("Me interesa")
+  // ============================================
+  const webData = parseWebMessage(text);
+  if (webData && webData.codigo) {
+    // Guardar datos del producto
+    session.producto = webData.producto;
+    session.precio = webData.precio;
+    session.codigo = webData.codigo;
+    session.foto_url = webData.foto_url;
+    session.state = "ESPERANDO_TALLA";
+    
+    // Preguntar talla/color
+    await sendTextWithTyping(waId, frase("pedir_talla", waId));
+    return;
+  }
+
+  // ============================================
+  // MÁQUINA DE ESTADOS
+  // ============================================
+
+  // ESPERANDO_TALLA: Cliente debe decir talla/color
+  if (session.state === "ESPERANDO_TALLA") {
+    session.talla_color = text.trim();
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    
+    await sendTextWithTyping(waId, frase("revisando", waId));
+    addPendingQuote(session);
+    return;
+  }
+
+  // ESPERANDO_CONFIRMACION_VENDEDOR: Dueño debe confirmar
+  if (session.state === "ESPERANDO_CONFIRMACION_VENDEDOR") { 
+    await sendTextWithTyping(waId, frase("espera_vendedor", waId)); 
+    return; 
+  }
+
+  // ESPERANDO_ZONA: Cliente da su ubicación
+  if (session.state === "ESPERANDO_ZONA") {
+    session.client_zone = text.trim();
+    session.state = "ZONA_RECIBIDA";
+    io.emit("zone_received", { waId, zone: session.client_zone, precio: session.precio });
+    await sendTextWithTyping(waId, frase("espera_zona", waId));
+    return;
+  }
+
+  // ZONA_RECIBIDA: Esperando que dueño dé costo envío
+  if (session.state === "ZONA_RECIBIDA") { 
+    await sendTextWithTyping(waId, "Estoy calculando el envío, un momento 🙌"); 
+    return; 
+  }
+
+  // PRECIO_TOTAL_ENVIADO: Cliente decide si compra
+  if (session.state === "PRECIO_TOTAL_ENVIADO") {
+    if (lower === "si" || lower === "sí" || lower.includes("quiero") || lower === "1") {
+      account.metrics.intent_yes += 1;
+      if (offersShipping() && offersPickup()) {
+        await sendButtons(waId, `${frase("confirmacion", waId)}\n\n¿Cómo lo preferís?`, [{ title: "📦 Envío" }, { title: "🏪 Recoger" }]);
+        session.state = "PREGUNTANDO_METODO";
+      } else if (offersShipping()) {
+        session.delivery_method = "envio"; account.metrics.delivery_envio += 1;
+        await sendTextWithTyping(waId, `${frase("confirmacion", waId)}\n\nPasame tus datos:\n📍 Dirección completa\n📞 Teléfono`);
+        session.state = "PIDIENDO_DATOS";
+      } else {
+        session.delivery_method = "recoger"; account.metrics.delivery_recoger += 1;
+        await sendTextWithTyping(waId, `${frase("confirmacion", waId)}\n\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\nNombre y teléfono:`);
+        session.state = "PIDIENDO_DATOS";
+      }
+      saveDataToDisk(); return;
+    }
+    if (lower === "no" || lower.includes("gracias") || lower === "2") {
+      account.metrics.intent_no += 1;
+      await sendTextWithTyping(waId, frase("no_quiere", waId));
+      resetSession(session); saveDataToDisk(); return;
+    }
+    return;
+  }
+
+  // PREGUNTANDO_METODO: Envío o recoger
+  if (session.state === "PREGUNTANDO_METODO") {
+    if (lower.includes("envio") || lower.includes("envío") || lower === "1") {
+      session.delivery_method = "envio"; account.metrics.delivery_envio += 1;
+      await sendTextWithTyping(waId, `${frase("confirmacion", waId)}\n\nDatos:\n📍 Dirección completa\n📞 Teléfono`);
+      session.state = "PIDIENDO_DATOS";
+    } else if (lower.includes("recoger") || lower.includes("tienda") || lower === "2") {
+      session.delivery_method = "recoger"; account.metrics.delivery_recoger += 1;
+      await sendTextWithTyping(waId, `${frase("confirmacion", waId)}\n\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\nNombre y teléfono:`);
+      session.state = "PIDIENDO_DATOS";
+    }
+    saveDataToDisk(); return;
+  }
+
+  // PIDIENDO_DATOS: Cliente da dirección/teléfono
+  if (session.state === "PIDIENDO_DATOS") {
+    const price = session.precio || 0;
+    const shipping = session.delivery_method === "envio" ? (session.shipping_cost || 0) : 0;
+    const total = price + shipping;
+    session.sinpe_reference = waId.slice(-4) + Date.now().toString(36).slice(-4).toUpperCase();
+    
+    await sendTextWithTyping(waId, 
+      `${frase("confirmacion", waId)}\n\n` +
+      `📦 Producto: ${session.producto || 'Artículo'}\n` +
+      `👕 Talla/Color: ${session.talla_color || '-'}\n` +
+      `💰 Total: ₡${total.toLocaleString()}\n\n` +
+      `SINPE: ${SINPE_NUMBER}\nA nombre de: ${SINPE_NAME}\nRef: ${session.sinpe_reference}\n\n` +
+      `Cuando pagues, mandame el comprobante 🧾`
+    );
+    session.state = "ESPERANDO_SINPE";
+    io.emit("sale_pending", { waId, total, reference: session.sinpe_reference, method: session.delivery_method, producto: session.producto, talla: session.talla_color });
+    saveDataToDisk(); return;
+  }
+
+  // ESPERANDO_SINPE: Cliente debe enviar comprobante
+  if (session.state === "ESPERANDO_SINPE") {
+    if (msg.message?.imageMessage) {
+      await sendTextWithTyping(waId, "¡Recibí tu comprobante! 🙌 Verificando...");
+      io.emit("sinpe_received", { waId, reference: session.sinpe_reference });
+      return;
+    }
+    if (lower.includes("pague") || lower.includes("listo") || lower.includes("ya")) {
+      await sendTextWithTyping(waId, "Mandame la foto del comprobante 🧾📸");
+    }
+    return;
+  }
+
+  // ============================================
+  // ESTADO NEW - Mensajes iniciales
+  // ============================================
+
+  // Saludo o pregunta por productos → Enviar catálogo
+  if (/^(hola|buenas|buenos|pura vida|hey|tienen|hay|busco|quiero|necesito)/.test(lower) || 
+      /faldas?|blusas?|vestidos?|jeans|pantalon|bolsos?|fajas?|ropa/.test(lower)) {
+    await sendTextWithTyping(waId, frase("saludos", waId));
+    await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
+    return;
+  }
+
+  // Agradecimiento
+  if (/^(gracias|muchas gracias)/.test(lower)) { 
+    await sendTextWithTyping(waId, frase("gracias", waId)); 
+    return; 
+  }
+
+  // FAQs
+  if (/envio|entregan|envían/.test(lower)) {
+    if (offersShipping()) await sendTextWithTyping(waId, `Sí hacemos envíos 🚚\n\nGAM: ${SHIPPING_GAM}\nRural: ${SHIPPING_RURAL}\n${DELIVERY_DAYS}`);
+    else await sendTextWithTyping(waId, `Solo retiro 🏪\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}`);
+    return;
+  }
+
+  if (/horario|hora|atienden/.test(lower)) { 
+    await sendTextWithTyping(waId, `Horario: ${HOURS_DAY} 🙌`); 
+    return; 
+  }
+  
+  if (/garantia|devolucion|cambio/.test(lower)) { 
+    await sendTextWithTyping(waId, `Garantía: ${WARRANTY_DAYS} 🙌`); 
+    return; 
+  }
+  
+  if (/ubicacion|donde|direccion/.test(lower) && hasPhysicalLocation()) { 
+    await sendTextWithTyping(waId, `📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}${MAPS_URL ? `\n🗺️ ${MAPS_URL}` : ""}`); 
+    return; 
+  }
+
+  if (/tallas?|medidas?|tamanos?/.test(lower)) {
+    await sendTextWithTyping(waId, "Manejamos tallas: S, M, L, XL, XXL y Talla Plus 👕\n\nRevisá el catálogo y si te gusta algo, dale 'Me interesa' 🙌");
+    return;
+  }
+
+  if (/sinpe|pago|como pago/.test(lower)) { 
+    await sendTextWithTyping(waId, `SINPE Móvil 💳\n${SINPE_NUMBER}\nA nombre de: ${SINPE_NAME}`); 
+    return; 
+  }
+
+  // Fallback: Enviar catálogo
+  await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
+}
+
+/**
+ ============================
+ ACCIONES PANEL
+ ============================
+ */
+async function executeAction(clientWaId, actionType, data = {}) {
+  const session = getSession(clientWaId);
+
+  // SI_HAY: Confirmar stock → preguntar zona
+  if (actionType === "SI_HAY") {
+    session.state = "ESPERANDO_ZONA";
+    pendingQuotes.delete(clientWaId);
+    account.metrics.quotes_sent += 1;
+    
+    await sendTextWithTyping(clientWaId, `${frase("si_hay", clientWaId)}\n\n${frase("pedir_zona", clientWaId)}`);
+    saveDataToDisk();
+    io.emit("pending_resolved", { waId: clientWaId });
+    return { success: true, message: "Stock confirmado, esperando zona" };
+  }
+
+  // ENVIO: Dueño da costo de envío
+  if (actionType === "ENVIO") {
+    const shipping = Number(data.shipping || 0);
+    session.shipping_cost = shipping;
+    session.state = "PRECIO_TOTAL_ENVIADO";
+    const price = session.precio || 0;
+    const total = price + shipping;
+
+    let msg = `${frase("confirmacion", clientWaId)}\n\n`;
+    msg += `📦 ${session.producto || 'Artículo'}\n`;
+    msg += `👕 ${session.talla_color || '-'}\n\n`;
+    
+    if (offersShipping() && offersPickup()) {
+      msg += `📦 Con envío: ₡${total.toLocaleString()}\n🏪 Recoger en tienda: ₡${price.toLocaleString()}\n\n¿Qué preferís?`;
+    } else {
+      msg += `💰 Total: ₡${total.toLocaleString()}\n\n¿Lo querés?`;
+    }
+    await sendButtons(clientWaId, msg, [{ title: "¡Lo quiero!" }, { title: "No, gracias" }]);
+    saveDataToDisk();
+    return { success: true, message: `Envío ₡${shipping.toLocaleString()} enviado` };
+  }
+
+  // NO_HAY: No hay stock
+  if (actionType === "NO_HAY") {
+    await sendTextWithTyping(clientWaId, frase("no_hay", clientWaId) + `\n\n${CATALOG_URL}`);
+    resetSession(session);
+    pendingQuotes.delete(clientWaId);
+    io.emit("pending_resolved", { waId: clientWaId });
+    saveDataToDisk();
+    return { success: true, message: "No hay enviado" };
+  }
+
+  // PAGADO: Confirmar pago
+  if (actionType === "PAGADO") {
+    session.state = "PAGO_CONFIRMADO";
+    account.metrics.sinpe_confirmed += 1;
+    const profile = getProfile(clientWaId);
+    profile.purchases = (profile.purchases || 0) + 1;
+    
+    const deliveryMsg = session.delivery_method === "envio" 
+      ? `Se enviará pronto 🚚 Tiempo estimado: ${DELIVERY_DAYS}` 
+      : `Podés recogerlo en:\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}`;
+    
+    await sendTextWithTyping(clientWaId, 
+      `¡Pago confirmado! 🎉 ${frase("gracias", clientWaId)}\n\n` +
+      `📦 ${session.producto || 'Artículo'}\n` +
+      `👕 ${session.talla_color || '-'}\n\n` +
+      `${deliveryMsg}`
+    );
+    resetSession(session);
+    saveDataToDisk();
+    return { success: true, message: "Pago confirmado" };
+  }
+
+  // MENSAJE: Mensaje libre
+  if (actionType === "MENSAJE") {
+    const texto = String(data.texto || "").trim();
+    if (!texto) return { success: false, message: "Vacío" };
+    await sendTextDirect(clientWaId, texto);
+    return { success: true, message: "Enviado" };
+  }
+
+  // NO_ENVIO_ZONA: No hacemos envío a esa zona
+  if (actionType === "NO_ENVIO_ZONA") {
+    const price = session.precio || 0;
+    session.shipping_cost = 0;
+    session.state = "PRECIO_TOTAL_ENVIADO";
+    
+    if (offersPickup()) {
+      await sendTextWithTyping(clientWaId, 
+        `No hacemos envíos a ${session.client_zone || "esa zona"} 😔\n\n` +
+        `Pero podés recoger en tienda:\n🏪 ${STORE_ADDRESS}\n💰 ₡${price.toLocaleString()}\n\n¿Te interesa?`
+      );
+    } else { 
+      await sendTextWithTyping(clientWaId, "No hacemos envíos a esa zona 😔"); 
+      resetSession(session); 
+    }
+    saveDataToDisk();
+    return { success: true, message: "Sin envío" };
+  }
+
+  return { success: false, message: "Acción desconocida" };
+}
+
+/**
+ ============================
+ SOCKET.IO
+ ============================
+ */
+io.on("connection", (socket) => {
+  let authenticated = false;
+
+  socket.on("auth", (pin) => {
+    if (pin === PANEL_PIN) {
+      authenticated = true;
+      socket.emit("auth_success", { storeName: STORE_NAME });
+      socket.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
+      socket.emit("bot_status", { paused: botPaused });
+      if (qrCode) socket.emit("qr_code", { qr: qrCode });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), history: chatHistory.slice(-50), contacts: Array.from(profiles.values()), metrics: account.metrics });
+    } else socket.emit("auth_error", "PIN incorrecto");
+  });
+
+  socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
+
+  socket.on("connect_whatsapp", () => { if (connectionStatus === "connected") { socket.emit("connection_status", { status: "connected", phone: connectedPhone }); return; } connectWhatsApp(); });
+  socket.on("disconnect_whatsapp", async () => { if (sock) await sock.logout(); sock = null; connectionStatus = "disconnected"; qrCode = null; connectedPhone = ""; io.emit("connection_status", { status: connectionStatus }); });
+  socket.on("toggle_bot", () => { botPaused = !botPaused; saveDataToDisk(); io.emit("bot_status", { paused: botPaused }); console.log(botPaused ? "⏸️ PAUSADO" : "▶️ ACTIVO"); });
+  socket.on("action", async (data) => { const result = await executeAction(data.clientWaId, data.actionType, data.payload || {}); socket.emit("action_result", result); });
+  socket.on("post_status", async (data) => { let result; if (data.textOnly && data.text) result = await postStatusText(data.text); else if (data.image) result = await postStatus(Buffer.from(data.image, "base64"), data.caption || ""); else result = { success: false, message: "Sin contenido" }; socket.emit("status_result", result); });
+  socket.on("get_contacts", () => { socket.emit("contacts_list", { contacts: Array.from(profiles.values()) }); });
+  socket.on("update_contact", (data) => { if (!data.waId) return; const p = getProfile(data.waId); if (data.name !== undefined) p.name = data.name; if (data.blocked !== undefined) p.blocked = data.blocked; saveDataToDisk(); socket.emit("contact_updated", p); });
+  socket.on("delete_chats", (data) => { if (!data.waId) return; const n = normalizePhone(data.waId); chatHistory = chatHistory.filter(m => m.waId !== n); sessions.delete(n); pendingQuotes.delete(n); saveDataToDisk(); io.emit("chats_deleted", { waId: n }); });
+  socket.on("get_metrics", () => { socket.emit("metrics", { metrics: account.metrics }); });
+});
+
+/**
+ ============================
+ ENDPOINTS
+ ============================
+ */
+app.get("/health", (req, res) => res.send("OK"));
+app.get("/status", (req, res) => res.json({ connection: connectionStatus, phone: connectedPhone, botPaused, storeOpen: isStoreOpen(), metrics: account.metrics }));
+
+/**
+ ============================
+ INICIAR
+ ============================
+ */
+server.listen(PORT, () => {
+  loadDataFromDisk();
+  console.log(`
+╔═══════════════════════════════════════════════════╗
+║  🐄 TICO-bot - La Vaca CR                         ║
+╠═══════════════════════════════════════════════════╣
+║  🕒 Horario: ${HOURS_DAY.padEnd(36)}║
+║  ⏱️ Delay: ${(DELAY_MIN + "-" + DELAY_MAX + " seg").padEnd(37)}║
+║  🌐 Catálogo: ${CATALOG_URL.slice(0,33).padEnd(34)}║
+║  📱 Panel: http://localhost:${PORT}/                  ║
+╚═══════════════════════════════════════════════════╝
+  `);
+  if (fs.existsSync(path.join(AUTH_FOLDER, "creds.json"))) { console.log("🔄 Reconectando..."); connectWhatsApp(); }
+});
