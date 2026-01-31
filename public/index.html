@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1a1f25">
+  <title>TICObot 🐄</title>
+  <style>
+    :root { --primary: #1a1f25; --primary-light: #25D366; --bg: #f0f2f5; --card: #fff; --text: #1a1f25; --text-muted: #667781; --danger: #E74C3C; --success: #25D366; --warning: #F39C12; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    #login { position: fixed; inset: 0; background: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
+    #login.hidden { display: none; }
+    .login-title { color: #fff; font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .login-subtitle { color: rgba(255,255,255,0.6); margin-bottom: 2rem; }
+    .pin-box { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .pin-digit { width: 55px; height: 65px; font-size: 1.8rem; text-align: center; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; outline: none; }
+    .pin-digit:focus { border-color: var(--primary-light); }
+    .login-btn { background: var(--primary-light); color: #fff; border: none; padding: 1rem 3rem; font-size: 1.1rem; font-weight: 600; border-radius: 25px; cursor: pointer; }
+    .login-btn:disabled { opacity: 0.5; }
+    .login-error { color: #FF6B6B; margin-top: 1rem; }
+
+    header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+    .header-title { font-size: 1.1rem; font-weight: 700; }
+    .header-right { display: flex; align-items: center; gap: 0.5rem; }
+    .status-badge { padding: 0.25rem 0.6rem; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
+    .status-badge.connected { background: var(--success); }
+    .status-badge.disconnected { background: var(--danger); }
+    .status-badge.qr, .status-badge.connecting { background: var(--warning); }
+    .bot-toggle { cursor: pointer; border: none; padding: 0.25rem 0.6rem; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
+    .bot-toggle.active { background: var(--success); color: #fff; }
+    .bot-toggle.paused { background: var(--warning); color: #fff; }
+
+    .tabs { display: flex; background: var(--primary); padding: 0.4rem; gap: 0.25rem; }
+    .tab { flex: 1; padding: 0.5rem 0.3rem; text-align: center; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); font-size: 0.65rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
+    .tab.active { background: #fff; color: var(--primary); }
+    .tab-icon { font-size: 1.1rem; }
+    .tab-badge { background: var(--danger); color: #fff; font-size: 0.55rem; padding: 0.1rem 0.35rem; border-radius: 8px; }
+
+    .content { display: none; padding: 1rem; padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
+    .content.active { display: block; }
+
+    .card { background: var(--card); border-radius: 16px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .card-phone { font-weight: 700; color: var(--primary-light); }
+    .card-time { font-size: 0.8rem; color: var(--text-muted); }
+    .card-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 0.5rem; cursor: pointer; }
+    .card-details { background: var(--bg); padding: 0.6rem; border-radius: 10px; font-size: 0.9rem; margin-bottom: 0.8rem; }
+    .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+    .btn { padding: 0.8rem; border: none; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .btn-primary { background: var(--primary-light); color: #fff; grid-column: span 2; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: var(--bg); color: var(--text); }
+    .btn-info { background: #2d9cdb; color: #fff; }
+
+    .qr-section { text-align: center; padding: 1.5rem; }
+    .qr-container { background: #fff; padding: 1rem; border-radius: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .qr-container img { width: 220px; height: 220px; }
+    .qr-instructions { color: var(--text-muted); margin-top: 1rem; font-size: 0.9rem; line-height: 1.5; }
+    .connect-btn { background: var(--primary-light); color: #fff; border: none; padding: 0.9rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 25px; cursor: pointer; margin-top: 1rem; }
+    .connected-info { background: var(--card); padding: 1.5rem; border-radius: 16px; text-align: center; }
+    .connected-phone { font-size: 1.4rem; font-weight: 700; color: var(--primary-light); margin: 0.5rem 0; }
+    .disconnect-btn { background: var(--danger); color: #fff; border: none; padding: 0.7rem 1.5rem; font-size: 0.9rem; border-radius: 20px; cursor: pointer; margin-top: 1rem; }
+
+    .status-section { background: var(--card); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; }
+    .status-title { font-weight: 700; margin-bottom: 1rem; }
+    .status-preview { width: 100%; height: 200px; background: var(--bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; overflow: hidden; }
+    .status-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .status-preview-placeholder { color: var(--text-muted); font-size: 3rem; }
+    .status-input { width: 100%; padding: 0.8rem; border: 2px solid var(--bg); border-radius: 12px; font-size: 1rem; margin-bottom: 0.8rem; }
+    .status-input:focus { border-color: var(--primary-light); outline: none; }
+    .status-actions { display: flex; gap: 0.5rem; }
+    .status-actions .btn { flex: 1; }
+    .file-input { display: none; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 200; opacity: 0; visibility: hidden; transition: all 0.3s; }
+    .modal-overlay.active { opacity: 1; visibility: visible; }
+    .modal { background: var(--card); width: 100%; max-width: 500px; border-radius: 20px 20px 0 0; padding: 1.5rem; transform: translateY(100%); transition: transform 0.3s; max-height: 85vh; overflow-y: auto; }
+    .modal-overlay.active .modal { transform: translateY(0); }
+    .modal-handle { width: 40px; height: 5px; background: rgba(0,0,0,0.2); border-radius: 5px; margin: 0 auto 1rem; }
+    .modal-title { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
+    .modal-client { background: var(--bg); padding: 0.7rem; border-radius: 10px; text-align: center; font-weight: 600; margin-bottom: 1rem; }
+    .price-input { width: 100%; padding: 1rem; font-size: 1.5rem; font-weight: 700; border: 2px solid var(--bg); border-radius: 12px; text-align: center; }
+    .price-input:focus { border-color: var(--primary-light); outline: none; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .modal-actions .btn { flex: 1; }
+    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0; }
+    .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .quick-price:hover { background: var(--primary-light); color: #fff; }
+
+    .chat-view { position: fixed; inset: 0; background: var(--bg); z-index: 150; display: none; flex-direction: column; }
+    .chat-view.active { display: flex; }
+    .chat-header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 1rem; }
+    .chat-back { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; }
+    .chat-info { flex: 1; }
+    .chat-name { font-weight: 700; }
+    .chat-delete { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer; }
+    .chat-messages { flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
+    .message { max-width: 80%; padding: 0.7rem 1rem; border-radius: 14px; font-size: 0.9rem; }
+    .message.in { background: var(--card); align-self: flex-start; }
+    .message.out { background: #d4f4eb; align-self: flex-end; }
+    .message-time { font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
+    .message-image { max-width: 100%; border-radius: 8px; margin-bottom: 0.3rem; cursor: pointer; }
+    .chat-input-area { background: var(--card); padding: 0.6rem; display: flex; gap: 0.4rem; }
+    .chat-input { flex: 1; padding: 0.7rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1rem; outline: none; }
+    .chat-send { width: 44px; height: 44px; background: var(--primary-light); border: none; border-radius: 50%; color: #fff; font-size: 1.2rem; cursor: pointer; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+    .empty-icon { font-size: 4rem; margin-bottom: 0.5rem; opacity: 0.5; }
+    .empty-title { font-weight: 600; color: var(--text); }
+
+    .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--card); padding: 0.8rem 1.2rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); opacity: 0; transition: all 0.3s; z-index: 300; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { background: var(--success); color: #fff; }
+    .toast.error { background: var(--danger); color: #fff; }
+
+    .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
+    .metric-card { background: var(--card); padding: 1.2rem; border-radius: 14px; text-align: center; }
+    .metric-value { font-size: 1.8rem; font-weight: 800; color: var(--primary-light); }
+    .metric-label { font-size: 0.8rem; color: var(--text-muted); }
+
+    .image-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 250; display: none; align-items: center; justify-content: center; }
+    .image-viewer.active { display: flex; }
+    .image-viewer img { max-width: 95%; max-height: 90vh; }
+    .image-viewer-close { position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.2); border: none; color: #fff; font-size: 1.5rem; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; }
+
+    .store-hours { background: var(--card); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; text-align: center; }
+    .store-hours .open { color: var(--success); font-weight: 700; }
+    .store-hours .closed { color: var(--danger); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <div class="login-title">🐄 TICObot</div>
+    <p class="login-subtitle">Ingresá tu PIN</p>
+    <div class="pin-box">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+    </div>
+    <button class="login-btn" id="loginBtn" disabled>Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+
+  <div id="app" style="display:none;">
+    <header>
+      <div class="header-title">🐄 TICObot</div>
+      <div class="header-right">
+        <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
+        <span class="status-badge disconnected" id="statusBadge">Off</span>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="whatsapp"><span class="tab-icon">📱</span>WhatsApp</button>
+      <button class="tab" data-tab="pending"><span class="tab-icon">📥</span>Inbox<span class="tab-badge" id="pendingBadge" style="display:none;">0</span></button>
+      <button class="tab" data-tab="chats"><span class="tab-icon">💬</span>Chats</button>
+      <button class="tab" data-tab="status"><span class="tab-icon">🟢</span>Estados</button>
+      <button class="tab" data-tab="metrics"><span class="tab-icon">📊</span>Stats</button>
+    </div>
+
+    <div class="content active" id="tab-whatsapp">
+      <div class="store-hours">🕒 Horario: 9am - 6:50pm | <span id="storeStatus" class="open">Abierto</span></div>
+      <div id="qrSection" class="qr-section">
+        <div id="qrPlaceholder"><h3>Conectar WhatsApp</h3><p class="qr-instructions">Vinculá tu WhatsApp para empezar</p><button class="connect-btn" id="connectBtn">📱 Conectar</button></div>
+        <div id="qrDisplay" style="display:none;"><div class="qr-container"><img id="qrImage" src="" alt="QR"></div><p class="qr-instructions">1. Abrí WhatsApp<br>2. ⋮ → Dispositivos vinculados<br>3. Escaneá el QR</p></div>
+        <div id="connectedDisplay" style="display:none;" class="connected-info"><div>✅ Conectado</div><div class="connected-phone" id="connectedPhone">+506</div><p style="color:var(--text-muted);margin-top:0.5rem;">El bot responde automáticamente.<br>Podés pausarlo para atender manual.</p><button class="disconnect-btn" id="disconnectBtn">🚪 Desconectar</button></div>
+      </div>
+    </div>
+
+    <div class="content" id="tab-pending">
+      <div id="pendingList"></div>
+      <div class="empty-state" id="emptyPending" style="display:none;"><div class="empty-icon">✅</div><div class="empty-title">¡Todo al día!</div></div>
+    </div>
+
+    <div class="content" id="tab-chats">
+      <div id="chatList"></div>
+      <div class="empty-state" id="emptyChats" style="display:none;"><div class="empty-icon">💬</div><div class="empty-title">Sin chats</div></div>
+    </div>
+
+    <div class="content" id="tab-status">
+      <div class="status-section">
+        <div class="status-title">🟢 Publicar Estado</div>
+        <div class="status-preview" id="statusPreview"><span class="status-preview-placeholder">📷</span></div>
+        <input type="file" id="statusFileInput" class="file-input" accept="image/*">
+        <input type="text" class="status-input" id="statusCaption" placeholder="Texto del estado...">
+        <div class="status-actions">
+          <button class="btn btn-secondary" id="statusSelectImage">📷 Imagen</button>
+          <button class="btn btn-primary" id="statusPublish">🟢 Publicar</button>
+        </div>
+      </div>
+      <div class="card"><p style="text-align:center;color:var(--text-muted);">Los estados duran 24 horas.<br>También podés subirlos desde tu celular.</p></div>
+    </div>
+
+    <div class="content" id="tab-metrics">
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-value" id="mChats">0</div><div class="metric-label">💬 Chats</div></div>
+        <div class="metric-card"><div class="metric-value" id="mMensajes">0</div><div class="metric-label">📤 Mensajes</div></div>
+        <div class="metric-card"><div class="metric-value" id="mQuotes">0</div><div class="metric-label">📋 Cotizaciones</div></div>
+        <div class="metric-card"><div class="metric-value" id="mSales">0</div><div class="metric-label">✅ Ventas</div></div>
+        <div class="metric-card"><div class="metric-value" id="mEstados">0</div><div class="metric-label">🟢 Estados</div></div>
+        <div class="metric-card"><div class="metric-value" id="mEnvios">0</div><div class="metric-label">📦 Envíos</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="priceModal">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">💰 Dar Precio</div>
+      <div class="modal-client" id="modalClient">506</div>
+      <input type="number" class="price-input" id="inputPrice" placeholder="₡0" inputmode="numeric">
+      <div class="quick-prices">
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=5000">₡5,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=7500">₡7,500</button>
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=10000">₡10,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=15000">₡15,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=20000">₡20,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputPrice').value=25000">₡25,000</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('priceModal').classList.remove('active')">Cancelar</button>
+        <button class="btn btn-primary" id="modalSendPrice">Enviar ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="shippingModal">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">📦 Costo Envío</div>
+      <div class="modal-client" id="shippingClient">506</div>
+      <div style="background:var(--bg);padding:0.8rem;border-radius:10px;margin-bottom:1rem;"><div style="font-size:0.85rem;color:var(--text-muted);">📍 Zona:</div><div style="font-weight:600;" id="shippingZone">-</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-muted);">💰 Precio producto:</div><div style="font-weight:600;" id="shippingPrecio">₡0</div></div>
+      <input type="number" class="price-input" id="inputShipping" placeholder="₡0" inputmode="numeric">
+      <div class="quick-prices">
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=2000">₡2,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=2500">₡2,500</button>
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=3000">₡3,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=3500">₡3,500</button>
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=4000">₡4,000</button>
+        <button class="quick-price" onclick="document.getElementById('inputShipping').value=5000">₡5,000</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('shippingModal').classList.remove('active')">Cancelar</button>
+        <button class="btn btn-primary" id="modalSendShipping">Enviar ✓</button>
+      </div>
+      <button class="btn btn-danger" style="width:100%;margin-top:0.5rem;" id="modalNoShipping">🚫 No envío a esa zona</button>
+    </div>
+  </div>
+
+  <div class="chat-view" id="chatView">
+    <div class="chat-header">
+      <button class="chat-back" id="chatBack">←</button>
+      <div class="chat-info"><div class="chat-name" id="chatName">Cliente</div></div>
+      <button class="chat-delete" id="chatDelete">🗑️</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-area">
+      <input type="text" class="chat-input" id="chatInput" placeholder="Mensaje...">
+      <button class="chat-send" id="chatSend">➤</button>
+    </div>
+  </div>
+
+  <div class="image-viewer" id="imageViewer">
+    <button class="image-viewer-close" onclick="document.getElementById('imageViewer').classList.remove('active')">✕</button>
+    <img id="imageViewerImg" src="">
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    let socket, pending=[], chats={}, currentClient=null, currentChat=null, currentShippingClient=null, statusImageBase64=null, botPaused=false;
+    const $=id=>document.getElementById(id), $$=sel=>document.querySelectorAll(sel);
+
+    const pins=$$('.pin-digit');
+    pins.forEach((p,i)=>{p.addEventListener('input',e=>{if(e.target.value&&i<3)pins[i+1].focus();$('loginBtn').disabled=getPin().length!==4;});p.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!e.target.value&&i>0)pins[i-1].focus();});});
+    function getPin(){return Array.from(pins).map(p=>p.value).join('');}
+
+    function connect(pin){
+      socket=io();
+      socket.on('connect',()=>socket.emit('auth',pin));
+      socket.on('auth_success',()=>{localStorage.setItem('ticobot_pin',pin);$('login').classList.add('hidden');$('app').style.display='block';toast('✅ Conectado','success');});
+      socket.on('auth_error',msg=>{$('loginError').textContent=msg;pins.forEach(p=>p.value='');pins[0].focus();localStorage.removeItem('ticobot_pin');});
+      
+      socket.on('connection_status',data=>{
+        const b=$('statusBadge');b.className='status-badge '+data.status;
+        b.textContent=data.status==='connected'?'✅ On':data.status==='qr'?'📱 QR':'❌ Off';
+        if(data.status==='connected'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='block';if(data.phone)$('connectedPhone').textContent='+'+data.phone.slice(0,3)+' '+data.phone.slice(3,7)+'-'+data.phone.slice(7);}
+        else if(data.status==='qr'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='block';$('connectedDisplay').style.display='none';}
+        else{$('qrPlaceholder').style.display='block';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='none';}
+      });
+
+      socket.on('bot_status',data=>{
+        botPaused=data.paused;
+        const btn=$('botToggle');
+        if(botPaused){btn.textContent='⏸️ Pausado';btn.className='bot-toggle paused';}
+        else{btn.textContent='▶️ Bot';btn.className='bot-toggle active';}
+      });
+
+      socket.on('qr_code',data=>{$('qrImage').src=data.qr;});
+      socket.on('init_data',data=>{pending=data.pending||[];chats={};(data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});updateMetrics(data.metrics);renderPending();renderChatList();});
+      socket.on('new_pending',item=>{pending.unshift(item);renderPending();toast('📥 Nueva consulta','success');});
+      socket.on('pending_resolved',data=>{pending=pending.filter(p=>p.waId!==data.waId);renderPending();});
+      socket.on('new_message',msg=>{if(!chats[msg.waId])chats[msg.waId]=[];chats[msg.waId].push(msg);renderChatList();if(currentChat===msg.waId)renderChatMessages();});
+      socket.on('zone_received',data=>{currentShippingClient=data.waId;$('shippingClient').textContent=formatPhone(data.waId);$('shippingZone').textContent=data.zone;$('shippingPrecio').textContent='₡'+(data.precio||0).toLocaleString();$('inputShipping').value='';$('shippingModal').classList.add('active');toast('📍 '+data.zone,'success');});
+      socket.on('action_result',r=>{toast(r.success?'✅ '+r.message:'❌ '+r.message,r.success?'success':'error');$('priceModal').classList.remove('active');$('shippingModal').classList.remove('active');});
+      socket.on('status_result',r=>{toast(r.success?'🟢 Publicado':'❌ '+r.message,r.success?'success':'error');if(r.success){$('statusPreview').innerHTML='<span class="status-preview-placeholder">📷</span>';$('statusCaption').value='';statusImageBase64=null;}});
+      socket.on('metrics',data=>{updateMetrics(data.metrics);});
+      socket.on('chats_deleted',data=>{delete chats[data.waId];renderChatList();if(currentChat===data.waId){$('chatView').classList.remove('active');currentChat=null;}});
+    }
+
+    $('loginBtn').onclick=()=>connect(getPin());
+    const savedPin=localStorage.getItem('ticobot_pin');if(savedPin)connect(savedPin);else pins[0].focus();
+
+    $$('.tab').forEach(tab=>{tab.onclick=()=>{$$('.tab').forEach(t=>t.classList.remove('active'));$$('.content').forEach(c=>c.classList.remove('active'));tab.classList.add('active');$('tab-'+tab.dataset.tab).classList.add('active');if(tab.dataset.tab==='metrics')socket.emit('get_metrics');};});
+
+    function formatPhone(w){const d=String(w).replace(/\D/g,'');return d.length===11&&d.startsWith('506')?d.slice(0,3)+' '+d.slice(3,7)+'-'+d.slice(7):w;}
+    function timeAgo(d){if(!d)return'';const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'ahora';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
+    function escapeHtml(t){return String(t||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+    function toast(msg,type=''){const t=$('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.classList.remove('show'),3000);}
+    function updateMetrics(m){if(!m)return;$('mChats').textContent=m.chats_total||0;$('mMensajes').textContent=m.mensajes_enviados||0;$('mQuotes').textContent=m.quotes_sent||0;$('mSales').textContent=m.sinpe_confirmed||0;$('mEstados').textContent=m.estados_sent||0;$('mEnvios').textContent=m.delivery_envio||0;}
+
+    // Actualizar estado de tienda
+    function updateStoreStatus(){const now=new Date();const utc=now.getTime()+(now.getTimezoneOffset()*60000);const cr=new Date(utc-(6*60*60*1000));const h=cr.getHours(),min=cr.getMinutes();const open=h>=9&&(h<18||(h===18&&min<50));$('storeStatus').textContent=open?'Abierto':'Cerrado';$('storeStatus').className=open?'open':'closed';}
+    updateStoreStatus();setInterval(updateStoreStatus,60000);
+
+    function renderPending(){
+      const list=$('pendingList');
+      if(pending.length===0){list.innerHTML='';$('emptyPending').style.display='block';$('pendingBadge').style.display='none';return;}
+      $('emptyPending').style.display='none';$('pendingBadge').style.display='inline';$('pendingBadge').textContent=pending.length;
+      list.innerHTML=pending.map(p=>`<div class="card"><div class="card-header"><span class="card-phone">📱 ${formatPhone(p.waId)}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${p.foto_url?`<img class="card-image" src="${p.foto_url}" onclick="viewImage(this.src)">`:''}}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong><br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}</div><div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY')">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY')">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div></div>`).join('');
+    }
+
+    function renderChatList(){
+      const list=$('chatList'),ids=Object.keys(chats).sort((a,b)=>{const la=chats[a][chats[a].length-1],lb=chats[b][chats[b].length-1];return new Date(lb?.timestamp||0)-new Date(la?.timestamp||0);});
+      if(ids.length===0){list.innerHTML='';$('emptyChats').style.display='block';return;}
+      $('emptyChats').style.display='none';
+      list.innerHTML=ids.slice(0,50).map(waId=>{const msgs=chats[waId],last=msgs[msgs.length-1];return`<div class="card" style="padding:0.8rem;cursor:pointer;" onclick="openChat('${waId}')"><div style="display:flex;align-items:center;gap:0.8rem;"><div style="width:45px;height:45px;border-radius:50%;background:var(--primary-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">${waId.slice(-2)}</div><div style="flex:1;"><div style="font-weight:600;">${formatPhone(waId)}</div><div style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml((last?.text||'').slice(0,40))}</div></div><span style="font-size:0.75rem;color:var(--text-muted);">${timeAgo(last?.timestamp)}</span></div></div>`;}).join('');
+    }
+
+    function openChat(waId){currentChat=waId;$('chatName').textContent=formatPhone(waId);$('chatView').classList.add('active');renderChatMessages();}
+    function renderChatMessages(){const msgs=chats[currentChat]||[];$('chatMessages').innerHTML=msgs.map(m=>`<div class="message ${m.direction}">${m.image?`<img class="message-image" src="data:image/jpeg;base64,${m.image}" onclick="viewImage(this.src)">`:''}><div>${escapeHtml(m.text)}</div><div class="message-time">${new Date(m.timestamp).toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}
+    $('chatBack').onclick=()=>{$('chatView').classList.remove('active');currentChat=null;};
+    $('chatSend').onclick=()=>{const t=$('chatInput').value.trim();if(!t||!currentChat)return;socket.emit('action',{clientWaId:currentChat,actionType:'MENSAJE',payload:{texto:t}});$('chatInput').value='';};
+    $('chatInput').onkeypress=e=>{if(e.key==='Enter')$('chatSend').click();};
+    $('chatDelete').onclick=()=>{if(currentChat&&confirm('¿Borrar chat?'))socket.emit('delete_chats',{waId:currentChat});};
+
+    function openPriceModal(waId){currentClient=waId;$('modalClient').textContent=formatPhone(waId);$('inputPrice').value='';$('priceModal').classList.add('active');}
+    $('modalSendPrice').onclick=()=>{const p=parseInt($('inputPrice').value)||0;if(p<100){toast('⚠️ Precio inválido','error');return;}socket.emit('action',{clientWaId:currentClient,actionType:'PRECIO',payload:{price:p}});};
+    $('modalSendShipping').onclick=()=>{const s=parseInt($('inputShipping').value)||0;if(s<100){toast('⚠️ Envío inválido','error');return;}socket.emit('action',{clientWaId:currentShippingClient,actionType:'ENVIO',payload:{shipping:s}});};
+    $('modalNoShipping').onclick=()=>{socket.emit('action',{clientWaId:currentShippingClient,actionType:'NO_ENVIO_ZONA'});$('shippingModal').classList.remove('active');};
+
+    function sendAction(waId,type){if(confirm('¿Confirmar?'))socket.emit('action',{clientWaId:waId,actionType:type});}
+    function viewImage(src){$('imageViewerImg').src=src;$('imageViewer').classList.add('active');}
+
+    $('connectBtn').onclick=()=>socket.emit('connect_whatsapp');
+    $('disconnectBtn').onclick=()=>{if(confirm('¿Desconectar?'))socket.emit('disconnect_whatsapp');};
+    $('botToggle').onclick=()=>{socket.emit('toggle_bot');};
+
+    $('statusSelectImage').onclick=()=>$('statusFileInput').click();
+    $('statusFileInput').onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{statusImageBase64=ev.target.result.split(',')[1];$('statusPreview').innerHTML=`<img src="${ev.target.result}">`;};reader.readAsDataURL(file);};
+    $('statusPublish').onclick=()=>{const caption=$('statusCaption').value.trim();if(!statusImageBase64&&!caption){toast('⚠️ Agregá imagen o texto','error');return;}socket.emit('post_status',statusImageBase64?{image:statusImageBase64,caption}:{textOnly:true,text:caption});};
+
+    $$('.modal-overlay').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('active');});
+  </script>
+</body>
+</html>
