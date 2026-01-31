@@ -10,11 +10,12 @@
  * 5. Dueño confirma stock → Pregunta zona → Envío → SINPE → Venta
  *
  * ANTI-BANEO:
- * ✅ Delay humano (10-60 segundos)
+ * ✅ Delay humano (15-60 segundos)
  * ✅ Cola de mensajes (uno a la vez)
  * ✅ Typing indicator
  * ✅ Horario 9am - 6:50pm
  * ✅ Variedad de frases
+ * ✅ IA para preguntas fuera del flujo
  * 
  * ============================ */
 
@@ -50,6 +51,9 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const PANEL_PIN = process.env.PANEL_PIN || "1234";
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
+
+// OpenAI
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 // Horario (Costa Rica UTC-6)
 const HOURS_START = 9;
@@ -115,6 +119,7 @@ const account = {
     sinpe_confirmed: 0,
     estados_sent: 0,
     mensajes_enviados: 0,
+    ia_calls: 0,
   },
 };
 
@@ -169,6 +174,102 @@ function extractPrice(text) {
     return parseInt(match[1].replace(/[\s,\.]/g, '')) || 0;
   }
   return 0;
+}
+
+/**
+ ============================
+ INTELIGENCIA ARTIFICIAL (OpenAI)
+ ============================
+ */
+const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de ropa y accesorios para damas ubicada en Heredia, Costa Rica.
+
+INFORMACIÓN DE LA TIENDA:
+- Nombre: La Vaca CR
+- Ubicación: Heredia centro, 200 metros sur de Correos de Costa Rica
+- Horario: Lunes a Sábado 9:00am - 7:00pm, Domingo 10:00am - 6:00pm
+- Teléfono tienda: 2237-3335
+- WhatsApp: +506 6483-6565
+- Catálogo online: www.lavacacr.com
+
+MÉTODOS DE PAGO:
+- SINPE Móvil (preferido)
+- Efectivo en tienda
+- NO aceptamos tarjetas de crédito/débito
+
+ENVÍOS:
+- Sí hacemos envíos a todo el país
+- GAM (Gran Área Metropolitana): ₡2,500
+- Zona rural: ₡3,500
+- Tiempo de entrega: 3-5 días hábiles
+
+TALLAS DISPONIBLES:
+- S, M, L, XL, XXL
+- Talla Plus disponible en algunos estilos
+
+SISTEMA DE APARTADOS:
+- Sí hacemos apartados
+- Apartás con la cuarta parte (1/4) del precio total
+- Tenés 2 meses para completar el pago y retirar
+- El apartado se hace en tienda o por SINPE
+
+POLÍTICAS:
+- Cambios: 8 días después de la compra, con factura, sin usar
+- No hacemos devoluciones de dinero, solo cambios
+- Garantía: 30 días contra defectos de fábrica
+
+ESTILO DE RESPUESTA:
+- Respondé como tico/costarricense, amigable y cercano
+- Usá emojis con moderación (1-2 por mensaje)
+- Respuestas cortas y directas (máximo 2-3 oraciones)
+- Si no sabés algo, decí que pueden consultar en tienda o por teléfono
+- NUNCA inventes información
+- Si preguntan por un producto específico, deciles que revisen el catálogo en www.lavacacr.com`;
+
+async function askAI(userMessage, conversationHistory = []) {
+  if (!OPENAI_API_KEY) {
+    console.log("⚠️ No hay API Key de OpenAI configurada");
+    return null;
+  }
+
+  try {
+    const messages = [
+      { role: "system", content: STORE_CONTEXT },
+      ...conversationHistory.slice(-4), // Últimos 4 mensajes para contexto
+      { role: "user", content: userMessage }
+    ];
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: messages,
+        max_tokens: 150,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      console.log("❌ Error OpenAI:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content?.trim();
+    
+    if (aiResponse) {
+      console.log("🤖 IA respondió:", aiResponse.slice(0, 50) + "...");
+      account.metrics.ia_calls = (account.metrics.ia_calls || 0) + 1;
+    }
+    
+    return aiResponse;
+  } catch (error) {
+    console.log("❌ Error IA:", error.message);
+    return null;
+  }
 }
 
 /**
@@ -802,14 +903,39 @@ async function handleIncomingMessage(msg) {
     return; 
   }
 
-  // Fallback: Si no entendió y no ha enviado catálogo, enviarlo
+  // Apartados
+  if (/apartado|apartar|aparto|reservar|reserva/.test(lower)) {
+    await sendTextWithTyping(waId, "¡Sí hacemos apartados! 🙌\n\nApartás con la cuarta parte (1/4) del precio y tenés 2 meses para completar el pago y retirar.");
+    return;
+  }
+
+  // Tarjeta
+  if (/tarjeta|credito|débito|debito|visa|mastercard/.test(lower)) {
+    await sendTextWithTyping(waId, "Por el momento solo aceptamos SINPE Móvil y efectivo 🙌 No manejamos tarjetas.");
+    return;
+  }
+
+  // Cambios/devoluciones
+  if (/cambio|devolucion|devolver|cambiar/.test(lower)) {
+    await sendTextWithTyping(waId, "Tenés 8 días para cambios, con factura y sin usar 🙌 No hacemos devoluciones de dinero, solo cambios.");
+    return;
+  }
+
+  // Fallback: Si no entendió, usar IA
   if (!session.catalogo_enviado) {
+    // Primera vez - enviar catálogo
     session.catalogo_enviado = true;
     saveDataToDisk();
     await sendTextWithTyping(waId, `${frase("catalogo", waId)}\n\n${CATALOG_URL}`);
   } else {
-    // Ya envió catálogo, dar respuesta genérica
-    await sendTextWithTyping(waId, "Si te interesa algo del catálogo, dale al botón 'Me interesa' y con gusto te ayudo 🙌");
+    // Ya envió catálogo - usar IA para responder
+    const aiResponse = await askAI(text);
+    if (aiResponse) {
+      await sendTextWithTyping(waId, aiResponse);
+    } else {
+      // Si IA falla, respuesta genérica
+      await sendTextWithTyping(waId, "Si tenés alguna duda, podés llamarnos al 2237-3335 o visitarnos en tienda 🙌");
+    }
   }
 }
 
