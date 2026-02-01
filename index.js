@@ -1,6 +1,3 @@
-dex · JS
-Copiar
-
 /** ============================
  * TICO-bot Lite (Baileys)
  * index.js — La Vaca CR - Ropa y Accesorios
