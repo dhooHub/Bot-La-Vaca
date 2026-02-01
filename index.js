@@ -1,3 +1,6 @@
+dex · JS
+Copiar
+
 /** ============================
  * TICO-bot Lite (Baileys)
  * index.js — La Vaca CR - Ropa y Accesorios
@@ -511,10 +514,13 @@ function parseWebMessage(text) {
     precio: null,
     codigo: null,
     foto_url: null,
+    talla: null,
+    color: null,
+    tamano: null,
   };
   
-  // Extraer nombre del producto (línea después de emoji 👗 o similar)
-  const productoMatch = text.match(/[👗🎽👕👖👜💼🧥]\s*(.+)/);
+  // Extraer nombre del producto
+  const productoMatch = text.match(/^([^\n]+)\nPrecio:/m);
   if (productoMatch) result.producto = productoMatch[1].trim();
   
   // Extraer precio
@@ -528,6 +534,18 @@ function parseWebMessage(text) {
   // Extraer URL de foto
   const fotoMatch = text.match(/(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp))/i);
   if (fotoMatch) result.foto_url = fotoMatch[1];
+  
+  // Extraer Talla
+  const tallaMatch = text.match(/Talla:\s*(.+)/i);
+  if (tallaMatch) result.talla = tallaMatch[1].trim();
+  
+  // Extraer Color
+  const colorMatch = text.match(/Color:\s*(.+)/i);
+  if (colorMatch) result.color = colorMatch[1].trim();
+  
+  // Extraer Tamaño
+  const tamanoMatch = text.match(/Tamaño:\s*(.+)/i);
+  if (tamanoMatch) result.tamano = tamanoMatch[1].trim();
   
   return result;
 }
@@ -720,9 +738,25 @@ async function handleIncomingMessage(msg) {
     session.precio = webData.precio;
     session.codigo = webData.codigo;
     session.foto_url = webData.foto_url;
-    session.state = "ESPERANDO_TALLA";
     
-    // Preguntar talla/color
+    // Armar detalles de talla/color/tamaño si vienen
+    let detalles = [];
+    if (webData.talla) detalles.push(`Talla: ${webData.talla}`);
+    if (webData.color) detalles.push(`Color: ${webData.color}`);
+    if (webData.tamano) detalles.push(`Tamaño: ${webData.tamano}`);
+    
+    // Si ya vienen los detalles, saltar la pregunta
+    if (detalles.length > 0) {
+      session.talla_color = detalles.join(", ");
+      session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+      
+      await sendTextWithTyping(waId, frase("revisando", waId));
+      addPendingQuote(session);
+      return;
+    }
+    
+    // Si NO vienen detalles, preguntar talla/color
+    session.state = "ESPERANDO_TALLA";
     await sendTextWithTyping(waId, frase("pedir_talla", waId));
     return;
   }
