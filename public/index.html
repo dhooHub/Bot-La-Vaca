@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#1a1f25">
-  <title>TICObot 🐄</title>
+  <title>La Vaca - Bot 🐄</title>
   <style>
     :root { --primary: #1a1f25; --primary-light: #25D366; --bg: #f0f2f5; --card: #fff; --text: #1a1f25; --text-muted: #667781; --danger: #E74C3C; --success: #25D366; --warning: #F39C12; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -91,6 +91,22 @@
     .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
     .quick-price:hover { background: var(--primary-light); color: #fff; }
 
+    .search-box { margin-bottom: 1rem; }
+    .search-input { width: 100%; padding: 0.8rem 1rem; border: 2px solid var(--bg); border-radius: 12px; font-size: 1rem; background: var(--card); }
+    .search-input:focus { border-color: var(--primary-light); outline: none; }
+    .contact-card { background: var(--card); border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .contact-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary-light); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 1.1rem; }
+    .contact-info { flex: 1; }
+    .contact-name { font-weight: 600; margin-bottom: 0.2rem; }
+    .contact-phone { font-size: 0.85rem; color: var(--text-muted); }
+    .contact-meta { font-size: 0.75rem; color: var(--text-muted); }
+    .contact-actions { display: flex; gap: 0.5rem; }
+    .contact-btn { padding: 0.5rem 0.8rem; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+    .contact-btn-chat { background: var(--primary-light); color: #fff; }
+    .contact-btn-block { background: var(--danger); color: #fff; }
+    .contact-blocked { opacity: 0.5; }
+    .contact-blocked .contact-avatar { background: var(--danger); }
+
     .chat-view { position: fixed; inset: 0; background: var(--bg); z-index: 150; display: none; flex-direction: column; }
     .chat-view.active { display: flex; }
     .chat-header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 1rem; }
@@ -159,6 +175,7 @@
       <button class="tab active" data-tab="whatsapp"><span class="tab-icon">📱</span>WhatsApp</button>
       <button class="tab" data-tab="pending"><span class="tab-icon">📥</span>Inbox<span class="tab-badge" id="pendingBadge" style="display:none;">0</span></button>
       <button class="tab" data-tab="chats"><span class="tab-icon">💬</span>Chats</button>
+      <button class="tab" data-tab="contacts"><span class="tab-icon">👥</span>Contactos</button>
       <button class="tab" data-tab="status"><span class="tab-icon">🟢</span>Estados</button>
       <button class="tab" data-tab="metrics"><span class="tab-icon">📊</span>Stats</button>
     </div>
@@ -180,6 +197,15 @@
     <div class="content" id="tab-chats">
       <div id="chatList"></div>
       <div class="empty-state" id="emptyChats" style="display:none;"><div class="empty-icon">💬</div><div class="empty-title">Sin chats</div></div>
+    </div>
+
+    <div class="content" id="tab-contacts">
+      <div class="search-box" style="display:flex;gap:0.5rem;">
+        <input type="text" id="contactSearch" placeholder="🔍 Buscar contacto..." class="search-input" style="flex:1;">
+        <button class="btn btn-primary" style="padding:0.8rem 1rem;" onclick="openAddContact()">➕</button>
+      </div>
+      <div id="contactList"></div>
+      <div class="empty-state" id="emptyContacts" style="display:none;"><div class="empty-icon">👥</div><div class="empty-title">Sin contactos</div></div>
     </div>
 
     <div class="content" id="tab-status">
@@ -252,6 +278,33 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="addContactModal">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">➕ Agregar Contacto</div>
+      <input type="text" class="price-input" id="inputContactPhone" placeholder="Número (ej: 88887777)" inputmode="tel" style="font-size:1.1rem;margin-bottom:0.8rem;">
+      <input type="text" class="price-input" id="inputContactName" placeholder="Nombre (opcional)" style="font-size:1.1rem;">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('addContactModal').classList.remove('active')">Cancelar</button>
+        <button class="btn btn-primary" id="modalAddContact">Agregar ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="editContactModal">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">✏️ Editar Contacto</div>
+      <div class="modal-client" id="editContactPhone">506</div>
+      <input type="text" class="price-input" id="inputEditName" placeholder="Nombre" style="font-size:1.1rem;">
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('editContactModal').classList.remove('active')">Cancelar</button>
+        <button class="btn btn-primary" id="modalSaveContact">Guardar ✓</button>
+      </div>
+      <button class="btn btn-danger" style="width:100%;margin-top:0.5rem;" id="modalDeleteContact">🗑️ Eliminar contacto</button>
+    </div>
+  </div>
+
   <div class="chat-view" id="chatView">
     <div class="chat-header">
       <button class="chat-back" id="chatBack">←</button>
@@ -303,7 +356,11 @@
       });
 
       socket.on('qr_code',data=>{$('qrImage').src=data.qr;});
-      socket.on('init_data',data=>{pending=data.pending||[];chats={};(data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});updateMetrics(data.metrics);renderPending();renderChatList();});
+      socket.on('init_data',data=>{pending=data.pending||[];chats={};(data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});contacts=data.contacts||[];updateMetrics(data.metrics);renderPending();renderChatList();renderContacts();});
+      socket.on('contacts_list',data=>{contacts=data.contacts||[];renderContacts();});
+      socket.on('contact_updated',data=>{const idx=contacts.findIndex(c=>c.waId===data.contact.waId);if(idx>=0)contacts[idx]=data.contact;else contacts.push(data.contact);renderContacts();toast('✅ Contacto actualizado','success');});
+      socket.on('contact_added',data=>{contacts.push(data.contact);renderContacts();toast('✅ Contacto agregado','success');});
+      socket.on('contact_deleted',data=>{contacts=contacts.filter(c=>c.waId!==data.waId);renderContacts();toast('🗑️ Contacto eliminado','success');});
       socket.on('new_pending',item=>{pending.unshift(item);renderPending();toast('📥 Nueva consulta','success');});
       socket.on('pending_resolved',data=>{pending=pending.filter(p=>p.waId!==data.waId);renderPending();});
       socket.on('new_message',msg=>{if(!chats[msg.waId])chats[msg.waId]=[];chats[msg.waId].push(msg);renderChatList();if(currentChat===msg.waId)renderChatMessages();});
@@ -317,7 +374,7 @@
     $('loginBtn').onclick=()=>connect(getPin());
     const savedPin=localStorage.getItem('ticobot_pin');if(savedPin)connect(savedPin);else pins[0].focus();
 
-    $$('.tab').forEach(tab=>{tab.onclick=()=>{$$('.tab').forEach(t=>t.classList.remove('active'));$$('.content').forEach(c=>c.classList.remove('active'));tab.classList.add('active');$('tab-'+tab.dataset.tab).classList.add('active');if(tab.dataset.tab==='metrics')socket.emit('get_metrics');};});
+    $$('.tab').forEach(tab=>{tab.onclick=()=>{$$('.tab').forEach(t=>t.classList.remove('active'));$$('.content').forEach(c=>c.classList.remove('active'));tab.classList.add('active');$('tab-'+tab.dataset.tab).classList.add('active');if(tab.dataset.tab==='metrics')socket.emit('get_metrics');if(tab.dataset.tab==='contacts')socket.emit('get_contacts');};});
 
     function formatPhone(w){const d=String(w).replace(/\D/g,'');return d.length===11&&d.startsWith('506')?d.slice(0,3)+' '+d.slice(3,7)+'-'+d.slice(7):w;}
     function timeAgo(d){if(!d)return'';const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'ahora';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
@@ -354,6 +411,82 @@
     $('modalSendPrice').onclick=()=>{const p=parseInt($('inputPrice').value)||0;if(p<100){toast('⚠️ Precio inválido','error');return;}socket.emit('action',{clientWaId:currentClient,actionType:'PRECIO',payload:{price:p}});};
     $('modalSendShipping').onclick=()=>{const s=parseInt($('inputShipping').value)||0;if(s<100){toast('⚠️ Envío inválido','error');return;}socket.emit('action',{clientWaId:currentShippingClient,actionType:'ENVIO',payload:{shipping:s}});};
     $('modalNoShipping').onclick=()=>{socket.emit('action',{clientWaId:currentShippingClient,actionType:'NO_ENVIO_ZONA'});$('shippingModal').classList.remove('active');};
+
+    // CONTACTOS
+    let contacts = [];
+    let editingContact = null;
+    
+    function renderContacts(filter=''){
+      const list=$('contactList');
+      const filtered = filter ? contacts.filter(c => 
+        c.waId.includes(filter) || (c.name||'').toLowerCase().includes(filter.toLowerCase())
+      ) : contacts;
+      
+      if(filtered.length===0){list.innerHTML='';$('emptyContacts').style.display='block';return;}
+      $('emptyContacts').style.display='none';
+      
+      list.innerHTML=filtered.map(c=>`
+        <div class="contact-card ${c.blocked?'contact-blocked':''}" onclick="openEditContact('${c.waId}')">
+          <div class="contact-avatar">${(c.name||c.waId).slice(-2).toUpperCase()}</div>
+          <div class="contact-info">
+            <div class="contact-name">${escapeHtml(c.name)||formatPhone(c.waId)}</div>
+            <div class="contact-phone">${formatPhone(c.waId)}</div>
+            <div class="contact-meta">🛒 ${c.purchases||0} compras · ${timeAgo(c.created_at)}</div>
+          </div>
+          <div class="contact-actions" onclick="event.stopPropagation()">
+            <button class="contact-btn contact-btn-chat" onclick="openChat('${c.waId}')">💬</button>
+            <button class="contact-btn contact-btn-block" onclick="toggleBlock('${c.waId}',${!c.blocked})">${c.blocked?'🔓':'🚫'}</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function openAddContact(){
+      $('inputContactPhone').value='';
+      $('inputContactName').value='';
+      $('addContactModal').classList.add('active');
+    }
+    
+    function openEditContact(waId){
+      const c = contacts.find(x=>x.waId===waId);
+      if(!c)return;
+      editingContact = waId;
+      $('editContactPhone').textContent = formatPhone(waId);
+      $('inputEditName').value = c.name || '';
+      $('editContactModal').classList.add('active');
+    }
+    
+    function toggleBlock(waId, block){
+      if(confirm(block?'¿Bloquear contacto?':'¿Desbloquear contacto?')){
+        socket.emit('toggle_block',{waId,block});
+      }
+    }
+    
+    $('contactSearch').oninput=e=>renderContacts(e.target.value);
+    
+    $('modalAddContact').onclick=()=>{
+      let phone = $('inputContactPhone').value.replace(/\D/g,'');
+      if(phone.length===8) phone = '506' + phone;
+      if(phone.length!==11){toast('⚠️ Número inválido','error');return;}
+      const name = $('inputContactName').value.trim();
+      socket.emit('add_contact',{waId:phone,name});
+      $('addContactModal').classList.remove('active');
+    };
+    
+    $('modalSaveContact').onclick=()=>{
+      if(!editingContact)return;
+      const name = $('inputEditName').value.trim();
+      socket.emit('update_contact',{waId:editingContact,name});
+      $('editContactModal').classList.remove('active');
+    };
+    
+    $('modalDeleteContact').onclick=()=>{
+      if(!editingContact)return;
+      if(confirm('¿Eliminar este contacto?')){
+        socket.emit('delete_contact',{waId:editingContact});
+        $('editContactModal').classList.remove('active');
+      }
+    };
 
     function sendAction(waId,type){if(confirm('¿Confirmar?'))socket.emit('action',{clientWaId:waId,actionType:type});}
     function viewImage(src){$('imageViewerImg').src=src;$('imageViewer').classList.add('active');}
