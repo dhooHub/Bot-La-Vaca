@@ -1,3 +1,6 @@
+ex · JS
+Copiar
+
 /** ============================
  * TICO-bot Lite (Baileys)
  * index.js — La Vaca CR - Ropa y Accesorios
@@ -309,16 +312,16 @@ setInterval(saveDataToDisk, 5 * 60 * 1000);
  */
 const FRASES = {
   revisando: [
-    "Dame un toque, voy a revisar 👍",
-    "Dejame chequearlo, ya te digo 👌",
-    "Un momento, voy a fijarme 🙌",
-    "Ya te confirmo, dame un ratito 😊",
+    "Dame un toque, voy a revisar si lo tenemos disponible 👍",
+    "Dejame chequearlo, ya te confirmo 👌",
+    "Un momento, voy a fijarme si queda en stock 🙌",
+    "Ya te confirmo disponibilidad, dame un ratito 😊",
     "Voy a revisar de una vez 👍",
     "Permíteme un momento, lo verifico 🙌",
     "Dame chance, ya lo busco 😊",
-    "Un segundito, lo reviso 👌",
+    "Un segundito, reviso si lo tenemos 👌",
     "Ya miro y te cuento 🙌",
-    "Dejame ver qué hay, ya te digo 👍",
+    "Dejame ver si queda, ya te digo 👍",
   ],
   saludos: [
     "¡Hola! Pura vida 🙌 ¿En qué te ayudo?",
@@ -393,6 +396,14 @@ const FRASES = {
     "Ya estoy revisando, un momento 🙌",
     "Dame chance, estoy verificando 😊",
     "Un momento, ya te confirmo 🙌",
+  ],
+  // ✅ NUEVO: Saludo cuando llega interés desde la web
+  saludo_interes: [
+    "¡Hola! Pura vida 🙌 Qué buena elección. Dejame revisar si lo tenemos disponible, ya te confirmo 😊",
+    "¡Hola! 🙌 Vi que te interesa este producto. Voy a verificar disponibilidad, un momento 😊",
+    "¡Buenas! 🐄 Excelente gusto. Dame un toque para confirmar si lo tenemos 👍",
+    "¡Hola! Pura vida 🙌 Ya vi tu consulta. Dejame revisar stock y te confirmo rapidito 😊",
+    "¡Qué tal! 🙌 Buena elección. Voy a fijarme si está disponible, ya te aviso 👍",
   ],
 };
 
@@ -528,9 +539,10 @@ function parseWebMessage(text) {
   const codigoMatch = text.match(/Código:\s*(\w+)/i);
   if (codigoMatch) result.codigo = codigoMatch[1].trim();
   
-  // Extraer URL de foto
-  const fotoMatch = text.match(/(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp))/i);
-  if (fotoMatch) result.foto_url = fotoMatch[1];
+  // ✅ FIX: Construir URL de imagen directa desde el código
+  if (result.codigo) {
+    result.foto_url = `${CATALOG_URL}/img/${result.codigo}.webp`;
+  }
   
   // Extraer Talla
   const tallaMatch = text.match(/Talla:\s*(.+)/i);
@@ -726,7 +738,7 @@ async function handleIncomingMessage(msg) {
   const lower = norm(text);
 
   // ============================================
-  // DETECTAR MENSAJE DESDE LA WEB ("Me interesa")
+  // ✅ FIX: DETECTAR MENSAJE DESDE LA WEB ("Me interesa")
   // ============================================
   const webData = parseWebMessage(text);
   if (webData && webData.codigo) {
@@ -742,19 +754,31 @@ async function handleIncomingMessage(msg) {
     if (webData.color) detalles.push(`Color: ${webData.color}`);
     if (webData.tamano) detalles.push(`Tamaño: ${webData.tamano}`);
     
+    // ✅ FIX: Armar resumen del producto para el cliente
+    let resumenProducto = `📦 *${webData.producto || 'Producto'}*`;
+    if (webData.precio) resumenProducto += `\n💰 ₡${webData.precio.toLocaleString()}`;
+    if (detalles.length > 0) resumenProducto += `\n👕 ${detalles.join(", ")}`;
+    
     // Si ya vienen los detalles, saltar la pregunta
     if (detalles.length > 0) {
       session.talla_color = detalles.join(", ");
       session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
       
-      await sendTextWithTyping(waId, frase("revisando", waId));
+      // ✅ FIX: Responder al cliente con saludo + producto + "voy a revisar"
+      await sendTextWithTyping(waId, 
+        `${frase("saludo_interes", waId)}\n\n${resumenProducto}`
+      );
       addPendingQuote(session);
       return;
     }
     
     // Si NO vienen detalles, preguntar talla/color
     session.state = "ESPERANDO_TALLA";
-    await sendTextWithTyping(waId, frase("pedir_talla", waId));
+    
+    // ✅ FIX: Saludar + confirmar producto + pedir talla
+    await sendTextWithTyping(waId, 
+      `¡Hola! Pura vida 🙌 Vi que te interesa:\n\n${resumenProducto}\n\n${frase("pedir_talla", waId)}`
+    );
     return;
   }
 
