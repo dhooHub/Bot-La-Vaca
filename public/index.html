@@ -326,8 +326,16 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    let socket, pending=[], chats={}, currentClient=null, currentChat=null, currentShippingClient=null, statusImageBase64=null, botPaused=false;
+    // ✅ FIX: contacts declarado aquí arriba junto con las demás variables globales
+    let socket, pending=[], chats={}, contacts=[], currentClient=null, currentChat=null, currentShippingClient=null, statusImageBase64=null, botPaused=false;
     const $=id=>document.getElementById(id), $$=sel=>document.querySelectorAll(sel);
+
+    // ✅ FIX 4: Restaurar datos de localStorage al cargar (evita perder datos al cambiar pestaña)
+    try {
+      const sp = localStorage.getItem('tb_pending'); if (sp) pending = JSON.parse(sp);
+      const sc = localStorage.getItem('tb_chats');   if (sc) chats = JSON.parse(sc);
+      const sco = localStorage.getItem('tb_contacts'); if (sco) contacts = JSON.parse(sco);
+    } catch(e) { console.log('⚠️ Error restaurando localStorage:', e); }
 
     const pins=$$('.pin-digit');
     pins.forEach((p,i)=>{p.addEventListener('input',e=>{if(e.target.value&&i<3)pins[i+1].focus();$('loginBtn').disabled=getPin().length!==4;});p.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!e.target.value&&i>0)pins[i-1].focus();});});
@@ -355,19 +363,53 @@
       });
 
       socket.on('qr_code',data=>{$('qrImage').src=data.qr;});
-      socket.on('init_data',data=>{pending=data.pending||[];chats={};(data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});contacts=data.contacts||[];updateMetrics(data.metrics);renderPending();renderChatList();renderContacts();});
-      socket.on('contacts_list',data=>{contacts=data.contacts||[];renderContacts();});
-      socket.on('contact_updated',data=>{const idx=contacts.findIndex(c=>c.waId===data.contact.waId);if(idx>=0)contacts[idx]=data.contact;else contacts.push(data.contact);renderContacts();toast('✅ Contacto actualizado','success');});
-      socket.on('contact_added',data=>{contacts.push(data.contact);renderContacts();toast('✅ Contacto agregado','success');});
-      socket.on('contact_deleted',data=>{contacts=contacts.filter(c=>c.waId!==data.waId);renderContacts();toast('🗑️ Contacto eliminado','success');});
-      socket.on('new_pending',item=>{pending.unshift(item);renderPending();toast('📥 Nueva consulta','success');});
-      socket.on('pending_resolved',data=>{pending=pending.filter(p=>p.waId!==data.waId);renderPending();});
-      socket.on('new_message',msg=>{if(!chats[msg.waId])chats[msg.waId]=[];chats[msg.waId].push(msg);renderChatList();if(currentChat===msg.waId)renderChatMessages();});
+
+      // ✅ FIX 4: Persistir en localStorage al recibir init_data
+      socket.on('init_data',data=>{
+        pending=data.pending||[];
+        chats={};
+        (data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});
+        contacts=data.contacts||[];
+        updateMetrics(data.metrics);
+        try {
+          localStorage.setItem('tb_pending', JSON.stringify(pending));
+          localStorage.setItem('tb_chats', JSON.stringify(chats));
+          localStorage.setItem('tb_contacts', JSON.stringify(contacts));
+        } catch(e) {}
+        renderPending(); renderChatList(); renderContacts();
+      });
+
+      socket.on('contacts_list',data=>{contacts=data.contacts||[];try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();});
+      socket.on('contact_updated',data=>{const idx=contacts.findIndex(c=>c.waId===data.contact.waId);if(idx>=0)contacts[idx]=data.contact;else contacts.push(data.contact);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('✅ Contacto actualizado','success');});
+      socket.on('contact_added',data=>{contacts.push(data.contact);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('✅ Contacto agregado','success');});
+      socket.on('contact_deleted',data=>{contacts=contacts.filter(c=>c.waId!==data.waId);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('🗑️ Contacto eliminado','success');});
+
+      // ✅ FIX 4: Persistir pending en localStorage
+      socket.on('new_pending',item=>{
+        pending.unshift(item);
+        try { localStorage.setItem('tb_pending', JSON.stringify(pending)); } catch(e) {}
+        renderPending(); toast('📥 Nueva consulta','success');
+      });
+      socket.on('pending_resolved',data=>{
+        pending=pending.filter(p=>p.waId!==data.waId);
+        try { localStorage.setItem('tb_pending', JSON.stringify(pending)); } catch(e) {}
+        renderPending();
+      });
+
+      // ✅ FIX 4: Persistir chats en localStorage
+      socket.on('new_message',msg=>{
+        if(!chats[msg.waId])chats[msg.waId]=[];
+        chats[msg.waId].push(msg);
+        try { localStorage.setItem('tb_chats', JSON.stringify(chats)); } catch(e) {}
+        renderChatList();
+        if(currentChat===msg.waId) renderChatMessages();
+      });
+
       socket.on('zone_received',data=>{currentShippingClient=data.waId;$('shippingClient').textContent=formatPhone(data.waId);$('shippingZone').textContent=data.zone;$('shippingPrecio').textContent='₡'+(data.precio||0).toLocaleString();$('inputShipping').value='';$('shippingModal').classList.add('active');toast('📍 '+data.zone,'success');});
       socket.on('action_result',r=>{toast(r.success?'✅ '+r.message:'❌ '+r.message,r.success?'success':'error');$('priceModal').classList.remove('active');$('shippingModal').classList.remove('active');});
       socket.on('status_result',r=>{toast(r.success?'🟢 Publicado':'❌ '+r.message,r.success?'success':'error');if(r.success){$('statusPreview').innerHTML='<span class="status-preview-placeholder">📷</span>';$('statusCaption').value='';statusImageBase64=null;}});
       socket.on('metrics',data=>{updateMetrics(data.metrics);});
-      socket.on('chats_deleted',data=>{delete chats[data.waId];renderChatList();if(currentChat===data.waId){$('chatView').classList.remove('active');currentChat=null;}});
+      socket.on('chats_deleted',data=>{delete chats[data.waId];try{localStorage.setItem('tb_chats',JSON.stringify(chats));}catch(e){}renderChatList();if(currentChat===data.waId){$('chatView').classList.remove('active');currentChat=null;}});
     }
 
     $('loginBtn').onclick=()=>connect(getPin());
@@ -385,11 +427,12 @@
     function updateStoreStatus(){const now=new Date();const utc=now.getTime()+(now.getTimezoneOffset()*60000);const cr=new Date(utc-(6*60*60*1000));const h=cr.getHours(),min=cr.getMinutes();const open=h>=9&&(h<18||(h===18&&min<50));$('storeStatus').textContent=open?'Abierto':'Cerrado';$('storeStatus').className=open?'open':'closed';}
     updateStoreStatus();setInterval(updateStoreStatus,60000);
 
+    // ✅ FIX 3: renderPending usa foto_url correctamente + quitado } suelto + muestra nombre
     function renderPending(){
       const list=$('pendingList');
       if(pending.length===0){list.innerHTML='';$('emptyPending').style.display='block';$('pendingBadge').style.display='none';return;}
       $('emptyPending').style.display='none';$('pendingBadge').style.display='inline';$('pendingBadge').textContent=pending.length;
-      list.innerHTML=pending.map(p=>`<div class="card"><div class="card-header"><span class="card-phone">📱 ${formatPhone(p.waId)}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${p.foto_url?`<img class="card-image" src="${p.foto_url}" onclick="viewImage(this.src)">`:''}}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong><br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}</div><div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY')">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY')">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div></div>`).join('');
+      list.innerHTML=pending.map(p=>`<div class="card"><div class="card-header"><span class="card-phone">📱 ${formatPhone(p.phone||p.waId)}${p.name?' ('+escapeHtml(p.name)+')':''}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${p.foto_url?`<img class="card-image" src="${p.foto_url}" onerror="this.style.display='none'" onclick="viewImage(this.src)">`:''}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong><br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}</div><div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY')">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY')">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div></div>`).join('');
     }
 
     function renderChatList(){
@@ -411,8 +454,7 @@
     $('modalSendShipping').onclick=()=>{const s=parseInt($('inputShipping').value)||0;if(s<100){toast('⚠️ Envío inválido','error');return;}socket.emit('action',{clientWaId:currentShippingClient,actionType:'ENVIO',payload:{shipping:s}});};
     $('modalNoShipping').onclick=()=>{socket.emit('action',{clientWaId:currentShippingClient,actionType:'NO_ENVIO_ZONA'});$('shippingModal').classList.remove('active');};
 
-    // CONTACTOS
-    let contacts = [];
+    // CONTACTOS (ya inicializado arriba con localStorage)
     let editingContact = null;
     
     function renderContacts(filter=''){
@@ -499,6 +541,9 @@
     $('statusPublish').onclick=()=>{const caption=$('statusCaption').value.trim();if(!statusImageBase64&&!caption){toast('⚠️ Agregá imagen o texto','error');return;}socket.emit('post_status',statusImageBase64?{image:statusImageBase64,caption}:{textOnly:true,text:caption});};
 
     $$('.modal-overlay').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('active');});
+
+    // ✅ Render inicial con datos de localStorage (antes de que llegue init_data del server)
+    renderPending(); renderChatList(); renderContacts();
   </script>
 </body>
 </html>
