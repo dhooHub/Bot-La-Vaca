@@ -23,12 +23,15 @@
     .login-error { color: #FF6B6B; margin-top: 1rem; }
 
     header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
-    .header-title { font-size: 1.1rem; font-weight: 700; }
+    .header-title { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
     .header-right { display: flex; align-items: center; gap: 0.5rem; }
-    .status-badge { padding: 0.25rem 0.6rem; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
-    .status-badge.connected { background: var(--success); }
-    .status-badge.disconnected { background: var(--danger); }
-    .status-badge.qr, .status-badge.connecting { background: var(--warning); }
+    .conn-indicator { padding: 0.2rem 0.6rem; border-radius: 15px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.3px; animation: pulse-glow 2s infinite; }
+    .conn-indicator.on { background: var(--success); color: #fff; }
+    .conn-indicator.off { background: var(--danger); color: #fff; cursor: pointer; animation: pulse-danger 1.5s infinite; }
+    .conn-indicator.wait { background: var(--warning); color: #fff; }
+    @keyframes pulse-danger { 0%,100%{opacity:1;} 50%{opacity:0.7;} }
+    @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(37,211,102,0.4);} 50%{box-shadow:0 0 8px 2px rgba(37,211,102,0.3);} }
+    .status-badge { display: none; }
     .bot-toggle { cursor: pointer; border: none; padding: 0.25rem 0.6rem; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
     .bot-toggle.active { background: var(--success); color: #fff; }
     .bot-toggle.paused { background: var(--warning); color: #fff; }
@@ -164,10 +167,10 @@
 
   <div id="app" style="display:none;">
     <header>
-      <div class="header-title">🐄 TICObot</div>
+      <div class="header-title">🐄 TICObot <span class="conn-indicator off" id="connIndicator" onclick="handleConnClick()">🔴 CONECTAR</span></div>
       <div class="header-right">
         <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
-        <span class="status-badge disconnected" id="statusBadge">Off</span>
+        <span class="status-badge disconnected" id="statusBadge" style="display:none;">Off</span>
       </div>
     </header>
 
@@ -330,6 +333,13 @@
     let socket, pending=[], chats={}, contacts=[], currentClient=null, currentChat=null, currentShippingClient=null, statusImageBase64=null, botPaused=false;
     const $=id=>document.getElementById(id), $$=sel=>document.querySelectorAll(sel);
 
+    // ✅ Clic en "CONECTAR" del header → ir a pestaña WhatsApp y conectar
+    function handleConnClick(){
+      document.querySelectorAll('.tab').forEach(t=>{t.classList.remove('active');if(t.dataset.tab==='whatsapp')t.classList.add('active');});
+      document.querySelectorAll('.content').forEach(c=>{c.classList.remove('active');if(c.id==='tab-whatsapp')c.classList.add('active');});
+      if(socket&&socket.connected)socket.emit('connect_whatsapp');
+    }
+
     // ✅ FIX 4: Restaurar datos de localStorage al cargar (evita perder datos al cambiar pestaña)
     try {
       const sp = localStorage.getItem('tb_pending'); if (sp) pending = JSON.parse(sp);
@@ -350,6 +360,11 @@
       socket.on('connection_status',data=>{
         const b=$('statusBadge');b.className='status-badge '+data.status;
         b.textContent=data.status==='connected'?'✅ On':data.status==='qr'?'📱 QR':'❌ Off';
+        // ✅ Actualizar indicador del header
+        const ci=$('connIndicator');
+        if(data.status==='connected'){ci.className='conn-indicator on';ci.textContent='🟢 CONECTADO';ci.onclick=null;}
+        else if(data.status==='qr'||data.status==='connecting'){ci.className='conn-indicator wait';ci.textContent='🟡 CONECTANDO...';ci.onclick=null;}
+        else{ci.className='conn-indicator off';ci.textContent='🔴 CONECTAR';ci.onclick=handleConnClick;}
         if(data.status==='connected'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='block';if(data.phone)$('connectedPhone').textContent='+'+data.phone.slice(0,3)+' '+data.phone.slice(3,7)+'-'+data.phone.slice(7);}
         else if(data.status==='qr'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='block';$('connectedDisplay').style.display='none';}
         else{$('qrPlaceholder').style.display='block';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='none';}
