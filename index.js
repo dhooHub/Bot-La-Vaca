@@ -19,21 +19,25 @@
  * 
  * ============================ */
 
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const fs = require("fs");
-const path = require("path");
-const QRCode = require("qrcode");
-const pino = require("pino");
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import QRCode from "qrcode";
+import pino from "pino";
 
-const {
-  default: makeWASocket,
+import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-} = require("@whiskeysockets/baileys");
+} from "@whiskeysockets/baileys";
+
+// ✅ ESM equivalente de __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
