@@ -95,6 +95,7 @@ const DATA_FOLDER = process.cwd();
 let sock = null;
 let qrCode = null;
 let connectionStatus = "disconnected";
+let reconnectAttempts = 0;
 let connectedPhone = "";
 let botPaused = false;
 
@@ -451,8 +452,37 @@ function getSession(waId) {
   return s;
 }
 
-// ✅ Mapa global: waId normalizado → JID completo original
+// ✅ Mapa global: waId normalizado → JID completo original (para enviar mensajes)
 const jidMap = new Map();
+
+// ✅ Mapa LID → Teléfono real (persistente en disco)
+const LID_MAP_FILE = path.join(DATA_FOLDER, "lid_phone_map.json");
+let lidPhoneMap = new Map();
+
+function loadLidMap() {
+  try {
+    if (fs.existsSync(LID_MAP_FILE)) {
+      const data = JSON.parse(fs.readFileSync(LID_MAP_FILE, "utf8"));
+      lidPhoneMap = new Map(Object.entries(data));
+      console.log(`📋 LID map cargado: ${lidPhoneMap.size} entradas`);
+    }
+  } catch(e) { console.log("⚠️ Error cargando lid map:", e.message); }
+}
+
+function saveLidMap() {
+  try {
+    const obj = Object.fromEntries(lidPhoneMap);
+    fs.writeFileSync(LID_MAP_FILE, JSON.stringify(obj, null, 2));
+  } catch(e) { /* silent */ }
+}
+
+// Resolver LID a teléfono real usando todas las fuentes disponibles
+function resolvePhoneFromLid(lidJid) {
+  const lid = fromJid(lidJid);
+  return lidPhoneMap.get(lid) || null;
+}
+
+loadLidMap();
 
 function resetSession(session) {
   session.state = "NEW"; 
@@ -591,26 +621,15 @@ async function connectWhatsApp() {
     browser: ["TICObot", "Chrome", "1.0.0"],
     syncFullHistory: false,
     shouldIgnoreJid: (jid) => jid?.endsWith("@g.us") || jid?.endsWith("@broadcast"),
+    // ✅ Anti-desconexión robusto
+    keepAliveIntervalMs: 20000,
+    connectTimeoutMs: 120000,
+    defaultQueryTimeoutMs: 120000,
+    retryRequestDelayMs: 500,
+    markOnlineOnConnect: false,
+    emitOwnEvents: true,
+    generateHighQualityLinkPreview: false,
   });
-
-  // Resolver LID → número real de teléfono
-  function resolveJid(jid) {
-    if (!jid) return jid;
-    // Si es un LID (@lid), intentar buscar el número real en el store
-    if (jid.endsWith("@lid")) {
-      const lid = jid.replace("@lid", "");
-      // Buscar en participants del store si hay mapeo
-      try {
-        const contact = sock.store?.contacts?.[jid];
-        if (contact?.id && contact.id.endsWith("@s.whatsapp.net")) {
-          return contact.id;
-        }
-      } catch(e) {}
-      // Si no se resolvió, devolver el LID como está
-      return jid;
-    }
-    return jid;
-  }
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -623,33 +642,124 @@ async function connectWhatsApp() {
     }
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode;
-      console.log("❌ Desconectado:", reason);
+      const errMsg = lastDisconnect?.error?.message || "unknown";
+      console.log(`❌ Desconectado: código=${reason} motivo="${errMsg}"`);
       connectionStatus = "disconnected"; qrCode = null; connectedPhone = "";
+      if (global._keepAliveInterval) { clearInterval(global._keepAliveInterval); global._keepAliveInterval = null; }
       io.emit("connection_status", { status: connectionStatus });
-      if (reason !== DisconnectReason.loggedOut) { setTimeout(connectWhatsApp, 3000); }
-      else { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); }
+      
+      if (reason === DisconnectReason.loggedOut) {
+        console.log("🔑 Sesión cerrada - eliminando credenciales...");
+        try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch(e) {}
+        setTimeout(connectWhatsApp, 5000);
+      } else if (reason === 428 || reason === 408) {
+        const delay = Math.min(15000 + (reconnectAttempts * 5000), 60000);
+        reconnectAttempts++;
+        console.log(`⏳ Error ${reason} - esperando ${delay/1000}s (intento #${reconnectAttempts})...`);
+        setTimeout(connectWhatsApp, delay);
+      } else if (reason === 515 || reason === 503) {
+        console.log("🔄 Servidor reiniciando - reconectando en 5s...");
+        setTimeout(connectWhatsApp, 5000);
+      } else {
+        const delay = Math.min(3000 * Math.pow(1.5, reconnectAttempts), 60000);
+        reconnectAttempts++;
+        console.log(`🔄 Reconectando en ${Math.round(delay/1000)}s (intento #${reconnectAttempts})...`);
+        setTimeout(connectWhatsApp, delay);
+      }
     }
     if (connection === "open") {
       connectionStatus = "connected"; qrCode = null;
+      reconnectAttempts = 0;
       connectedPhone = sock.user?.id?.split(":")[0] || "";
       io.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
       console.log("✅ Conectado:", connectedPhone);
+      
+      // ✅ KEEPALIVE: cada 4 minutos
+      if (global._keepAliveInterval) clearInterval(global._keepAliveInterval);
+      global._keepAliveInterval = setInterval(async () => {
+        try {
+          if (sock && connectionStatus === "connected") {
+            await sock.sendPresenceUpdate("available");
+          }
+        } catch(e) {
+          console.log("⚠️ Keepalive error:", e.message);
+        }
+      }, 4 * 60 * 1000);
     }
   });
 
   sock.ev.on("creds.update", saveCreds);
   
-  // ✅ Escuchar mapeo LID↔PN cuando Baileys lo descubre
-  sock.ev.on("lid-mapping.update", (mapping) => {
-    console.log("🗺️ LID mapping actualizado:", JSON.stringify(mapping));
+  // ✅ CLAVE: Capturar contactos para resolver LID → teléfono real
+  sock.ev.on("contacts.upsert", (contacts) => {
+    for (const c of contacts) {
+      if (c.id?.endsWith("@lid") && c.phoneNumber) {
+        const lid = fromJid(c.id);
+        const phone = c.phoneNumber.replace(/[^\d]/g, "");
+        if (phone.length >= 8) {
+          lidPhoneMap.set(lid, phone);
+          console.log(`📇 Contact: LID ${lid.slice(0,10)}... → ${formatPhone(phone)} (${c.notify || c.name || ""})`);
+          // Actualizar perfil existente con número real
+          if (profiles.has(lid)) {
+            const p = profiles.get(lid);
+            p.phone = phone;
+            if ((c.notify || c.name) && !p.name) p.name = c.notify || c.name;
+          }
+        }
+      }
+      // Guardar nombre de contacto
+      const cId = fromJid(c.id || "");
+      if (cId && profiles.has(cId) && (c.notify || c.name)) {
+        const p = profiles.get(cId);
+        if (!p.name) p.name = c.notify || c.name;
+      }
+    }
+    saveLidMap();
   });
+  
+  sock.ev.on("contacts.update", (updates) => {
+    for (const u of updates) {
+      if (u.id?.endsWith("@lid") && u.phoneNumber) {
+        const lid = fromJid(u.id);
+        const phone = u.phoneNumber.replace(/[^\d]/g, "");
+        if (phone.length >= 8) {
+          lidPhoneMap.set(lid, phone);
+          console.log(`📇 Contact update: LID ${lid.slice(0,10)}... → ${formatPhone(phone)}`);
+        }
+      }
+    }
+    saveLidMap();
+  });
+  
+  // ✅ Escuchar lid-mapping.update (v7+, silencioso en v6)
+  try {
+    sock.ev.on("lid-mapping.update", (mapping) => {
+      console.log("🗺️ LID mapping update");
+      const items = Array.isArray(mapping) ? mapping : [mapping];
+      for (const m of items) {
+        if (m.lid && m.pn) {
+          const lid = fromJid(m.lid);
+          const phone = fromJid(m.pn);
+          lidPhoneMap.set(lid, phone);
+          console.log(`  🔗 ${lid.slice(0,10)}... → ${formatPhone(phone)}`);
+          if (profiles.has(lid) && !profiles.has(phone)) {
+            const old = profiles.get(lid);
+            old.phone = phone;
+            profiles.set(phone, old);
+          }
+        }
+      }
+      saveLidMap();
+    });
+  } catch(e) { /* no disponible en esta versión */ }
   
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const msg of messages) {
       if (msg.key.fromMe || msg.key.remoteJid?.endsWith("@g.us")) continue;
-      // ✅ Debug: mostrar key completo para verificar senderPn
-      console.log(`🔍 MSG KEY: ${JSON.stringify(msg.key)} | pushName: ${msg.pushName || "(sin nombre)"}`);
+      // Debug: ver si viene senderPn
+      const dbg = { jid: msg.key.remoteJid?.slice(0,20), pn: msg.key.senderPn || "-" };
+      console.log(`🔍 MSG: ${JSON.stringify(dbg)} | ${msg.pushName || ""}`);
       messageQueue.push(msg);
       processQueue();
     }
@@ -751,56 +861,64 @@ async function postStatusText(text) {
 async function handleIncomingMessage(msg) {
   const remoteJid = msg.key.remoteJid;
   const isLid = remoteJid?.endsWith("@lid");
+  const lidId = isLid ? fromJid(remoteJid) : null;
   
   // ✅ Extraer número real de senderPn (viene cuando remoteJid es @lid)
-  const senderPn = msg.key.senderPn || null; // ej: "50670106802@s.whatsapp.net"
-  const pushName = msg.pushName || "";       // nombre de WhatsApp del contacto
+  const senderPn = msg.key.senderPn || msg.key.senderPnAlt || null;
+  const pushName = msg.pushName || "";
   
-  // ✅ SISTEMA DUAL:
-  // - waId = número real (para mostrar en panel, guardar contacto)
-  // - replyJid = JID original (puede ser @lid, para enviar mensajes)
+  // ✅ SISTEMA DUAL de resolución:
   let waId;
   let realPhone = null;
   
-  if (isLid && senderPn) {
-    // Tenemos LID + número real → usar número real como ID principal
+  if (senderPn) {
+    // CASO 1: Baileys nos da senderPn directo → mejor caso
     realPhone = fromJid(senderPn);
     waId = realPhone;
-    console.log(`🔗 LID ${fromJid(remoteJid).slice(0,10)}... → Teléfono real: ${formatPhone(realPhone)}`);
+    if (lidId) { lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
+    console.log(`🔗 senderPn: LID ${lidId?.slice(0,10)}... → ${formatPhone(realPhone)}`);
+  } else if (isLid && lidPhoneMap.has(lidId)) {
+    // CASO 2: Ya resolvimos este LID antes → usar cache persistente
+    realPhone = lidPhoneMap.get(lidId);
+    waId = realPhone;
+    console.log(`🔗 LID cache: ${formatPhone(realPhone)}`);
   } else if (isLid) {
-    // Solo LID sin senderPn → intentar resolver con lidMapping
+    // CASO 3: Intentar lidMapping interno de Baileys
     try {
       const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
       if (pn) {
         realPhone = fromJid(pn);
         waId = realPhone;
-        console.log(`🔗 LID resuelto via mapping: ${formatPhone(realPhone)}`);
+        lidPhoneMap.set(lidId, realPhone); saveLidMap();
+        console.log(`🔗 LID mapping: ${formatPhone(realPhone)}`);
       } else {
-        waId = fromJid(remoteJid);
-        console.log(`⚠️ LID sin número real: ${waId} (${pushName || "sin nombre"})`);
+        // CASO 4: No se puede resolver → usar LID como ID temporal
+        waId = lidId;
+        console.log(`⚠️ LID sin resolver: ${lidId?.slice(0,12)}... (${pushName || "sin nombre"})`);
       }
     } catch(e) {
-      waId = fromJid(remoteJid);
+      waId = lidId;
+      console.log(`⚠️ Error resolviendo LID: ${e.message}`);
     }
   } else {
-    // Número normal @s.whatsapp.net
+    // CASO 5: Número normal @s.whatsapp.net
     waId = fromJid(remoteJid);
     realPhone = waId;
   }
   
-  // ✅ Guardar mapeo: waId (número real) → remoteJid (para responder)
+  // ✅ Guardar mapeo: waId → remoteJid (para responder al JID correcto)
   jidMap.set(normalizePhone(waId), remoteJid);
   
   const session = getSession(waId);
   session.replyJid = remoteJid;
-  if (isLid) session.lid = fromJid(remoteJid);
+  if (isLid) session.lid = lidId;
   
   const profile = getProfile(waId);
   
   // ✅ Auto-guardar nombre y teléfono real en el perfil
   if (pushName && !profile.name) profile.name = pushName;
   if (realPhone) profile.phone = realPhone;
-  if (isLid) profile.lid = fromJid(remoteJid);
+  if (lidId) profile.lid = lidId;
 
   let text = "";
   if (msg.message?.conversation) text = msg.message.conversation;
@@ -1253,4 +1371,26 @@ server.listen(PORT, () => {
 ╚═══════════════════════════════════════════════════╝
   `);
   if (fs.existsSync(path.join(AUTH_FOLDER, "creds.json"))) { console.log("🔄 Reconectando..."); connectWhatsApp(); }
+  
+  // ✅ SELF-PING: Mantener Render activo (cada 4 minutos)
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+  if (RENDER_URL) {
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${RENDER_URL}/health`);
+        console.log(`💓 Self-ping: ${res.status}`);
+      } catch(e) {
+        console.log(`💔 Self-ping falló: ${e.message}`);
+      }
+    }, 4 * 60 * 1000); // cada 4 minutos
+    console.log(`💓 Self-ping habilitado: ${RENDER_URL}/health`);
+  }
+  
+  // ✅ WATCHDOG: Verificar conexión cada 2 minutos
+  setInterval(() => {
+    if (connectionStatus === "disconnected" && fs.existsSync(path.join(AUTH_FOLDER, "creds.json"))) {
+      console.log("🐕 Watchdog: bot desconectado, intentando reconectar...");
+      connectWhatsApp();
+    }
+  }, 2 * 60 * 1000);
 });
