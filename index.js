@@ -424,7 +424,9 @@ function getSession(waId) {
   const id = normalizePhone(waId);
   if (!sessions.has(id)) {
     sessions.set(id, { 
-      waId: id, 
+      waId: id,
+      // ✅ JID completo original para responder (puede ser @lid o @s.whatsapp.net)
+      replyJid: null,
       state: "NEW", 
       // Producto (desde web)
       producto: null,
@@ -448,6 +450,9 @@ function getSession(waId) {
   s.last_activity = Date.now();
   return s;
 }
+
+// ✅ Mapa global: waId normalizado → JID completo original
+const jidMap = new Map();
 
 function resetSession(session) {
   session.state = "NEW"; 
@@ -477,9 +482,13 @@ function getProfile(waId) {
  ============================
  */
 function addToChatHistory(waId, direction, text, imageUrl = null) {
+  const profile = getProfile(waId);
   const entry = { 
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), 
-    waId: normalizePhone(waId), 
+    waId: normalizePhone(waId),
+    // ✅ Número real y nombre para mostrar en panel
+    phone: profile.phone || normalizePhone(waId),
+    name: profile.name || "",
     direction, 
     text, 
     imageUrl,
@@ -492,8 +501,13 @@ function addToChatHistory(waId, direction, text, imageUrl = null) {
 }
 
 function addPendingQuote(session) {
+  const profile = getProfile(session.waId);
   const quote = { 
-    waId: session.waId, 
+    waId: session.waId,
+    // ✅ Datos para el panel: número real + nombre + LID de referencia
+    phone: profile.phone || session.waId,  // número real para guardar contacto
+    name: profile.name || "",              // nombre de WhatsApp
+    lid: profile.lid || null,              // LID para referencia interna
     producto: session.producto,
     precio: session.precio,
     codigo: session.codigo,
@@ -576,7 +590,27 @@ async function connectWhatsApp() {
     printQRInTerminal: false,
     browser: ["TICObot", "Chrome", "1.0.0"],
     syncFullHistory: false,
+    shouldIgnoreJid: (jid) => jid?.endsWith("@g.us") || jid?.endsWith("@broadcast"),
   });
+
+  // Resolver LID → número real de teléfono
+  function resolveJid(jid) {
+    if (!jid) return jid;
+    // Si es un LID (@lid), intentar buscar el número real en el store
+    if (jid.endsWith("@lid")) {
+      const lid = jid.replace("@lid", "");
+      // Buscar en participants del store si hay mapeo
+      try {
+        const contact = sock.store?.contacts?.[jid];
+        if (contact?.id && contact.id.endsWith("@s.whatsapp.net")) {
+          return contact.id;
+        }
+      } catch(e) {}
+      // Si no se resolvió, devolver el LID como está
+      return jid;
+    }
+    return jid;
+  }
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -604,10 +638,18 @@ async function connectWhatsApp() {
   });
 
   sock.ev.on("creds.update", saveCreds);
+  
+  // ✅ Escuchar mapeo LID↔PN cuando Baileys lo descubre
+  sock.ev.on("lid-mapping.update", (mapping) => {
+    console.log("🗺️ LID mapping actualizado:", JSON.stringify(mapping));
+  });
+  
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
     for (const msg of messages) {
       if (msg.key.fromMe || msg.key.remoteJid?.endsWith("@g.us")) continue;
+      // ✅ Debug: mostrar key completo para verificar senderPn
+      console.log(`🔍 MSG KEY: ${JSON.stringify(msg.key)} | pushName: ${msg.pushName || "(sin nombre)"}`);
       messageQueue.push(msg);
       processQueue();
     }
@@ -637,9 +679,10 @@ async function processQueue() {
 async function sendTextWithTyping(waId, text) {
   if (!sock || connectionStatus !== "connected") return false;
   try {
-    const jid = toJid(waId);
+    // ✅ Usar JID original si existe (puede ser @lid), sino construir @s.whatsapp.net
+    const jid = jidMap.get(normalizePhone(waId)) || toJid(waId);
     const delay = getHumanDelay();
-    console.log(`⏳ Esperando ${Math.round(delay/1000)}s...`);
+    console.log(`⏳ Esperando ${Math.round(delay/1000)}s... → ${jid}`);
     
     await sock.sendPresenceUpdate("composing", jid);
     await sleep(delay);
@@ -650,13 +693,14 @@ async function sendTextWithTyping(waId, text) {
     account.metrics.mensajes_enviados += 1;
     console.log(`📤 ${formatPhone(waId)}: ${text.slice(0, 50)}...`);
     return true;
-  } catch (e) { console.log("❌ Error:", e.message); return false; }
+  } catch (e) { console.log("❌ Error envío:", e.message); return false; }
 }
 
 async function sendTextDirect(waId, text) {
   if (!sock || connectionStatus !== "connected") return false;
   try {
-    const jid = toJid(waId);
+    // ✅ Usar JID original si existe
+    const jid = jidMap.get(normalizePhone(waId)) || toJid(waId);
     await sock.sendPresenceUpdate("composing", jid);
     await sleep(2000);
     await sock.sendPresenceUpdate("paused", jid);
@@ -705,17 +749,70 @@ async function postStatusText(text) {
  ============================
  */
 async function handleIncomingMessage(msg) {
-  const waId = fromJid(msg.key.remoteJid);
+  const remoteJid = msg.key.remoteJid;
+  const isLid = remoteJid?.endsWith("@lid");
+  
+  // ✅ Extraer número real de senderPn (viene cuando remoteJid es @lid)
+  const senderPn = msg.key.senderPn || null; // ej: "50670106802@s.whatsapp.net"
+  const pushName = msg.pushName || "";       // nombre de WhatsApp del contacto
+  
+  // ✅ SISTEMA DUAL:
+  // - waId = número real (para mostrar en panel, guardar contacto)
+  // - replyJid = JID original (puede ser @lid, para enviar mensajes)
+  let waId;
+  let realPhone = null;
+  
+  if (isLid && senderPn) {
+    // Tenemos LID + número real → usar número real como ID principal
+    realPhone = fromJid(senderPn);
+    waId = realPhone;
+    console.log(`🔗 LID ${fromJid(remoteJid).slice(0,10)}... → Teléfono real: ${formatPhone(realPhone)}`);
+  } else if (isLid) {
+    // Solo LID sin senderPn → intentar resolver con lidMapping
+    try {
+      const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
+      if (pn) {
+        realPhone = fromJid(pn);
+        waId = realPhone;
+        console.log(`🔗 LID resuelto via mapping: ${formatPhone(realPhone)}`);
+      } else {
+        waId = fromJid(remoteJid);
+        console.log(`⚠️ LID sin número real: ${waId} (${pushName || "sin nombre"})`);
+      }
+    } catch(e) {
+      waId = fromJid(remoteJid);
+    }
+  } else {
+    // Número normal @s.whatsapp.net
+    waId = fromJid(remoteJid);
+    realPhone = waId;
+  }
+  
+  // ✅ Guardar mapeo: waId (número real) → remoteJid (para responder)
+  jidMap.set(normalizePhone(waId), remoteJid);
+  
   const session = getSession(waId);
+  session.replyJid = remoteJid;
+  if (isLid) session.lid = fromJid(remoteJid);
+  
   const profile = getProfile(waId);
+  
+  // ✅ Auto-guardar nombre y teléfono real en el perfil
+  if (pushName && !profile.name) profile.name = pushName;
+  if (realPhone) profile.phone = realPhone;
+  if (isLid) profile.lid = fromJid(remoteJid);
 
   let text = "";
   if (msg.message?.conversation) text = msg.message.conversation;
   else if (msg.message?.extendedTextMessage?.text) text = msg.message.extendedTextMessage.text;
   else if (msg.message?.imageMessage?.caption) text = msg.message.imageMessage.caption;
 
+  // ✅ Log con número real + nombre
+  const displayPhone = realPhone ? formatPhone(realPhone) : waId;
+  const nameTag = pushName ? ` (${pushName})` : (profile.name ? ` (${profile.name})` : "");
+  
   addToChatHistory(waId, "in", text || "(mensaje)");
-  console.log(`📥 ${formatPhone(waId)}: ${text || "(mensaje)"}`);
+  console.log(`📥 ${displayPhone}${nameTag}: ${text || "(mensaje)"}`);
 
   if (profile.blocked) return;
   if (botPaused) { console.log("⏸️ Bot pausado"); return; }
@@ -870,7 +967,7 @@ async function handleIncomingMessage(msg) {
       `Cuando pagues, mandame el comprobante 🧾`
     );
     session.state = "ESPERANDO_SINPE";
-    io.emit("sale_pending", { waId, total, reference: session.sinpe_reference, method: session.delivery_method, producto: session.producto, talla: session.talla_color });
+    io.emit("sale_pending", { waId, phone: profile.phone || waId, name: profile.name || "", total, reference: session.sinpe_reference, method: session.delivery_method, producto: session.producto, talla: session.talla_color });
     saveDataToDisk(); return;
   }
 
