@@ -275,7 +275,7 @@ function getSession(waId) {
       // Datos de envío
       envio_nombre:null, envio_telefono:null, envio_direccion:null,
       // Foto externa
-      foto_externa:false, foto_base64:null,
+      foto_externa:false, foto_base64:null, foto_url_guardada:null,
       saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() 
     });
   }
@@ -292,7 +292,7 @@ loadLidMap();
 function resetSession(session) {
   session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
   session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
-  session.foto_externa=false; session.foto_base64=null;
+  session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
 
@@ -641,6 +641,13 @@ async function handleIncomingMessage(msg) {
       const estadosPermitidos = ["NEW", "PREGUNTANDO_ALGO_MAS", "VENTA_COMPLETADA"];
       if(estadosPermitidos.includes(session.state)){
         
+        // ✅ GUARDAR IMAGEN INMEDIATAMENTE como archivo (no en sesión)
+        let fotoUrl = null;
+        if(imageBase64){
+          fotoUrl = await guardarImagenFoto(waId, imageBase64);
+          console.log(`📷 Imagen guardada inmediatamente: ${fotoUrl}`);
+        }
+        
         // Detectar si el texto ya incluye talla/color/tamaño
         const textoDetalle = text?.trim() || "";
         const regexDetalles = /\b(xs|s|m|l|xl|xxl|xxxl|small|medium|large|extra\s*large|chico|mediano|grande|talla\s*\d+|\d{1,2}|rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|crema|dorado|plateado|turquesa)\b/i;
@@ -649,7 +656,7 @@ async function handleIncomingMessage(msg) {
         console.log(`📷 Foto externa - texto: "${textoDetalle}", tieneDetalles: ${tieneDetalles}`);
         
         session.foto_externa = true;
-        session.foto_base64 = imageBase64;
+        session.foto_url_guardada = fotoUrl; // Guardar URL, no base64
         session.saludo_enviado = true;
         
         if(tieneDetalles){
@@ -657,9 +664,6 @@ async function handleIncomingMessage(msg) {
           session.talla_color = textoDetalle;
           session.producto = "Producto de foto";
           session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
-          
-          // Guardar imagen y notificar al dueño
-          let fotoUrl = await guardarImagenFoto(waId, session.foto_base64);
           
           const quote = {
             waId,
@@ -674,9 +678,9 @@ async function handleIncomingMessage(msg) {
             created_at: new Date().toISOString()
           };
           pendingQuotes.set(waId, quote);
+          console.log(`📷 *** EMITIENDO new_pending (con detalles) ***`);
           io.emit("new_pending", quote);
           
-          session.foto_base64 = null;
           saveDataToDisk();
           
           await sendTextWithTyping(waId, 
@@ -687,7 +691,8 @@ async function handleIncomingMessage(msg) {
         } else {
           // CASO 1 y 2: Foto sola o Foto + texto sin detalles → Preguntar
           session.state = "ESPERANDO_DETALLES_FOTO";
-          console.log(`📷 Foto guardada en sesión: ${imageBase64 ? Math.round(imageBase64.length/1024) + 'KB' : 'NULL'}`);
+          saveDataToDisk();
+          console.log(`📷 Esperando detalles, foto guardada en: ${fotoUrl}`);
           await sendTextWithTyping(waId,
             `¡Hola! Pura vida 🙌 Dejame revisar ese producto.\n\n` +
             `¿Qué talla, color o tamaño te interesa? 👕`
@@ -709,13 +714,9 @@ async function handleIncomingMessage(msg) {
     session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
     
     console.log(`📷 ESPERANDO_DETALLES_FOTO - talla_color: ${session.talla_color}`);
-    console.log(`📷 foto_base64 disponible: ${session.foto_base64 ? Math.round(session.foto_base64.length/1024) + 'KB' : 'NO - PERDIDA!'}`);
+    console.log(`📷 foto_url_guardada: ${session.foto_url_guardada || 'NO DISPONIBLE'}`);
     
-    // Guardar imagen y notificar al dueño
-    let fotoUrl = await guardarImagenFoto(waId, session.foto_base64);
-    console.log(`📷 fotoUrl generada: ${fotoUrl || 'NULL'}`);
-    
-    // Notificar al dueño con la foto
+    // Notificar al dueño con la foto (ya guardada como archivo)
     const quote = {
       waId,
       phone: profile.phone || waId,
@@ -723,17 +724,18 @@ async function handleIncomingMessage(msg) {
       producto: "📷 Producto de foto",
       precio: null,
       codigo: null,
-      foto_url: fotoUrl,
+      foto_url: session.foto_url_guardada || null,
       talla_color: session.talla_color,
       foto_externa: true,
       created_at: new Date().toISOString()
     };
     pendingQuotes.set(waId, quote);
-    console.log(`📷 *** EMITIENDO new_pending para ${waId} ***`);
+    console.log(`📷 *** EMITIENDO new_pending ***`);
+    console.log(`📷 Quote: ${JSON.stringify(quote)}`);
+    console.log(`📷 Sockets conectados: ${io.engine.clientsCount}`);
     io.emit("new_pending", quote);
+    console.log(`📷 *** EMITIDO! ***`);
     
-    // Limpiar foto de sesión para no ocupar memoria
-    session.foto_base64 = null;
     saveDataToDisk();
     
     await sendTextWithTyping(waId, frase("revisando", waId));
