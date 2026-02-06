@@ -116,6 +116,7 @@
     .action-btn.danger { background: var(--danger); color: #fff; }
     .action-btn.info { background: #2196f3; color: #fff; }
     .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); }
+    .action-card.tienda { background: #fff3e0; border-color: #ff9800; }
 
     /* Chat input */
     .chat-input-area { background: #fff; padding: 0.6rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
@@ -453,6 +454,19 @@
         showNotification('📍 Zona recibida', data.zone);
       });
 
+      // Producto de tienda física (no en catálogo online)
+      socket.on('store_product_inquiry', data => {
+        if (!chats[data.waId]) chats[data.waId] = { messages: [], pending: null };
+        chats[data.waId].pending = { 
+          ...data, 
+          tipo: 'tienda',
+          producto: data.producto
+        };
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+        showNotification('🏪 Producto de tienda', `${data.producto?.slice(0,30)} - ${formatPhone(data.waId)}`);
+      });
+
       // Pending resolved
       socket.on('pending_resolved', data => {
         if (chats[data.waId]) {
@@ -598,22 +612,30 @@
       if (chat.pending) {
         const p = chat.pending;
         const isSinpe = p.tipo === 'sinpe';
+        const isTienda = p.tipo === 'tienda';
+        
+        let cardClass = isSinpe ? 'sinpe' : isTienda ? 'tienda' : '';
+        let icon = isSinpe ? '💰' : isTienda ? '🏪' : '🔔';
+        let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : 'CONFIRMAR DISPONIBILIDAD';
         
         html += `
-          <div class="action-card ${isSinpe ? 'sinpe' : ''}" id="actionCard">
+          <div class="action-card ${cardClass}" id="actionCard">
             <div class="action-card-header">
-              <span class="action-card-icon">${isSinpe ? '💰' : '🔔'}</span>
-              <span>${isSinpe ? 'CONFIRMAR PAGO SINPE' : 'CONFIRMAR DISPONIBILIDAD'}</span>
+              <span class="action-card-icon">${icon}</span>
+              <span>${title}</span>
             </div>
             <div class="action-card-details">
               <div class="action-card-detail">📦 <strong>${escapeHtml(p.producto || 'Producto')}</strong></div>
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
               ${p.talla_color ? `<div class="action-card-detail">👕 ${escapeHtml(p.talla_color)}</div>` : ''}
-              ${!isSinpe && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
+              ${!isSinpe && !isTienda && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
+              ${isTienda ? `<div class="action-card-detail" style="color:#666;font-style:italic;">⚠️ Este producto no está en catálogo online.<br>El cliente fue invitado a visitar la tienda.</div>` : ''}
             </div>
             <div class="action-card-buttons">
               ${isSinpe ? `
                 <button class="action-btn primary" onclick="confirmAction('PAGADO')">💰 Confirmar Pago</button>
+              ` : isTienda ? `
+                <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
               ` : `
                 <button class="action-btn primary" onclick="confirmAction('SI_HAY')">✅ Sí Hay</button>
                 <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
@@ -641,6 +663,14 @@
     }
 
     // ===== ACTIONS =====
+    function dismissAction() {
+      if (!currentChat || !chats[currentChat]) return;
+      chats[currentChat].pending = null;
+      renderChat();
+      renderChatList();
+      toast('✓ Marcado como visto', 'success');
+    }
+
     function confirmAction(type) {
       if (!currentChat) return;
       const btn = event.target;
