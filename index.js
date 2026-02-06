@@ -122,8 +122,6 @@ LO QUE SÍ PODÉS RESPONDER:
 
 ESTILO: Respondé como tico, amigable, natural, corto (2-3 oraciones máximo). Usá "vos" no "usted". No inventés información.`;
 
-ESTILO: Respondé como tico, amigable, natural, corto (2-3 oraciones máximo). Usá "vos" no "usted". No inventés información.`;
-
 
 async function classifyMessage(userMessage, currentState, lastBotQuestion) {
   if (!OPENAI_API_KEY) return "RESPUESTA_FLUJO";
