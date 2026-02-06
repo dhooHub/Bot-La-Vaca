@@ -335,17 +335,33 @@
     }
     
     // ===== FORCE UPDATE UI =====
+    let updatePending = false;
     function forceUpdate() {
-      // Forzar re-render inmediato
-      requestAnimationFrame(() => {
+      if (updatePending) return;
+      updatePending = true;
+      
+      // Usar setTimeout 0 para salir del contexto actual
+      setTimeout(() => {
+        updatePending = false;
+        console.log('🔄 forceUpdate ejecutando');
+        
+        // Siempre re-renderizar la lista
         renderChatList();
-        if (currentChat) {
-          renderChat();
-          // Scroll al final del chat
-          const msgs = $('chatMessages');
-          if (msgs) msgs.scrollTop = msgs.scrollHeight;
+        
+        // Si hay chat abierto, actualizar el contenido
+        if (currentChat && chats[currentChat]) {
+          // Solo actualizar el contenedor de mensajes, no todo el chatArea
+          const container = $('messagesContainer');
+          if (container) {
+            const chat = chats[currentChat];
+            container.innerHTML = renderMessages(chat);
+            container.scrollTop = container.scrollHeight;
+          } else {
+            // Si no existe el contenedor, re-renderizar todo
+            renderChat();
+          }
         }
-      });
+      }, 0);
     }
 
     // ===== NOTIFICATIONS =====
