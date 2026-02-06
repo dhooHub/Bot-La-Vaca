@@ -53,8 +53,9 @@ const SHIPPING_RURAL = process.env.SHIPPING_RURAL || "₡3,500";
 const DELIVERY_DAYS = process.env.DELIVERY_DAYS || "8 días hábiles";
 const WARRANTY_DAYS = process.env.WARRANTY_DAYS || "30 días contra defectos de fábrica";
 const CATALOG_URL = process.env.CATALOG_URL || "https://www.lavacacr.com";
-const AUTH_FOLDER = path.join(process.cwd(), "auth_baileys");
-const DATA_FOLDER = process.cwd();
+const PERSISTENT_DIR = "/data";
+const AUTH_FOLDER = path.join(PERSISTENT_DIR, "auth_baileys");
+const DATA_FOLDER = PERSISTENT_DIR;
 
 let sock = null, qrCode = null, connectionStatus = "disconnected", reconnectAttempts = 0, connectedPhone = "", botPaused = false;
 const messageQueue = [];
@@ -170,7 +171,7 @@ function getStateDescription(state) {
 }
 
 // ============ PERSISTENCIA ============
-function saveDataToDisk() { try { fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:Array.from(sessions.values())},null,2)); } catch(e){console.log("⚠️ Error guardando:",e.message);} }
+function saveDataToDisk() { try { fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:Array.from(sessions.values())},null,2)); saveHistory(); } catch(e){console.log("⚠️ Error guardando:",e.message);} }
 function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; console.log("📂 Datos cargados"); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
@@ -247,7 +248,77 @@ function addToChatHistory(waId, direction, text, imageUrl=null) {
   const profile=getProfile(waId);
   const entry = { id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), waId:normalizePhone(waId), phone:profile.phone||normalizePhone(waId), name:profile.name||"", direction, text, imageUrl, timestamp:new Date().toISOString() };
   chatHistory.push(entry); if(chatHistory.length>MAX_CHAT_HISTORY)chatHistory=chatHistory.slice(-MAX_CHAT_HISTORY);
+  // ✅ Guardar en historial permanente (disco)
+  appendToHistory(entry);
   io.emit("new_message",entry); return entry;
+}
+
+// ============ HISTORIAL PERMANENTE EN DISCO ============
+const HISTORY_FILE = path.join(PERSISTENT_DIR, "historial.json");
+let fullHistory = [];
+
+function loadHistory() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const data = fs.readFileSync(HISTORY_FILE, "utf-8");
+      fullHistory = JSON.parse(data);
+      console.log(`📚 Historial cargado: ${fullHistory.length} mensajes`);
+      // Limpiar mensajes > 30 días
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const before = fullHistory.length;
+      fullHistory = fullHistory.filter(m => new Date(m.timestamp).getTime() > thirtyDaysAgo);
+      if (fullHistory.length < before) {
+        console.log(`🧹 Limpiados ${before - fullHistory.length} mensajes antiguos (>30 días)`);
+        saveHistory();
+      }
+    }
+  } catch(e) { console.log("⚠️ Error cargando historial:", e.message); fullHistory = []; }
+}
+
+function saveHistory() {
+  try { fs.writeFileSync(HISTORY_FILE, JSON.stringify(fullHistory)); }
+  catch(e) { console.log("⚠️ Error guardando historial:", e.message); }
+}
+
+function appendToHistory(entry) {
+  fullHistory.push(entry);
+  // Guardar cada 50 mensajes para no escribir disco en cada mensaje
+  if (fullHistory.length % 50 === 0) saveHistory();
+}
+
+// Guardar historial periódicamente (cada 2 minutos)
+setInterval(() => { if (fullHistory.length > 0) saveHistory(); }, 2 * 60 * 1000);
+
+function searchHistory(filters = {}) {
+  let results = fullHistory;
+  
+  // Filtrar por teléfono
+  if (filters.phone) {
+    const phoneNorm = normalizePhone(filters.phone);
+    results = results.filter(m => m.waId === phoneNorm || m.phone === phoneNorm || 
+      m.waId?.includes(filters.phone) || m.phone?.includes(filters.phone));
+  }
+  
+  // Filtrar por fecha inicio
+  if (filters.from) {
+    const fromDate = new Date(filters.from);
+    results = results.filter(m => new Date(m.timestamp) >= fromDate);
+  }
+  
+  // Filtrar por fecha fin
+  if (filters.to) {
+    const toDate = new Date(filters.to);
+    toDate.setHours(23, 59, 59, 999);
+    results = results.filter(m => new Date(m.timestamp) <= toDate);
+  }
+  
+  // Filtrar por texto
+  if (filters.text) {
+    const search = filters.text.toLowerCase();
+    results = results.filter(m => m.text?.toLowerCase().includes(search));
+  }
+  
+  return results.slice(-500); // Max 500 resultados
 }
 
 function addPendingQuote(session) {
@@ -722,15 +793,23 @@ io.on("connection", (socket) => {
   socket.on("delete_contact", (data) => { if (!data.waId) return; profiles.delete(data.waId); saveDataToDisk(); io.emit("contact_deleted", { waId: data.waId }); });
   socket.on("delete_chats", (data) => { if (!data.waId) return; const n = normalizePhone(data.waId); chatHistory = chatHistory.filter(m => m.waId !== n); sessions.delete(n); pendingQuotes.delete(n); saveDataToDisk(); io.emit("chats_deleted", { waId: n }); });
   socket.on("get_metrics", () => { socket.emit("metrics", { metrics: account.metrics }); });
+  socket.on("search_history", (filters) => { const results = searchHistory(filters); socket.emit("history_results", { count: results.length, messages: results }); });
 });
 
 // ============ ENDPOINTS ============
 app.get("/health", (req, res) => res.send("OK"));
 app.get("/status", (req, res) => res.json({ connection: connectionStatus, phone: connectedPhone, botPaused, storeOpen: isStoreOpen(), metrics: account.metrics }));
+app.get("/api/history", (req, res) => {
+  const results = searchHistory({ phone: req.query.phone, from: req.query.from, to: req.query.to, text: req.query.text });
+  res.json({ count: results.length, messages: results });
+});
 
 // ============ INICIAR ============
 server.listen(PORT, () => {
+  // Asegurar que /data existe
+  if (!fs.existsSync(PERSISTENT_DIR)) { try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) { console.log("⚠️ No se pudo crear /data:", e.message); } }
   loadDataFromDisk();
+  loadHistory();
   console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║  🐄 TICO-bot - La Vaca CR                         ║
