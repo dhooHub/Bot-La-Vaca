@@ -637,8 +637,8 @@ async function handleIncomingMessage(msg) {
     console.log(`🔍 webData: ${webData ? JSON.stringify(webData) : 'null'}`);
     // Si NO es mensaje estructurado del catálogo ("Me interesa")
     if(!webData || !webData.codigo){
-      // Si está en NEW o en estados "finales" donde puede empezar nueva consulta
-      const estadosPermitidos = ["NEW", "PREGUNTANDO_ALGO_MAS", "VENTA_COMPLETADA"];
+      // Si está en NEW o en estados donde puede empezar nueva consulta con foto
+      const estadosPermitidos = ["NEW", "PREGUNTANDO_ALGO_MAS", "VENTA_COMPLETADA", "ESPERANDO_CONFIRMACION_VENDEDOR"];
       if(estadosPermitidos.includes(session.state)){
         
         // ✅ GUARDAR IMAGEN INMEDIATAMENTE como archivo (no en sesión)
