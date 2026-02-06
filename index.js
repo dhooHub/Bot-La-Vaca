@@ -58,6 +58,11 @@ const PERSISTENT_DIR = "/data";
 const AUTH_FOLDER = path.join(PERSISTENT_DIR, "auth_baileys");
 const DATA_FOLDER = PERSISTENT_DIR;
 
+// Telegram config
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8572915797:AAH09-bWAlKwHG5gh3ElOZpDAsuyNwNNqG4";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "172868898";
+const PANEL_URL = process.env.PANEL_URL || "https://tico-bot-lite.onrender.com";
+
 // Servir imágenes guardadas
 app.use('/images', express.static(path.join(PERSISTENT_DIR, 'images')));
 
@@ -402,6 +407,66 @@ async function guardarImagenFoto(waId, base64Data) {
   }
 }
 
+// ✅ Función para enviar alertas a Telegram
+async function sendTelegramAlert(tipo, datos) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  
+  try {
+    const phone = datos.phone || datos.waId || "Desconocido";
+    const phoneFormatted = formatPhone(phone);
+    const linkPanel = `${PANEL_URL}`;
+    
+    let mensaje = "";
+    
+    if (tipo === "PRODUCTO_FOTO") {
+      mensaje = `🔔 *NUEVA CONSULTA*\n\n` +
+        `📷 Producto de foto\n` +
+        `👕 ${datos.talla_color || "Sin especificar"}\n` +
+        `👤 ${phoneFormatted}\n\n` +
+        `👉 [Abrir Panel](${linkPanel})`;
+    } else if (tipo === "PRODUCTO_CATALOGO") {
+      mensaje = `🔔 *NUEVA CONSULTA*\n\n` +
+        `📦 ${datos.producto || "Producto"}\n` +
+        `💰 ₡${(datos.precio || 0).toLocaleString()}\n` +
+        `👕 ${datos.talla_color || "Sin especificar"}\n` +
+        `👤 ${phoneFormatted}\n\n` +
+        `👉 [Abrir Panel](${linkPanel})`;
+    } else if (tipo === "SINPE") {
+      mensaje = `💰 *SINPE RECIBIDO*\n\n` +
+        `📱 Referencia: ${datos.reference || "?"}\n` +
+        `👤 ${phoneFormatted}\n\n` +
+        `👉 [Confirmar Pago](${linkPanel})`;
+    } else if (tipo === "ZONA") {
+      mensaje = `📍 *ZONA RECIBIDA*\n\n` +
+        `🗺️ ${datos.zone || "?"}\n` +
+        `👤 ${phoneFormatted}\n\n` +
+        `👉 [Calcular Envío](${linkPanel})`;
+    }
+    
+    if (!mensaje) return;
+    
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: mensaje,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      })
+    });
+    
+    if (response.ok) {
+      console.log(`📲 Telegram enviado: ${tipo}`);
+    } else {
+      console.log(`⚠️ Telegram error:`, await response.text());
+    }
+  } catch (e) {
+    console.log(`⚠️ Telegram error: ${e.message}`);
+  }
+}
+
 function searchHistory(filters = {}) {
   let results = fullHistory;
   
@@ -438,6 +503,8 @@ function addPendingQuote(session) {
   const profile=getProfile(session.waId);
   const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, created_at:new Date().toISOString() };
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
+  // Enviar a Telegram
+  sendTelegramAlert("PRODUCTO_CATALOGO", quote);
 }
 
 function parseWebMessage(text) {
@@ -680,6 +747,8 @@ async function handleIncomingMessage(msg) {
           pendingQuotes.set(waId, quote);
           console.log(`📷 *** EMITIENDO new_pending (con detalles) ***`);
           io.emit("new_pending", quote);
+          // Enviar a Telegram
+          sendTelegramAlert("PRODUCTO_FOTO", quote);
           
           saveDataToDisk();
           
@@ -735,6 +804,8 @@ async function handleIncomingMessage(msg) {
     console.log(`📷 Sockets conectados: ${io.engine.clientsCount}`);
     io.emit("new_pending", quote);
     console.log(`📷 *** EMITIDO! ***`);
+    // Enviar a Telegram
+    sendTelegramAlert("PRODUCTO_FOTO", quote);
     
     saveDataToDisk();
     
@@ -856,6 +927,7 @@ async function handleIncomingMessage(msg) {
     }else if(offersShipping()){
       session.delivery_method="envio"; session.state="ZONA_RECIBIDA";
       io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
+      sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
       await sendTextWithTyping(waId,frase("espera_zona",waId));
     }else{
       session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO";
@@ -869,6 +941,7 @@ async function handleIncomingMessage(msg) {
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
       session.delivery_method="envio"; session.state="ZONA_RECIBIDA"; account.metrics.delivery_envio+=1;
       io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
+      sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
       await sendTextWithTyping(waId,frase("espera_zona",waId)); saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
@@ -900,7 +973,9 @@ async function handleIncomingMessage(msg) {
   if(session.state==="ESPERANDO_SINPE"){
     if(msg.message?.imageMessage){
       await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
-      io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});return;
+      io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});
+      sendTelegramAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
+      return;
     }
     if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
       await sendTextWithTyping(waId,"Mandame la foto del comprobante 🧾📸");
