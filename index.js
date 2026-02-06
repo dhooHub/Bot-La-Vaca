@@ -83,7 +83,7 @@ function extractPrice(text) { const match=String(text).match(/₡?\s*([\d\s,\.]+
 
 // ============ INTELIGENCIA ARTIFICIAL ============
 
-const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de ropa y accesorios para damas ubicada en Heredia, Costa Rica.
+const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de ropa y accesorios ubicada en Heredia, Costa Rica.
 
 INFORMACIÓN DE LA TIENDA:
 - Nombre: La Vaca CR
@@ -91,7 +91,16 @@ INFORMACIÓN DE LA TIENDA:
 - Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
 - Teléfono: 2237-3335
 - WhatsApp: +506 6483-6565
-- Catálogo: www.lavacacr.com
+- Catálogo online: www.lavacacr.com
+
+⚠️ MUY IMPORTANTE - DIFERENCIA TIENDA vs CATÁLOGO:
+EN TIENDA FÍSICA vendemos: ropa para damas, caballeros y niños, uniformes escolares, fajas, bolsos para dama, y más.
+EN CATÁLOGO ONLINE (www.lavacacr.com) solo vendemos: ROPA PARA DAMAS.
+
+Si preguntan por productos que NO son ropa de damas (uniformes, ropa de niños, ropa de hombre, fajas, etc.):
+- Decí que esos productos los manejamos EN TIENDA
+- Invitá a visitar la tienda física donde pueden ver toda la variedad
+- NO digas que no tenemos, decí que en tienda pueden encontrarlo
 
 LO QUE SÍ PODÉS RESPONDER:
 - Horarios de atención
@@ -106,10 +115,12 @@ LO QUE SÍ PODÉS RESPONDER:
   * Fuera de GAM: ₡3,500
   * Tiempo de entrega: 4-5 días hábiles
 
-🚫 NUNCA RESPONDAS SOBRE (decí que ya te van a confirmar):
+🚫 NUNCA RESPONDAS SOBRE:
 - Precios de productos (decí: "Los precios los vemos cuando elijas el producto del catálogo 🙌")
 - Números de SINPE o datos de pago (decí: "Los datos de pago te los paso cuando confirmemos tu pedido 🙌")
-- Disponibilidad de productos específicos (decí: "Revisá el catálogo en www.lavacacr.com y si te gusta algo, dale al botón 'Me interesa' 🙌")
+- Disponibilidad de productos específicos del catálogo (decí: "Revisá el catálogo en www.lavacacr.com y si te gusta algo, dale al botón 'Me interesa' 🙌")
+
+ESTILO: Respondé como tico, amigable, natural, corto (2-3 oraciones máximo). Usá "vos" no "usted". No inventés información.`;
 
 ESTILO: Respondé como tico, amigable, natural, corto (2-3 oraciones máximo). Usá "vos" no "usted". No inventés información.`;
 
@@ -827,6 +838,33 @@ async function handleIncomingMessage(msg) {
     );
     session.catalogo_enviado = true;
     saveDataToDisk();
+    return;
+  }
+
+  // ✅ Detectar productos que NO están en catálogo online pero SÍ en tienda física
+  const productosEnTienda = /uniforme|escolar|escuela|colegio|niño|niña|niños|niñas|hombre|caballero|masculino|faja|fajas|bolso|bolsos|cartera|carteras|mochila|maletín|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
+  if(productosEnTienda.test(lower)){
+    session.saludo_enviado = true;
+    saveDataToDisk();
+    
+    // Notificar al dueño sobre consulta de producto en tienda
+    io.emit("store_product_inquiry", {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: text.trim(),
+      timestamp: new Date().toISOString()
+    });
+    
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,
+      `${saludo}Esos productos los manejamos en nuestra tienda física 🏪\n\n` +
+      `Te invitamos a visitarnos donde podés ver toda la variedad:\n\n` +
+      `📍 Heredia centro, 200m sur de Correos de CR\n` +
+      `🕒 Lunes a Sábado 9am-7pm, Domingo 10am-6pm\n` +
+      `📞 2237-3335\n\n` +
+      `¡Con gusto te atendemos! 😊`
+    );
     return;
   }
 
