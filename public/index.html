@@ -330,9 +330,54 @@
       t.className = 'toast show ' + type;
       setTimeout(() => t.classList.remove('show'), 3000);
     }
+    // Variable para el audio
+    let audioContext = null;
+    let audioUnlocked = false;
+    
     function playSound() {
-      try { $('notifSound').play(); } catch(e) {}
+      console.log('🔊 Intentando reproducir sonido...');
+      try {
+        const audio = $('notifSound');
+        audio.currentTime = 0;
+        audio.volume = 1.0;
+        
+        // Intentar reproducir
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('🔊 Sonido reproducido');
+          }).catch(e => {
+            console.log('🔊 Audio bloqueado:', e.message);
+          });
+        }
+      } catch(e) {
+        console.log('🔊 Error:', e);
+      }
     }
+    
+    // Desbloquear audio con el primer toque del usuario
+    document.addEventListener('touchstart', function unlockAudio() {
+      const audio = $('notifSound');
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audioUnlocked = true;
+        console.log('🔊 Audio desbloqueado');
+      }).catch(e => {});
+      document.removeEventListener('touchstart', unlockAudio);
+    }, { once: true });
+    
+    // También intentar con click
+    document.addEventListener('click', function unlockAudioClick() {
+      const audio = $('notifSound');
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audioUnlocked = true;
+        console.log('🔊 Audio desbloqueado (click)');
+      }).catch(e => {});
+      document.removeEventListener('click', unlockAudioClick);
+    }, { once: true });
     
     // ===== FORCE UPDATE UI =====
     let updatePending = false;
@@ -946,7 +991,11 @@
     // ===== ACTUALIZAR AL VOLVER A LA APP =====
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && socket) {
-        console.log('👁️ App visible - reconectando...');
+        console.log('👁️ App visible - volviendo a lista principal...');
+        
+        // SIEMPRE volver a la lista de chats (no quedarse en un chat específico)
+        closeChat();
+        
         // Si el socket está desconectado, reconectar
         if (!socket.connected) {
           socket.connect();
@@ -961,14 +1010,22 @@
     
     // También detectar cuando se desbloquea el teléfono
     window.addEventListener('focus', () => {
+      console.log('👁️ Window focus');
+      
+      // Volver a lista principal
+      closeChat();
+      
       if (socket && !socket.connected) {
-        console.log('👁️ Window focus - reconectando...');
+        console.log('👁️ Reconectando socket...');
         socket.connect();
         const pin = localStorage.getItem('ticobot_pin');
         if (pin) {
           setTimeout(() => socket.emit('auth', pin), 500);
         }
       }
+      
+      // Forzar actualización
+      forceUpdate();
     });
   </script>
 </body>
