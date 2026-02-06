@@ -58,6 +58,9 @@ const PERSISTENT_DIR = "/data";
 const AUTH_FOLDER = path.join(PERSISTENT_DIR, "auth_baileys");
 const DATA_FOLDER = PERSISTENT_DIR;
 
+// Servir imágenes guardadas
+app.use('/images', express.static(path.join(PERSISTENT_DIR, 'images')));
+
 let sock = null, qrCode = null, connectionStatus = "disconnected", reconnectAttempts = 0, connectedPhone = "", botPaused = false;
 const messageQueue = [];
 let isProcessingQueue = false;
@@ -284,13 +287,46 @@ function resetSession(session) {
 
 function getProfile(waId) { const id=normalizePhone(waId); if(!profiles.has(id))profiles.set(id,{waId:id,name:"",blocked:false,purchases:0,created_at:new Date().toISOString()}); return profiles.get(id); }
 
-function addToChatHistory(waId, direction, text, imageUrl=null) {
+function addToChatHistory(waId, direction, text, imageBase64=null) {
   const profile=getProfile(waId);
-  const entry = { id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), waId:normalizePhone(waId), phone:profile.phone||normalizePhone(waId), name:profile.name||"", direction, text, imageUrl, timestamp:new Date().toISOString() };
-  chatHistory.push(entry); if(chatHistory.length>MAX_CHAT_HISTORY)chatHistory=chatHistory.slice(-MAX_CHAT_HISTORY);
+  
+  // Si hay imagen, guardarla como archivo
+  let imageUrl = null;
+  if(imageBase64) {
+    try {
+      const imgDir = path.join(PERSISTENT_DIR, "images");
+      if(!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, {recursive: true});
+      const imgFile = `chat_${waId}_${Date.now()}.jpg`;
+      const imgPath = path.join(imgDir, imgFile);
+      fs.writeFileSync(imgPath, Buffer.from(imageBase64, 'base64'));
+      imageUrl = `/images/${imgFile}`;
+    } catch(e) {
+      console.log(`⚠️ Error guardando imagen de chat: ${e.message}`);
+      // Fallback: no guardar imagen
+      imageUrl = null;
+    }
+  }
+  
+  const entry = { 
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), 
+    waId:normalizePhone(waId), 
+    phone:profile.phone||normalizePhone(waId), 
+    name:profile.name||"", 
+    direction, 
+    text, 
+    imageUrl,
+    timestamp:new Date().toISOString() 
+  };
+  
+  chatHistory.push(entry); 
+  if(chatHistory.length>MAX_CHAT_HISTORY) chatHistory=chatHistory.slice(-MAX_CHAT_HISTORY);
+  
   // ✅ Guardar en historial permanente (disco)
   appendToHistory(entry);
-  io.emit("new_message",entry); return entry;
+  
+  // ✅ Emitir al panel
+  io.emit("new_message", entry); 
+  return entry;
 }
 
 // ============ HISTORIAL PERMANENTE EN DISCO ============
@@ -321,7 +357,12 @@ function saveHistory() {
 }
 
 function appendToHistory(entry) {
-  fullHistory.push(entry);
+  // No guardar imágenes base64 en disco (muy grandes)
+  const entryForDisk = { ...entry };
+  if (entryForDisk.imageUrl && entryForDisk.imageUrl.length > 1000) {
+    entryForDisk.imageUrl = "(imagen)"; // Marcador
+  }
+  fullHistory.push(entryForDisk);
   // Guardar cada 50 mensajes para no escribir disco en cada mensaje
   if (fullHistory.length % 50 === 0) saveHistory();
 }
@@ -586,7 +627,25 @@ async function handleIncomingMessage(msg) {
     session.producto = "Producto de foto";
     session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
     
-    console.log(`📷 Creando quote con foto: ${session.foto_base64 ? Math.round(session.foto_base64.length/1024) + 'KB' : 'NULL'}`);
+    // Guardar imagen como archivo para servirla por HTTP
+    let fotoUrl = null;
+    if (session.foto_base64) {
+      try {
+        const imgFileName = `foto_${waId}_${Date.now()}.jpg`;
+        const imgPath = path.join(PERSISTENT_DIR, "images", imgFileName);
+        // Crear carpeta si no existe
+        if (!fs.existsSync(path.join(PERSISTENT_DIR, "images"))) {
+          fs.mkdirSync(path.join(PERSISTENT_DIR, "images"), { recursive: true });
+        }
+        fs.writeFileSync(imgPath, Buffer.from(session.foto_base64, 'base64'));
+        fotoUrl = `/images/${imgFileName}`;
+        console.log(`📷 Imagen guardada: ${imgPath} (${Math.round(session.foto_base64.length/1024)}KB)`);
+      } catch(e) {
+        console.log(`⚠️ Error guardando imagen: ${e.message}`);
+        // Fallback a base64
+        fotoUrl = `data:image/jpeg;base64,${session.foto_base64}`;
+      }
+    }
     
     // Notificar al dueño con la foto
     const quote = {
@@ -596,7 +655,7 @@ async function handleIncomingMessage(msg) {
       producto: "📷 Producto de foto",
       precio: null,
       codigo: null,
-      foto_url: session.foto_base64 ? `data:image/jpeg;base64,${session.foto_base64}` : null,
+      foto_url: fotoUrl,
       talla_color: session.talla_color,
       foto_externa: true,
       created_at: new Date().toISOString()
