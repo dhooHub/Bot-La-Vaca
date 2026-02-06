@@ -421,6 +421,15 @@
       });
 
       socket.on('zone_received',data=>{currentShippingClient=data.waId;$('shippingClient').textContent=formatPhone(data.waId);$('shippingZone').textContent=data.zone;$('shippingPrecio').textContent='₡'+(data.precio||0).toLocaleString();$('inputShipping').value='';$('shippingModal').classList.add('active');toast('📍 '+data.zone,'success');});
+
+      // ✅ SINPE recibido: mostrar tarjeta para confirmar pago
+      socket.on('sinpe_received',data=>{
+        const sinpeItem={waId:data.waId,phone:data.phone||data.waId,name:data.name||'',producto:data.producto||'',talla_color:data.talla||'',foto_url:data.foto_url||null,tipo:'sinpe',created_at:new Date().toISOString()};
+        pending.unshift(sinpeItem);
+        try{localStorage.setItem('tb_pending',JSON.stringify(pending));}catch(e){}
+        renderPending();
+        toast('💰 Comprobante SINPE recibido','success');
+      });
       socket.on('action_result',r=>{toast(r.success?'✅ '+r.message:'❌ '+r.message,r.success?'success':'error');$('priceModal').classList.remove('active');$('shippingModal').classList.remove('active');});
       socket.on('status_result',r=>{toast(r.success?'🟢 Publicado':'❌ '+r.message,r.success?'success':'error');if(r.success){$('statusPreview').innerHTML='<span class="status-preview-placeholder">📷</span>';$('statusCaption').value='';statusImageBase64=null;}});
       socket.on('metrics',data=>{updateMetrics(data.metrics);});
@@ -442,12 +451,27 @@
     function updateStoreStatus(){const now=new Date();const utc=now.getTime()+(now.getTimezoneOffset()*60000);const cr=new Date(utc-(6*60*60*1000));const h=cr.getHours(),min=cr.getMinutes();const open=h>=9&&(h<18||(h===18&&min<50));$('storeStatus').textContent=open?'Abierto':'Cerrado';$('storeStatus').className=open?'open':'closed';}
     updateStoreStatus();setInterval(updateStoreStatus,60000);
 
-    // ✅ FIX 3: renderPending usa foto_url correctamente + quitado } suelto + muestra nombre
+    // ✅ renderPending: stock queries + SINPE payment cards, botones se deshabilitan
     function renderPending(){
       const list=$('pendingList');
       if(pending.length===0){list.innerHTML='';$('emptyPending').style.display='block';$('pendingBadge').style.display='none';return;}
       $('emptyPending').style.display='none';$('pendingBadge').style.display='inline';$('pendingBadge').textContent=pending.length;
-      list.innerHTML=pending.map(p=>`<div class="card"><div class="card-header"><span class="card-phone">📱 ${formatPhone(p.phone||p.waId)}${p.name?' ('+escapeHtml(p.name)+')':''}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${p.foto_url?`<img class="card-image" src="${p.foto_url}" onerror="this.style.display='none'" onclick="viewImage(this.src)">`:''}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong><br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}</div><div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY')">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY')">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div></div>`).join('');
+      list.innerHTML=pending.map(p=>{
+        const resolved=p._resolved||false;
+        const isSinpe=p.tipo==='sinpe';
+        const actionLabel=p._action==='SI_HAY'?'✅ Confirmado':p._action==='NO_HAY'?'❌ Agotado':p._action==='PAGADO'?'💰 Pago confirmado':'';
+        let buttons='';
+        if(resolved){
+          buttons=`<div style="text-align:center;padding:0.5rem;font-weight:700;color:var(--text-muted);">${actionLabel}</div>`;
+        }else if(isSinpe){
+          buttons=`<div class="card-actions"><button class="btn btn-primary" style="background:#2d9cdb;" onclick="sendAction('${p.waId}','PAGADO',this)">💰 Confirmar Pago</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div>`;
+        }else{
+          buttons=`<div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY',this)">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY',this)">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div>`;
+        }
+        const headerIcon=isSinpe?'💰':'📱';
+        const headerLabel=isSinpe?'COMPROBANTE SINPE':'';
+        return `<div class="card" style="${resolved?'opacity:0.6;':''}${isSinpe&&!resolved?'border-left:4px solid #2d9cdb;':''}"><div class="card-header"><span class="card-phone">${headerIcon} ${formatPhone(p.phone||p.waId)}${p.name?' ('+escapeHtml(p.name)+')':''}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${headerLabel?`<div style="background:#e3f2fd;color:#1565c0;padding:0.3rem 0.6rem;border-radius:8px;font-size:0.75rem;font-weight:700;margin-bottom:0.5rem;text-align:center;">${headerLabel}</div>`:''}${p.foto_url?`<img class="card-image" src="${p.foto_url}" onerror="this.style.display='none'" onclick="viewImage(this.src)">`:''}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong>${!isSinpe?`<br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}`:''}</div>${buttons}</div>`;
+      }).join('');
     }
 
     function renderChatList(){
@@ -544,7 +568,15 @@
       }
     };
 
-    function sendAction(waId,type){if(confirm('¿Confirmar?'))socket.emit('action',{clientWaId:waId,actionType:type});}
+    function sendAction(waId,type,btnEl){
+      if(!confirm('¿Confirmar?'))return;
+      // Deshabilitar botones visualmente
+      if(btnEl){const card=btnEl.closest('.card-actions');if(card)card.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='0.5';});}
+      // Marcar en pending array
+      const item=pending.find(p=>p.waId===waId);
+      if(item){item._resolved=true;item._action=type;}
+      socket.emit('action',{clientWaId:waId,actionType:type});
+    }
     function viewImage(src){$('imageViewerImg').src=src;$('imageViewer').classList.add('active');}
 
     $('connectBtn').onclick=()=>socket.emit('connect_whatsapp');
