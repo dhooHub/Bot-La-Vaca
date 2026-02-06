@@ -172,7 +172,11 @@ function getStateDescription(state) {
     ZONA_RECIBIDA: "Se le dijo que estamos calculando el envío",
     PRECIO_TOTAL_ENVIADO: "Se le mostró el precio total y se preguntó si está de acuerdo",
     ESPERANDO_SINPE: "Se le dieron los datos de SINPE y se espera el comprobante",
-    PAGO_CONFIRMADO_ENVIO: "Se confirmó el pago y se pidió la dirección de envío",
+    PAGO_CONFIRMADO_ENVIO: "Se confirmó el pago y se están pidiendo datos de envío",
+    ESPERANDO_NOMBRE_ENVIO: "Se le pidió su nombre completo para el envío",
+    ESPERANDO_TELEFONO_ENVIO: "Se le pidió su número de teléfono",
+    ESPERANDO_DIRECCION_ENVIO: "Se le pidió su dirección completa",
+    CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
   return map[state] || state;
 }
@@ -214,7 +218,11 @@ const FRASES = {
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
     ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
-    PAGO_CONFIRMADO_ENVIO: "Y sobre tu envío, ocupo tu dirección completa 📍",
+    PAGO_CONFIRMADO_ENVIO: "Y sobre tu envío, ocupo tus datos 📍",
+    ESPERANDO_NOMBRE_ENVIO: "Y sobre tu envío, ¿cuál es tu nombre completo? 👤",
+    ESPERANDO_TELEFONO_ENVIO: "Y sobre tu envío, ¿cuál es tu teléfono? 📱",
+    ESPERANDO_DIRECCION_ENVIO: "Y sobre tu envío, ¿cuál es tu dirección completa? 📍",
+    CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
 
@@ -233,7 +241,13 @@ function frase(tipo, sessionId = "global") {
 function getSession(waId) {
   const id = normalizePhone(waId);
   if (!sessions.has(id)) {
-    sessions.set(id, { waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, talla_color:null, shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() });
+    sessions.set(id, { 
+      waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, talla_color:null, 
+      shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, 
+      // Datos de envío
+      envio_nombre:null, envio_telefono:null, envio_direccion:null,
+      saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() 
+    });
   }
   const s = sessions.get(id); s.last_activity = Date.now(); return s;
 }
@@ -246,7 +260,9 @@ function saveLidMap() { try{fs.writeFileSync(LID_MAP_FILE,JSON.stringify(Object.
 loadLidMap();
 
 function resetSession(session) {
-  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
+  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
+  session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
+  session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
 
 function getProfile(waId) { const id=normalizePhone(waId); if(!profiles.has(id))profiles.set(id,{waId:id,name:"",blocked:false,purchases:0,created_at:new Date().toISOString()}); return profiles.get(id); }
@@ -477,6 +493,21 @@ async function handleIncomingMessage(msg) {
   // Detectar mensaje web ("Me interesa")
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
+    // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
+    const preguntaOtro = /(?:tienen|hay|viene|está|esta|tendrán|tendran|lo tienen|la tienen|tienen en|hay en|viene en|otro|otra)\s*(?:en\s+)?(?:color|talla|tamaño|tamano)?\s*(?:en\s+)?(rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|s|m|l|xl|xxl|xs|small|medium|large|\d+)/i.test(text);
+    
+    if(preguntaOtro){
+      session.saludo_enviado = true;
+      saveDataToDisk();
+      await sendTextWithTyping(waId,
+        `¡Hola! Pura vida 🙌\n\n` +
+        `De momento solo ofrecemos lo que está disponible en el catálogo.\n\n` +
+        `Si te interesa el producto como aparece, con gusto te confirmo disponibilidad 😊\n\n` +
+        `${CATALOG_URL}`
+      );
+      return;
+    }
+    
     session.producto=webData.producto; session.precio=webData.precio; session.codigo=webData.codigo; session.foto_url=webData.foto_url;
     let detalles=[];
     if(webData.talla)detalles.push(`Talla: ${webData.talla}`);
@@ -502,7 +533,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -628,13 +659,110 @@ async function handleIncomingMessage(msg) {
   }
 
   if(session.state==="PAGO_CONFIRMADO_ENVIO"){
-    if(text.trim().length>5){
-      profile.purchases=(profile.purchases||0)+1;
-      await sendTextWithTyping(waId,frase("fin_envio",waId).replace("{days}",DELIVERY_DAYS));
-      io.emit("sale_completed",{waId,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,method:"envio",direccion:text.trim()});
-      resetSession(session);saveDataToDisk();return;
+    // Paso 1: Pedir nombre
+    session.state="ESPERANDO_NOMBRE_ENVIO";
+    await sendTextWithTyping(waId,"¡Pago recibido! 🎉\n\nAhora ocupo tus datos para el envío.\n\n¿Cuál es tu nombre completo? 👤");
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="ESPERANDO_NOMBRE_ENVIO"){
+    if(text.trim().length < 3){
+      await sendTextWithTyping(waId,"Ocupo tu nombre completo para el envío 👤");
+      return;
     }
-    await sendTextWithTyping(waId,"Ocupo tu dirección completa para el envío 📍 (provincia, cantón, distrito y señas)");return;
+    session.envio_nombre = text.trim();
+    session.state = "ESPERANDO_TELEFONO_ENVIO";
+    await sendTextWithTyping(waId,"¿Cuál es tu número de teléfono? 📱");
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="ESPERANDO_TELEFONO_ENVIO"){
+    const tel = text.replace(/[^\d]/g,"");
+    if(tel.length < 8){
+      await sendTextWithTyping(waId,"Ocupo un número de teléfono válido 📱 (8 dígitos)");
+      return;
+    }
+    session.envio_telefono = tel;
+    session.state = "ESPERANDO_DIRECCION_ENVIO";
+    await sendTextWithTyping(waId,"¿Cuál es tu dirección completa? 📍\n\n(Provincia, cantón, distrito y otras señas)");
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="ESPERANDO_DIRECCION_ENVIO"){
+    if(text.trim().length < 10){
+      await sendTextWithTyping(waId,"Ocupo tu dirección completa 📍\n(Provincia, cantón, distrito y otras señas)");
+      return;
+    }
+    session.envio_direccion = text.trim();
+    session.state = "CONFIRMANDO_DATOS_ENVIO";
+    
+    const price = session.precio || 0;
+    const shipping = session.shipping_cost || 0;
+    const total = price + shipping;
+    
+    const resumen = `📋 *RESUMEN DE TU PEDIDO*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 Producto: ${session.producto || 'Artículo'}\n` +
+      `🏷️ Código: ${session.codigo || '-'}\n` +
+      `👕 Talla/Color: ${session.talla_color || '-'}\n` +
+      `💰 Precio: ₡${price.toLocaleString()}\n` +
+      `🚚 Envío: ₡${shipping.toLocaleString()}\n` +
+      `💵 *TOTAL: ₡${total.toLocaleString()}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📍 *DATOS DE ENVÍO*\n` +
+      `👤 Nombre: ${session.envio_nombre}\n` +
+      `📱 Teléfono: ${session.envio_telefono}\n` +
+      `🏠 Dirección: ${session.envio_direccion}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `¿Los datos están correctos?\n\n` +
+      `1. ✅ Sí, todo está bien\n` +
+      `2. ❌ No, quiero corregir`;
+    
+    await sendTextWithTyping(waId, resumen);
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="CONFIRMANDO_DATOS_ENVIO"){
+    if(lower==="1"||lower==="si"||lower==="sí"||lower.includes("bien")||lower.includes("correcto")){
+      profile.purchases = (profile.purchases||0) + 1;
+      
+      await sendTextWithTyping(waId,
+        `¡Perfecto! 🎉 Tu pedido está confirmado.\n\n` +
+        `🚚 Te llega en aproximadamente 8 días hábiles.\n\n` +
+        `Te avisamos cuando lo despachemos.\n\n` +
+        `¡Muchas gracias por tu compra! 🙌\n¡Pura vida! 🐄`
+      );
+      
+      io.emit("sale_completed",{
+        waId,
+        phone: profile.phone||waId,
+        name: session.envio_nombre || profile.name || "",
+        producto: session.producto,
+        codigo: session.codigo,
+        talla: session.talla_color,
+        method: "envio",
+        envio_nombre: session.envio_nombre,
+        envio_telefono: session.envio_telefono,
+        envio_direccion: session.envio_direccion,
+        total: (session.precio||0) + (session.shipping_cost||0)
+      });
+      
+      resetSession(session);
+      saveDataToDisk();
+      return;
+    }
+    
+    if(lower==="2"||lower==="no"||lower.includes("corregir")){
+      session.state = "ESPERANDO_NOMBRE_ENVIO";
+      session.envio_nombre = null;
+      session.envio_telefono = null;
+      session.envio_direccion = null;
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\n¿Cuál es tu nombre completo? 👤");
+      saveDataToDisk();return;
+    }
+    
+    await sendTextWithTyping(waId,"Por favor respondé:\n\n1. ✅ Sí, todo está bien\n2. ❌ No, quiero corregir");
+    return;
   }
 
   // ============ ESTADO NEW ============
@@ -642,6 +770,57 @@ async function handleIncomingMessage(msg) {
   // ✅ Detectar gracias (simple, no necesita IA)
   if(/gracias/i.test(lower)){
     await sendTextWithTyping(waId,frase("gracias",waId));
+    return;
+  }
+
+  // ✅ Detectar pregunta de COSTO de envío con zona incluida (ej: "cuánto vale el envío a Puntarenas")
+  const envioConZonaMatch = text.match(/(?:cuanto|cuánto|cual|cuál)\s+(?:vale|cuesta|es|sale)\s+(?:el\s+)?(?:envio|envío).*(?:a|para|hacia)\s+(.+)/i);
+  if(envioConZonaMatch || (/(?:envio|envío).*(?:a|para)\s+\w+/i.test(lower) && /(?:cuanto|cuánto|precio|costo|vale|cuesta)/i.test(lower))){
+    // Extraer la zona del mensaje
+    let zona = envioConZonaMatch ? envioConZonaMatch[1].trim() : null;
+    if(!zona){
+      // Intentar extraer zona de otra forma
+      const zonaMatch2 = text.match(/(?:a|para|hacia)\s+([A-Za-záéíóúÁÉÍÓÚñÑ\s]+?)(?:\?|$|,|\.|cuanto|cuánto)/i);
+      if(zonaMatch2) zona = zonaMatch2[1].trim();
+    }
+    
+    if(zona && zona.length > 2){
+      session.client_zone = zona;
+      session.saludo_enviado = true;
+      saveDataToDisk();
+      
+      // Notificar al panel que hay consulta de envío
+      io.emit("shipping_inquiry", {
+        waId,
+        phone: profile.phone || waId,
+        name: profile.name || "",
+        zone: zona
+      });
+      
+      const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+      await sendTextWithTyping(waId,
+        `${saludo}¡Sí hacemos envíos a ${zona}! 🚚\n\n` +
+        `El costo exacto te lo confirmo cuando elijas tu producto.\n\n` +
+        `Revisá el catálogo y si te gusta algo, dale al botón 'Me interesa' 😊\n\n${CATALOG_URL}`
+      );
+      session.catalogo_enviado = true;
+      saveDataToDisk();
+      return;
+    }
+  }
+
+  // ✅ Detectar pregunta general de si hacen envíos (sin zona específica)
+  if(/hacen envios|hacen envíos|envian|envían|hacen entregas|llegan a/i.test(lower) && !/cuanto|cuánto|precio|costo|vale|cuesta/i.test(lower)){
+    session.saludo_enviado = true;
+    saveDataToDisk();
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,
+      `${saludo}¡Sí hacemos envíos a todo el país! 🚚\n\n` +
+      `El costo depende de tu zona.\n\n` +
+      `Revisá el catálogo y cuando elijas tu producto te confirmo el precio del envío 😊\n\n${CATALOG_URL}`
+    );
+    session.catalogo_enviado = true;
+    saveDataToDisk();
     return;
   }
 
