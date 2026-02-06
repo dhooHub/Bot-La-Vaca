@@ -557,15 +557,16 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
+  console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}`);
   if(hasImage && session.state === "NEW"){
     const webData = parseWebMessage(text);
+    console.log(`🔍 webData: ${webData ? JSON.stringify(webData) : 'null'}`);
     // Si NO es mensaje estructurado del catálogo ("Me interesa")
     if(!webData || !webData.codigo){
       session.state = "ESPERANDO_DETALLES_FOTO";
       session.foto_externa = true;
       session.foto_base64 = imageBase64; // Guardar la foto para enviarla al dueño después
       session.saludo_enviado = true;
-      // NO guardar en disco (foto base64 es muy grande)
       console.log(`📷 Foto guardada en sesión: ${imageBase64 ? Math.round(imageBase64.length/1024) + 'KB' : 'NULL'}`);
       await sendTextWithTyping(waId,
         `¡Hola! Pura vida 🙌 Dejame revisar ese producto.\n\n` +
@@ -1102,7 +1103,7 @@ io.on("connection", (socket) => {
       socket.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
       socket.emit("bot_status", { paused: botPaused });
       if (qrCode) socket.emit("qr_code", { qr: qrCode });
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), history: chatHistory.slice(-50), contacts: Array.from(profiles.values()), metrics: account.metrics });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
