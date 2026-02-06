@@ -84,13 +84,33 @@ function extractPrice(text) { const match=String(text).match(/₡?\s*([\d\s,\.]+
 // ============ INTELIGENCIA ARTIFICIAL ============
 
 const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de ropa y accesorios para damas ubicada en Heredia, Costa Rica.
-INFORMACIÓN: La Vaca CR, Heredia centro, 200m sur de Correos de CR. Horario: L-S 9am-7pm, D 10am-6pm. Tel: 2237-3335. WhatsApp: +506 6483-6565. Catálogo: www.lavacacr.com
-PAGO: SINPE Móvil (preferido), efectivo en tienda. NO tarjetas.
-ENVÍOS: Todo el país. GAM: ₡2,500. Rural: ₡3,500. Entrega: 3-5 días hábiles.
-TALLAS: S, M, L, XL, XXL, Talla Plus en algunos estilos.
-APARTADOS: Sí, con 1/4 del precio. 2 meses para completar.
-POLÍTICAS: Cambios 8 días con factura sin usar. No devoluciones de dinero. Garantía 30 días defectos fábrica.
-ESTILO: Respondé como tico, amigable, corto (2-3 oraciones). No inventés info.`;
+
+INFORMACIÓN DE LA TIENDA:
+- Nombre: La Vaca CR
+- Ubicación: Heredia centro, 200m sur de Correos de CR
+- Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
+- Teléfono: 2237-3335
+- WhatsApp: +506 6483-6565
+- Catálogo: www.lavacacr.com
+
+LO QUE SÍ PODÉS RESPONDER:
+- Horarios de atención
+- Ubicación y cómo llegar
+- Tallas disponibles: S, M, L, XL, XXL y Talla Plus en algunos estilos
+- Apartados: Se aparta con la cuarta parte del costo y tenés dos meses para retirar
+- Cambios: 8 días con factura y sin usar. No se hacen devoluciones de dinero.
+- Garantía: 30 días contra defectos de fábrica
+- Métodos de pago: SINPE Móvil y efectivo en tienda (NO tarjetas)
+- Que sí hacemos envíos a todo el país
+
+🚫 NUNCA RESPONDAS SOBRE (decí que ya te van a confirmar):
+- Precios de productos (decí: "Los precios los vemos cuando elijas el producto del catálogo 🙌")
+- Costos exactos de envío (decí: "El costo de envío te lo confirmo cuando me digás tu zona 🙌")
+- Números de SINPE o datos de pago (decí: "Los datos de pago te los paso cuando confirmemos tu pedido 🙌")
+- Disponibilidad de productos específicos (decí: "Revisá el catálogo en www.lavacacr.com y si te gusta algo, dale al botón 'Me interesa' 🙌")
+
+ESTILO: Respondé como tico, amigable, natural, corto (2-3 oraciones máximo). Usá "vos" no "usted". No inventés información.`;
+
 
 async function classifyMessage(userMessage, currentState, lastBotQuestion) {
   if (!OPENAI_API_KEY) return "RESPUESTA_FLUJO";
@@ -140,19 +160,6 @@ async function askAI(userMessage, conversationHistory = []) {
     if (aiResponse) { console.log("🤖 IA respondió:", aiResponse.slice(0, 50) + "..."); account.metrics.ia_calls = (account.metrics.ia_calls || 0) + 1; }
     return aiResponse;
   } catch (error) { console.log("❌ Error IA:", error.message); return null; }
-}
-
-function checkFaqRegex(lower) {
-  if (/envio|entregan|envían|costo de envio/.test(lower)) { if(offersShipping()) return `Sí hacemos envíos 🚚\n\nGAM: ${SHIPPING_GAM}\nRural: ${SHIPPING_RURAL}\n${DELIVERY_DAYS}`; return `Solo retiro 🏪\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}`; }
-  if (/horario|hora|atienden|cierran|abren/.test(lower)) return `Horario: ${HOURS_DAY} 🙌`;
-  if (/garantia|devolucion/.test(lower)) return `Garantía: ${WARRANTY_DAYS} 🙌`;
-  if ((/ubicacion|donde|direccion/.test(lower)) && hasPhysicalLocation()) return `📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}${MAPS_URL ? `\n🗺️ ${MAPS_URL}` : ""}`;
-  if (/tallas?|medidas?|tamanos?/.test(lower)) return "Manejamos tallas: S, M, L, XL, XXL y Talla Plus 👕";
-  if (/sinpe|pago|como pago/.test(lower)) return `SINPE Móvil 💳\n${SINPE_NUMBER}\nA nombre de: ${SINPE_NAME}`;
-  if (/apartado|apartar|aparto|reservar|reserva/.test(lower)) return "¡Sí hacemos apartados! 🙌\n\nApartás con 1/4 del precio y tenés 2 meses para completar.";
-  if (/tarjeta|credito|débito|debito|visa|mastercard/.test(lower)) return "Por el momento solo aceptamos SINPE Móvil y efectivo 🙌";
-  if (/cambio|devolucion|devolver|cambiar/.test(lower)) return "Tenés 8 días para cambios, con factura y sin usar 🙌 No hacemos devoluciones de dinero.";
-  return null;
 }
 
 function getStateDescription(state) {
@@ -493,20 +500,13 @@ async function handleIncomingMessage(msg) {
   if(numResp==="1")text="si"; if(numResp==="2")text="no";
   const lower=norm(text);
 
-  // ============ IA CLASIFICADORA: Detectar interrupciones en medio del flujo ============
+  // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    // Paso 1: FAQ por regex (gratis)
-    const faqResponse=checkFaqRegex(lower);
-    if(faqResponse){
-      const recordatorio=FRASES.recordatorio_flujo[session.state]||"";
-      await sendTextWithTyping(waId,recordatorio?`${faqResponse}\n\n${recordatorio}`:faqResponse);
-      return;
-    }
-    // Paso 2: IA clasificadora (solo en estados que esperan respuesta específica)
     const estadosConRespuesta=["ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
+      
       if(classification==="FAQ"){
         const aiResp=await askAI(text);
         const recordatorio=FRASES.recordatorio_flujo[session.state]||"";
@@ -639,45 +639,39 @@ async function handleIncomingMessage(msg) {
 
   // ============ ESTADO NEW ============
 
-  // ✅ PRIMERO: Chequear FAQs (incluso si viene con "hola" adelante)
-  const faqResp=checkFaqRegex(lower);
-  if(faqResp){
-    // Si también incluye saludo, saludar + responder FAQ
-    if(!session.saludo_enviado&&/hola|buenas|buenos|pura vida|hey/.test(lower)){
-      session.saludo_enviado=true;saveDataToDisk();
-      await sendTextWithTyping(waId,`¡Hola! Pura vida 🙌\n\n${faqResp}`);
-    }else{
-      await sendTextWithTyping(waId,faqResp);
-    }
+  // ✅ Detectar gracias (simple, no necesita IA)
+  if(/gracias/i.test(lower)){
+    await sendTextWithTyping(waId,frase("gracias",waId));
     return;
   }
 
-  if(/^(gracias|muchas gracias)/.test(lower)){await sendTextWithTyping(waId,frase("gracias",waId));return;}
-
-  // SEGUNDO: Saludo puro (sin pregunta)
-  if(!session.saludo_enviado&&/^(hola|buenas|buenos|pura vida|hey)/.test(lower)){
-    session.saludo_enviado=true;saveDataToDisk();
-    await sendTextWithTyping(waId,frase("saludos",waId));return;
-  }
-
-  // TERCERO: Catálogo
-  if(!session.catalogo_enviado&&(session.saludo_enviado||/tienen|hay|busco|quiero|necesito|faldas?|blusas?|vestidos?|jeans|pantalon|bolsos?|fajas?|ropa|catalogo|productos/.test(lower))){
-    session.saludo_enviado=true;session.catalogo_enviado=true;saveDataToDisk();
-    await sendTextWithTyping(waId,`${frase("catalogo",waId)}\n\n${CATALOG_URL}`);return;
-  }
-
-  if(session.catalogo_enviado&&/tienen|hay|busco|quiero|necesito/.test(lower)){
-    await sendTextWithTyping(waId,`Revisá el catálogo y si te gusta algo, dale al botón 'Me interesa' 🙌\n\n${CATALOG_URL}`);return;
-  }
-
-  // Fallback
-  if(!session.catalogo_enviado){
+  // ✅ Si pregunta por productos específicos o catálogo → enviar catálogo
+  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower)){
+    if(!session.saludo_enviado){session.saludo_enviado=true;}
     session.catalogo_enviado=true;saveDataToDisk();
-    await sendTextWithTyping(waId,`${frase("catalogo",waId)}\n\n${CATALOG_URL}`);
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,`${saludo}${frase("catalogo",waId)}\n\n${CATALOG_URL}`);
+    return;
+  }
+
+  // ✅ Para todo lo demás → IA analiza y responde
+  const aiResponse = await askAI(text);
+  
+  if(aiResponse){
+    // Detectar si la IA respondió como saludo para marcar la sesión
+    if(!session.saludo_enviado && /hola|pura vida|bienvenid|gusto|ayud/i.test(aiResponse)){
+      session.saludo_enviado=true;
+      saveDataToDisk();
+    }
+    await sendTextWithTyping(waId, aiResponse);
   }else{
-    const aiResponse=await askAI(text);
-    if(aiResponse){await sendTextWithTyping(waId,aiResponse);}
-    else{await sendTextWithTyping(waId,"Si tenés alguna duda, podés llamarnos al 2237-3335 o visitarnos en tienda 🙌");}
+    // Fallback si IA falla
+    if(!session.saludo_enviado){
+      session.saludo_enviado=true;saveDataToDisk();
+      await sendTextWithTyping(waId,frase("saludos",waId));
+    }else{
+      await sendTextWithTyping(waId,"Si tenés alguna duda, podés llamarnos al 2237-3335 o visitarnos en tienda 🙌");
+    }
   }
 }
 
