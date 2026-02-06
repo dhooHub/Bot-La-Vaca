@@ -333,6 +333,20 @@
     function playSound() {
       try { $('notifSound').play(); } catch(e) {}
     }
+    
+    // ===== FORCE UPDATE UI =====
+    function forceUpdate() {
+      // Forzar re-render inmediato
+      requestAnimationFrame(() => {
+        renderChatList();
+        if (currentChat) {
+          renderChat();
+          // Scroll al final del chat
+          const msgs = $('chatMessages');
+          if (msgs) msgs.scrollTop = msgs.scrollHeight;
+        }
+      });
+    }
 
     // ===== NOTIFICATIONS =====
     function requestNotifications() {
@@ -575,15 +589,15 @@
         // Contacts
         (data.contacts || []).forEach(c => contacts[c.waId] = c);
         renderChatList();
+        if (currentChat) renderChat();
       });
 
       // New message - NO notificar (solo actualizar UI)
       socket.on('new_message', msg => {
+        console.log('📩 new_message:', msg.waId);
         if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null };
         chats[msg.waId].messages.push(msg);
-        renderChatList();
-        if (currentChat === msg.waId) renderChat();
-        // NO showNotification - solo notificar acciones del jefe
+        forceUpdate();
       });
 
       // New pending (stock query)
@@ -591,8 +605,7 @@
         console.log('📥 new_pending:', item.waId, 'foto_url:', item.foto_url ? item.foto_url.substring(0, 50) + '...' : 'null');
         if (!chats[item.waId]) chats[item.waId] = { messages: [], pending: null };
         chats[item.waId].pending = item;
-        renderChatList();
-        if (currentChat === item.waId) renderChat();
+        forceUpdate();
         showNotification('📥 Nueva consulta', `${item.producto || 'Producto'} - ${formatPhone(item.waId)}`);
       });
 
@@ -600,8 +613,7 @@
       socket.on('sinpe_received', data => {
         if (!chats[data.waId]) chats[data.waId] = { messages: [], pending: null };
         chats[data.waId].pending = { ...data, tipo: 'sinpe' };
-        renderChatList();
-        if (currentChat === data.waId) renderChat();
+        forceUpdate();
         showNotification('💰 SINPE recibido', formatPhone(data.waId));
       });
 
