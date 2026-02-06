@@ -5,15 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#1a1f25">
-  <title>La Vaca-Bot 🐄</title>
+  <title>TICObot 🐄</title>
   <style>
-    :root { --primary: #1a1f25; --primary-light: #25D366; --bg: #f0f2f5; --card: #fff; --text: #1a1f25; --text-muted: #667781; --danger: #E74C3C; --success: #25D366; --warning: #F39C12; }
+    :root {
+      --primary: #1a1f25;
+      --primary-light: #25D366;
+      --bg: #f0f2f5;
+      --card: #fff;
+      --text: #1a1f25;
+      --text-muted: #667781;
+      --danger: #E74C3C;
+      --success: #25D366;
+      --warning: #F39C12;
+      --action-bg: #fff3cd;
+      --action-border: #ffc107;
+      --sinpe-bg: #e3f2fd;
+      --sinpe-border: #2196f3;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
 
+    /* ===== LOGIN ===== */
     #login { position: fixed; inset: 0; background: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
     #login.hidden { display: none; }
-    .login-title { color: #fff; font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .login-title { color: #fff; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; }
     .login-subtitle { color: rgba(255,255,255,0.6); margin-bottom: 2rem; }
     .pin-box { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
     .pin-digit { width: 55px; height: 65px; font-size: 1.8rem; text-align: center; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; outline: none; }
@@ -22,136 +37,136 @@
     .login-btn:disabled { opacity: 0.5; }
     .login-error { color: #FF6B6B; margin-top: 1rem; }
 
-    header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
-    .header-title { font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+    /* ===== MAIN LAYOUT ===== */
+    #app { display: none; height: 100vh; }
+    #app.active { display: flex; flex-direction: column; }
+
+    /* Header */
+    .header { background: var(--primary); color: #fff; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .header-left { display: flex; align-items: center; gap: 0.8rem; }
+    .header-title { font-size: 1.1rem; font-weight: 700; }
+    .conn-badge { padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.65rem; font-weight: 700; }
+    .conn-badge.on { background: var(--success); }
+    .conn-badge.off { background: var(--danger); cursor: pointer; }
+    .conn-badge.wait { background: var(--warning); }
     .header-right { display: flex; align-items: center; gap: 0.5rem; }
-    .conn-indicator { padding: 0.2rem 0.6rem; border-radius: 15px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.3px; animation: pulse-glow 2s infinite; }
-    .conn-indicator.on { background: var(--success); color: #fff; }
-    .conn-indicator.off { background: var(--danger); color: #fff; cursor: pointer; animation: pulse-danger 1.5s infinite; }
-    .conn-indicator.wait { background: var(--warning); color: #fff; }
-    @keyframes pulse-danger { 0%,100%{opacity:1;} 50%{opacity:0.7;} }
-    @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(37,211,102,0.4);} 50%{box-shadow:0 0 8px 2px rgba(37,211,102,0.3);} }
-    .status-badge { display: none; }
-    .bot-toggle { cursor: pointer; border: none; padding: 0.25rem 0.6rem; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
+    .bot-toggle { padding: 0.3rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; }
     .bot-toggle.active { background: var(--success); color: #fff; }
     .bot-toggle.paused { background: var(--warning); color: #fff; }
+    .notif-btn { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 0.3rem 0.6rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+    .notif-btn.enabled { background: var(--success); }
 
-    .tabs { display: flex; background: var(--primary); padding: 0.4rem; gap: 0.25rem; }
-    .tab { flex: 1; padding: 0.5rem 0.3rem; text-align: center; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); font-size: 0.65rem; font-weight: 600; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
-    .tab.active { background: #fff; color: var(--primary); }
-    .tab-icon { font-size: 1.1rem; }
-    .tab-badge { background: var(--danger); color: #fff; font-size: 0.55rem; padding: 0.1rem 0.35rem; border-radius: 8px; }
+    /* Main container */
+    .main-container { flex: 1; display: flex; overflow: hidden; }
 
-    .content { display: none; padding: 1rem; padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
-    .content.active { display: block; }
+    /* Sidebar - Lista de chats */
+    .sidebar { width: 320px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 0.8rem; border-bottom: 1px solid #e0e0e0; }
+    .search-input { width: 100%; padding: 0.6rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 0.9rem; outline: none; }
+    .chat-list { flex: 1; overflow-y: auto; }
+    .chat-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
+    .chat-item:hover { background: #f5f5f5; }
+    .chat-item.active { background: #e8f5e9; }
+    .chat-item.has-action { background: #fff8e1; }
+    .chat-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; position: relative; flex-shrink: 0; }
+    .chat-avatar .badge { position: absolute; top: -2px; right: -2px; width: 18px; height: 18px; background: var(--danger); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #fff; border: 2px solid #fff; }
+    .chat-info { flex: 1; min-width: 0; }
+    .chat-name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-preview { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-meta { text-align: right; flex-shrink: 0; }
+    .chat-time { font-size: 0.7rem; color: var(--text-muted); }
+    .chat-action-icon { font-size: 1rem; margin-top: 0.2rem; }
 
-    .card { background: var(--card); border-radius: 16px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-    .card-phone { font-weight: 700; color: var(--primary-light); }
-    .card-time { font-size: 0.8rem; color: var(--text-muted); }
-    .card-image { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; margin-bottom: 0.5rem; cursor: pointer; }
-    .card-details { background: var(--bg); padding: 0.6rem; border-radius: 10px; font-size: 0.9rem; margin-bottom: 0.8rem; }
-    .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    /* Chat area */
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; }
+    .chat-area.empty { align-items: center; justify-content: center; }
+    .empty-chat { text-align: center; color: var(--text-muted); }
+    .empty-chat-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-chat-text { font-size: 1.1rem; }
 
-    .btn { padding: 0.8rem; border: none; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
-    .btn-primary { background: var(--primary-light); color: #fff; grid-column: span 2; }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-secondary { background: var(--bg); color: var(--text); }
-    .btn-info { background: #2d9cdb; color: #fff; }
+    /* Chat header */
+    .chat-header { background: #fff; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #e0e0e0; }
+    .chat-header-back { display: none; background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.3rem; }
+    .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .chat-header-info { flex: 1; }
+    .chat-header-name { font-weight: 600; }
+    .chat-header-status { font-size: 0.75rem; color: var(--text-muted); }
+    .chat-header-actions { display: flex; gap: 0.5rem; }
+    .chat-header-btn { background: var(--bg); border: none; padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; }
 
-    .qr-section { text-align: center; padding: 1.5rem; }
-    .qr-container { background: #fff; padding: 1rem; border-radius: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .qr-container img { width: 220px; height: 220px; }
-    .qr-instructions { color: var(--text-muted); margin-top: 1rem; font-size: 0.9rem; line-height: 1.5; }
-    .connect-btn { background: var(--primary-light); color: #fff; border: none; padding: 0.9rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 25px; cursor: pointer; margin-top: 1rem; }
-    .connected-info { background: var(--card); padding: 1.5rem; border-radius: 16px; text-align: center; }
-    .connected-phone { font-size: 1.4rem; font-weight: 700; color: var(--primary-light); margin: 0.5rem 0; }
-    .disconnect-btn { background: var(--danger); color: #fff; border: none; padding: 0.7rem 1.5rem; font-size: 0.9rem; border-radius: 20px; cursor: pointer; margin-top: 1rem; }
-
-    .status-section { background: var(--card); border-radius: 16px; padding: 1.2rem; margin-bottom: 1rem; }
-    .status-title { font-weight: 700; margin-bottom: 1rem; }
-    .status-preview { width: 100%; height: 200px; background: var(--bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; overflow: hidden; }
-    .status-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .status-preview-placeholder { color: var(--text-muted); font-size: 3rem; }
-    .status-input { width: 100%; padding: 0.8rem; border: 2px solid var(--bg); border-radius: 12px; font-size: 1rem; margin-bottom: 0.8rem; }
-    .status-input:focus { border-color: var(--primary-light); outline: none; }
-    .status-actions { display: flex; gap: 0.5rem; }
-    .status-actions .btn { flex: 1; }
-    .file-input { display: none; }
-
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-end; justify-content: center; z-index: 200; opacity: 0; visibility: hidden; transition: all 0.3s; }
-    .modal-overlay.active { opacity: 1; visibility: visible; }
-    .modal { background: var(--card); width: 100%; max-width: 500px; border-radius: 20px 20px 0 0; padding: 1.5rem; transform: translateY(100%); transition: transform 0.3s; max-height: 85vh; overflow-y: auto; }
-    .modal-overlay.active .modal { transform: translateY(0); }
-    .modal-handle { width: 40px; height: 5px; background: rgba(0,0,0,0.2); border-radius: 5px; margin: 0 auto 1rem; }
-    .modal-title { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
-    .modal-client { background: var(--bg); padding: 0.7rem; border-radius: 10px; text-align: center; font-weight: 600; margin-bottom: 1rem; }
-    .price-input { width: 100%; padding: 1rem; font-size: 1.5rem; font-weight: 700; border: 2px solid var(--bg); border-radius: 12px; text-align: center; }
-    .price-input:focus { border-color: var(--primary-light); outline: none; }
-    .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
-    .modal-actions .btn { flex: 1; }
-    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0; }
-    .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
-    .quick-price:hover { background: var(--primary-light); color: #fff; }
-
-    .search-box { margin-bottom: 1rem; }
-    .search-input { width: 100%; padding: 0.8rem 1rem; border: 2px solid var(--bg); border-radius: 12px; font-size: 1rem; background: var(--card); }
-    .search-input:focus { border-color: var(--primary-light); outline: none; }
-    .contact-card { background: var(--card); border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-    .contact-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary-light); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 1.1rem; }
-    .contact-info { flex: 1; }
-    .contact-name { font-weight: 600; margin-bottom: 0.2rem; }
-    .contact-phone { font-size: 0.85rem; color: var(--text-muted); }
-    .contact-meta { font-size: 0.75rem; color: var(--text-muted); }
-    .contact-actions { display: flex; gap: 0.5rem; }
-    .contact-btn { padding: 0.5rem 0.8rem; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
-    .contact-btn-chat { background: var(--primary-light); color: #fff; }
-    .contact-btn-block { background: var(--danger); color: #fff; }
-    .contact-blocked { opacity: 0.5; }
-    .contact-blocked .contact-avatar { background: var(--danger); }
-
-    .chat-view { position: fixed; inset: 0; background: var(--bg); z-index: 150; display: none; flex-direction: column; }
-    .chat-view.active { display: flex; }
-    .chat-header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 1rem; }
-    .chat-back { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; }
-    .chat-info { flex: 1; }
-    .chat-name { font-weight: 700; }
-    .chat-delete { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer; }
-    .chat-messages { flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
-    .message { max-width: 80%; padding: 0.7rem 1rem; border-radius: 14px; font-size: 0.9rem; }
-    .message.in { background: var(--card); align-self: flex-start; }
-    .message.out { background: #d4f4eb; align-self: flex-end; }
+    /* Messages */
+    .messages-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .message { max-width: 70%; padding: 0.5rem 0.8rem; border-radius: 10px; font-size: 0.9rem; position: relative; }
+    .message.in { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .message.out { background: #d9fdd3; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .message-text { word-wrap: break-word; }
     .message-time { font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
-    .message-image { max-width: 100%; border-radius: 8px; margin-bottom: 0.3rem; cursor: pointer; }
-    .chat-input-area { background: var(--card); padding: 0.6rem; display: flex; gap: 0.4rem; }
-    .chat-input { flex: 1; padding: 0.7rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1rem; outline: none; }
-    .chat-send { width: 44px; height: 44px; background: var(--primary-light); border: none; border-radius: 50%; color: #fff; font-size: 1.2rem; cursor: pointer; }
 
-    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-    .empty-icon { font-size: 4rem; margin-bottom: 0.5rem; opacity: 0.5; }
-    .empty-title { font-weight: 600; color: var(--text); }
+    /* Action cards inside chat */
+    .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
+    .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
+    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 0.9rem; }
+    .action-card-icon { font-size: 1.2rem; }
+    .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 0.8rem; }
+    .action-card-detail { margin-bottom: 0.3rem; }
+    .action-card-buttons { display: flex; gap: 0.5rem; }
+    .action-btn { flex: 1; padding: 0.7rem; border: none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .action-btn.primary { background: var(--success); color: #fff; }
+    .action-btn.danger { background: var(--danger); color: #fff; }
+    .action-btn.info { background: #2196f3; color: #fff; }
+    .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); }
 
-    .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--card); padding: 0.8rem 1.2rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); opacity: 0; transition: all 0.3s; z-index: 300; }
+    /* Chat input */
+    .chat-input-area { background: #fff; padding: 0.6rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
+    .chat-input { flex: 1; padding: 0.7rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 0.95rem; outline: none; }
+    .chat-send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    /* QR Section */
+    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .qr-overlay.active { display: flex; }
+    .qr-modal { background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 350px; }
+    .qr-modal img { width: 220px; height: 220px; margin: 1rem 0; }
+    .qr-instructions { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+    .qr-close { margin-top: 1rem; background: var(--danger); color: #fff; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; cursor: pointer; }
+
+    /* Shipping Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #fff; padding: 1.5rem; border-radius: 16px; width: 90%; max-width: 400px; }
+    .modal-title { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
+    .modal-info { background: var(--bg); padding: 0.8rem; border-radius: 10px; margin-bottom: 1rem; }
+    .modal-info-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.9rem; }
+    .modal-input { width: 100%; padding: 1rem; font-size: 1.3rem; font-weight: 700; border: 2px solid var(--bg); border-radius: 12px; text-align: center; outline: none; }
+    .modal-input:focus { border-color: var(--primary-light); }
+    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0; }
+    .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .quick-price:hover { background: var(--primary-light); color: #fff; }
+    .modal-buttons { display: flex; gap: 0.5rem; }
+    .modal-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .modal-btn.cancel { background: var(--bg); }
+    .modal-btn.confirm { background: var(--primary-light); color: #fff; }
+    .modal-btn.danger { background: var(--danger); color: #fff; margin-top: 0.5rem; width: 100%; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: #fff; padding: 0.8rem 1.5rem; border-radius: 25px; opacity: 0; transition: all 0.3s; z-index: 300; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-    .toast.success { background: var(--success); color: #fff; }
-    .toast.error { background: var(--danger); color: #fff; }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
 
-    .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
-    .metric-card { background: var(--card); padding: 1.2rem; border-radius: 14px; text-align: center; }
-    .metric-value { font-size: 1.8rem; font-weight: 800; color: var(--primary-light); }
-    .metric-label { font-size: 0.8rem; color: var(--text-muted); }
-
-    .image-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 250; display: none; align-items: center; justify-content: center; }
-    .image-viewer.active { display: flex; }
-    .image-viewer img { max-width: 95%; max-height: 90vh; }
-    .image-viewer-close { position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.2); border: none; color: #fff; font-size: 1.5rem; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; }
-
-    .store-hours { background: var(--card); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; text-align: center; }
-    .store-hours .open { color: var(--success); font-weight: 700; }
-    .store-hours .closed { color: var(--danger); font-weight: 700; }
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
+      .sidebar.hidden { display: none; }
+      .chat-area { position: absolute; inset: 0; z-index: 20; display: none; }
+      .chat-area.active { display: flex; }
+      .chat-header-back { display: block; }
+      .main-container { position: relative; }
+    }
   </style>
 </head>
 <body>
+  <!-- LOGIN -->
   <div id="login">
     <div class="login-title">🐄 TICObot</div>
     <p class="login-subtitle">Ingresá tu PIN</p>
@@ -165,522 +180,517 @@
     <p class="login-error" id="loginError"></p>
   </div>
 
-  <div id="app" style="display:none;">
-    <header>
-      <div class="header-title">🐄 TICObot <span class="conn-indicator off" id="connIndicator" onclick="handleConnClick()">🔴 CONECTAR</span></div>
+  <!-- APP -->
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="header-title">🐄 TICObot</span>
+        <span class="conn-badge off" id="connBadge" onclick="showQR()">CONECTAR</span>
+      </div>
       <div class="header-right">
+        <button class="notif-btn" id="notifBtn" onclick="requestNotifications()">🔔</button>
         <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
-        <span class="status-badge disconnected" id="statusBadge" style="display:none;">Off</span>
-      </div>
-    </header>
-
-    <div class="tabs">
-      <button class="tab active" data-tab="whatsapp"><span class="tab-icon">📱</span>WhatsApp</button>
-      <button class="tab" data-tab="pending"><span class="tab-icon">📥</span>Inbox<span class="tab-badge" id="pendingBadge" style="display:none;">0</span></button>
-      <button class="tab" data-tab="chats"><span class="tab-icon">💬</span>Chats</button>
-      <button class="tab" data-tab="contacts"><span class="tab-icon">👥</span>Contactos</button>
-      <button class="tab" data-tab="metrics"><span class="tab-icon">📊</span>Stats</button>
-    </div>
-
-    <div class="content active" id="tab-whatsapp">
-      <div class="store-hours">🕒 Horario: 9am - 6:50pm | <span id="storeStatus" class="open">Abierto</span></div>
-      <div id="qrSection" class="qr-section">
-        <div id="qrPlaceholder"><h3>Conectar WhatsApp</h3><p class="qr-instructions">Vinculá tu WhatsApp para empezar</p><button class="connect-btn" id="connectBtn">📱 Conectar</button></div>
-        <div id="qrDisplay" style="display:none;"><div class="qr-container"><img id="qrImage" src="" alt="QR"></div><p class="qr-instructions">1. Abrí WhatsApp<br>2. ⋮ → Dispositivos vinculados<br>3. Escaneá el QR</p></div>
-        <div id="connectedDisplay" style="display:none;" class="connected-info"><div>✅ Conectado</div><div class="connected-phone" id="connectedPhone">+506</div><p style="color:var(--text-muted);margin-top:0.5rem;">El bot responde automáticamente.<br>Podés pausarlo para atender manual.</p><button class="disconnect-btn" id="disconnectBtn">🚪 Desconectar</button></div>
       </div>
     </div>
 
-    <div class="content" id="tab-pending">
-      <div id="pendingList"></div>
-      <div class="empty-state" id="emptyPending" style="display:none;"><div class="empty-icon">✅</div><div class="empty-title">¡Todo al día!</div></div>
-    </div>
-
-    <div class="content" id="tab-chats">
-      <!-- Buscador de historial -->
-      <div class="card" style="margin-bottom:1rem;">
-        <div style="font-weight:700;margin-bottom:0.5rem;">🔍 Buscar en historial</div>
-        <input type="text" id="histPhone" placeholder="📱 Teléfono (ej: 7010-6802)" class="search-input" style="margin-bottom:0.5rem;">
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
-          <input type="date" id="histFrom" class="search-input" style="flex:1;">
-          <input type="date" id="histTo" class="search-input" style="flex:1;">
+    <!-- Main -->
+    <div class="main-container">
+      <!-- Sidebar -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <input type="text" class="search-input" id="searchInput" placeholder="🔍 Buscar chat...">
         </div>
-        <button class="btn btn-primary" onclick="searchHist()" style="width:100%;">🔍 Buscar</button>
-      </div>
-      <!-- Resultados de búsqueda -->
-      <div id="histResults" style="display:none;"></div>
-      <!-- Chats recientes -->
-      <div id="chatList"></div>
-      <div class="empty-state" id="emptyChats" style="display:none;"><div class="empty-icon">💬</div><div class="empty-title">Sin chats</div></div>
-    </div>
-
-    <div class="content" id="tab-contacts">
-      <div class="search-box" style="display:flex;gap:0.5rem;">
-        <input type="text" id="contactSearch" placeholder="🔍 Buscar contacto..." class="search-input" style="flex:1;">
-        <button class="btn btn-primary" style="padding:0.8rem 1rem;" onclick="openAddContact()">➕</button>
-      </div>
-      <div id="contactList"></div>
-      <div class="empty-state" id="emptyContacts" style="display:none;"><div class="empty-icon">👥</div><div class="empty-title">Sin contactos</div></div>
-    </div>
-
-    <div class="content" id="tab-status">
-      <div class="status-section">
-        <div class="status-title">🟢 Publicar Estado</div>
-        <div class="status-preview" id="statusPreview"><span class="status-preview-placeholder">📷</span></div>
-        <input type="file" id="statusFileInput" class="file-input" accept="image/*">
-        <input type="text" class="status-input" id="statusCaption" placeholder="Texto del estado...">
-        <div class="status-actions">
-          <button class="btn btn-secondary" id="statusSelectImage">📷 Imagen</button>
-          <button class="btn btn-primary" id="statusPublish">🟢 Publicar</button>
+        <div class="chat-list" id="chatList">
+          <!-- Chats se renderizan aquí -->
         </div>
       </div>
-      <div class="card"><p style="text-align:center;color:var(--text-muted);">Los estados duran 24 horas.<br>También podés subirlos desde tu celular.</p></div>
-    </div>
 
-    <div class="content" id="tab-metrics">
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-value" id="mChats">0</div><div class="metric-label">💬 Chats</div></div>
-        <div class="metric-card"><div class="metric-value" id="mMensajes">0</div><div class="metric-label">📤 Mensajes</div></div>
-        <div class="metric-card"><div class="metric-value" id="mQuotes">0</div><div class="metric-label">📋 Cotizaciones</div></div>
-        <div class="metric-card"><div class="metric-value" id="mSales">0</div><div class="metric-label">✅ Ventas</div></div>
-        <div class="metric-card"><div class="metric-value" id="mEstados">0</div><div class="metric-label">🟢 Estados</div></div>
-        <div class="metric-card"><div class="metric-value" id="mEnvios">0</div><div class="metric-label">📦 Envíos</div></div>
+      <!-- Chat Area -->
+      <div class="chat-area empty" id="chatArea">
+        <div class="empty-chat">
+          <div class="empty-chat-icon">💬</div>
+          <div class="empty-chat-text">Seleccioná un chat para empezar</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="modal-overlay" id="priceModal">
-    <div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title">💰 Dar Precio</div>
-      <div class="modal-client" id="modalClient">506</div>
-      <input type="number" class="price-input" id="inputPrice" placeholder="₡0" inputmode="numeric">
-      <div class="quick-prices">
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=5000">₡5,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=7500">₡7,500</button>
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=10000">₡10,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=15000">₡15,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=20000">₡20,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputPrice').value=25000">₡25,000</button>
+  <!-- QR Modal -->
+  <div class="qr-overlay" id="qrOverlay">
+    <div class="qr-modal">
+      <h3>📱 Conectar WhatsApp</h3>
+      <div id="qrContent">
+        <p class="qr-instructions">Cargando...</p>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('priceModal').classList.remove('active')">Cancelar</button>
-        <button class="btn btn-primary" id="modalSendPrice">Enviar ✓</button>
-      </div>
+      <button class="qr-close" onclick="hideQR()">Cerrar</button>
     </div>
   </div>
 
+  <!-- Shipping Modal -->
   <div class="modal-overlay" id="shippingModal">
     <div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title">📦 Costo Envío</div>
-      <div class="modal-client" id="shippingClient">506</div>
-      <div style="background:var(--bg);padding:0.8rem;border-radius:10px;margin-bottom:1rem;"><div style="font-size:0.85rem;color:var(--text-muted);">📍 Zona:</div><div style="font-weight:600;" id="shippingZone">-</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-muted);">💰 Precio producto:</div><div style="font-weight:600;" id="shippingPrecio">₡0</div></div>
-      <input type="number" class="price-input" id="inputShipping" placeholder="₡0" inputmode="numeric">
+      <div class="modal-title">📦 Costo de Envío</div>
+      <div class="modal-info">
+        <div class="modal-info-row"><span>📱 Cliente:</span><span id="shipClient">-</span></div>
+        <div class="modal-info-row"><span>📍 Zona:</span><span id="shipZone">-</span></div>
+        <div class="modal-info-row"><span>💰 Producto:</span><span id="shipPrice">-</span></div>
+      </div>
+      <input type="number" class="modal-input" id="shipInput" placeholder="₡0" inputmode="numeric">
       <div class="quick-prices">
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=2000">₡2,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=2500">₡2,500</button>
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=3000">₡3,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=3500">₡3,500</button>
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=4000">₡4,000</button>
-        <button class="quick-price" onclick="document.getElementById('inputShipping').value=5000">₡5,000</button>
+        <button class="quick-price" onclick="setShip(2000)">₡2,000</button>
+        <button class="quick-price" onclick="setShip(2500)">₡2,500</button>
+        <button class="quick-price" onclick="setShip(3000)">₡3,000</button>
+        <button class="quick-price" onclick="setShip(3500)">₡3,500</button>
+        <button class="quick-price" onclick="setShip(4000)">₡4,000</button>
+        <button class="quick-price" onclick="setShip(5000)">₡5,000</button>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('shippingModal').classList.remove('active')">Cancelar</button>
-        <button class="btn btn-primary" id="modalSendShipping">Enviar ✓</button>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="hideShipModal()">Cancelar</button>
+        <button class="modal-btn confirm" onclick="sendShipping()">Enviar ✓</button>
       </div>
-      <button class="btn btn-danger" style="width:100%;margin-top:0.5rem;" id="modalNoShipping">🚫 No envío a esa zona</button>
+      <button class="modal-btn danger" onclick="noShipping()">🚫 No envío a esa zona</button>
     </div>
   </div>
 
-  <div class="modal-overlay" id="addContactModal">
-    <div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title">➕ Agregar Contacto</div>
-      <input type="text" class="price-input" id="inputContactPhone" placeholder="Número (ej: 88887777)" inputmode="tel" style="font-size:1.1rem;margin-bottom:0.8rem;">
-      <input type="text" class="price-input" id="inputContactName" placeholder="Nombre (opcional)" style="font-size:1.1rem;">
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('addContactModal').classList.remove('active')">Cancelar</button>
-        <button class="btn btn-primary" id="modalAddContact">Agregar ✓</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="editContactModal">
-    <div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title">✏️ Editar Contacto</div>
-      <div class="modal-client" id="editContactPhone">506</div>
-      <input type="text" class="price-input" id="inputEditName" placeholder="Nombre" style="font-size:1.1rem;">
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('editContactModal').classList.remove('active')">Cancelar</button>
-        <button class="btn btn-primary" id="modalSaveContact">Guardar ✓</button>
-      </div>
-      <button class="btn btn-danger" style="width:100%;margin-top:0.5rem;" id="modalDeleteContact">🗑️ Eliminar contacto</button>
-    </div>
-  </div>
-
-  <div class="chat-view" id="chatView">
-    <div class="chat-header">
-      <button class="chat-back" id="chatBack">←</button>
-      <div class="chat-info"><div class="chat-name" id="chatName">Cliente</div></div>
-      <button class="chat-delete" id="chatDelete">🗑️</button>
-    </div>
-    <div class="chat-messages" id="chatMessages"></div>
-    <div class="chat-input-area">
-      <input type="text" class="chat-input" id="chatInput" placeholder="Mensaje...">
-      <button class="chat-send" id="chatSend">➤</button>
-    </div>
-  </div>
-
-  <div class="image-viewer" id="imageViewer">
-    <button class="image-viewer-close" onclick="document.getElementById('imageViewer').classList.remove('active')">✕</button>
-    <img id="imageViewerImg" src="">
-  </div>
-
+  <!-- Toast -->
   <div class="toast" id="toast"></div>
+
+  <!-- Audio for notifications -->
+  <audio id="notifSound" preload="auto">
+    <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv4AAAAAAAAAAAAAAAAAAAAAP/7UGQAD/AAADSAAAAAAgAANIAAAAQAAAGkAAAAIAAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==" type="audio/mpeg">
+  </audio>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // ✅ FIX: contacts declarado aquí arriba junto con las demás variables globales
-    let socket, pending=[], chats={}, contacts=[], currentClient=null, currentChat=null, currentShippingClient=null, statusImageBase64=null, botPaused=false;
-    const $=id=>document.getElementById(id), $$=sel=>document.querySelectorAll(sel);
+    // ===== GLOBALS =====
+    let socket, currentChat = null, shipClient = null;
+    let chats = {}, pending = {}, contacts = {};
+    let notificationsEnabled = false;
 
-    // ✅ Clic en "CONECTAR" del header → ir a pestaña WhatsApp y conectar
-    function handleConnClick(){
-      document.querySelectorAll('.tab').forEach(t=>{t.classList.remove('active');if(t.dataset.tab==='whatsapp')t.classList.add('active');});
-      document.querySelectorAll('.content').forEach(c=>{c.classList.remove('active');if(c.id==='tab-whatsapp')c.classList.add('active');});
-      if(socket&&socket.connected)socket.emit('connect_whatsapp');
+    const $ = id => document.getElementById(id);
+    const $$ = sel => document.querySelectorAll(sel);
+
+    // ===== HELPERS =====
+    function formatPhone(w) {
+      const d = String(w).replace(/\D/g, '');
+      return d.length === 11 && d.startsWith('506') ? d.slice(0,3) + ' ' + d.slice(3,7) + '-' + d.slice(7) : w;
+    }
+    function timeAgo(d) {
+      if (!d) return '';
+      const s = Math.floor((Date.now() - new Date(d)) / 1000);
+      if (s < 60) return 'ahora';
+      if (s < 3600) return Math.floor(s/60) + 'm';
+      if (s < 86400) return Math.floor(s/3600) + 'h';
+      return Math.floor(s/86400) + 'd';
+    }
+    function escapeHtml(t) {
+      return String(t || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+    function toast(msg, type = '') {
+      const t = $('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + type;
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+    function playSound() {
+      try { $('notifSound').play(); } catch(e) {}
     }
 
-    // ✅ FIX 4: Restaurar datos de localStorage al cargar (evita perder datos al cambiar pestaña)
-    try {
-      const sp = localStorage.getItem('tb_pending'); if (sp) pending = JSON.parse(sp);
-      const sc = localStorage.getItem('tb_chats');   if (sc) chats = JSON.parse(sc);
-      const sco = localStorage.getItem('tb_contacts'); if (sco) contacts = JSON.parse(sco);
-    } catch(e) { console.log('⚠️ Error restaurando localStorage:', e); }
+    // ===== NOTIFICATIONS =====
+    function requestNotifications() {
+      if (!('Notification' in window)) {
+        toast('Tu navegador no soporta notificaciones', 'error');
+        return;
+      }
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') {
+          notificationsEnabled = true;
+          $('notifBtn').classList.add('enabled');
+          toast('🔔 Notificaciones activadas', 'success');
+        } else {
+          toast('Notificaciones denegadas', 'error');
+        }
+      });
+    }
+    function showNotification(title, body) {
+      if (notificationsEnabled && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '🐄' });
+      }
+      playSound();
+    }
 
-    const pins=$$('.pin-digit');
-    pins.forEach((p,i)=>{p.addEventListener('input',e=>{if(e.target.value&&i<3)pins[i+1].focus();$('loginBtn').disabled=getPin().length!==4;});p.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!e.target.value&&i>0)pins[i-1].focus();});});
-    function getPin(){return Array.from(pins).map(p=>p.value).join('');}
+    // ===== LOGIN =====
+    const pins = $$('.pin-digit');
+    pins.forEach((p, i) => {
+      p.addEventListener('input', e => {
+        if (e.target.value && i < 3) pins[i+1].focus();
+        $('loginBtn').disabled = getPin().length !== 4;
+      });
+      p.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !e.target.value && i > 0) pins[i-1].focus();
+      });
+    });
+    function getPin() { return Array.from(pins).map(p => p.value).join(''); }
 
-    function connect(pin){
-      socket=io();
-      socket.on('connect',()=>socket.emit('auth',pin));
-      socket.on('auth_success',()=>{localStorage.setItem('ticobot_pin',pin);$('login').classList.add('hidden');$('app').style.display='block';toast('✅ Conectado','success');});
-      socket.on('auth_error',msg=>{$('loginError').textContent=msg;pins.forEach(p=>p.value='');pins[0].focus();localStorage.removeItem('ticobot_pin');});
-      
-      socket.on('connection_status',data=>{
-        const b=$('statusBadge');b.className='status-badge '+data.status;
-        b.textContent=data.status==='connected'?'✅ On':data.status==='qr'?'📱 QR':'❌ Off';
-        // ✅ Actualizar indicador del header
-        const ci=$('connIndicator');
-        if(data.status==='connected'){ci.className='conn-indicator on';ci.textContent='🟢 CONECTADO';ci.onclick=null;}
-        else if(data.status==='qr'||data.status==='connecting'){ci.className='conn-indicator wait';ci.textContent='🟡 CONECTANDO...';ci.onclick=null;}
-        else{ci.className='conn-indicator off';ci.textContent='🔴 CONECTAR';ci.onclick=handleConnClick;}
-        if(data.status==='connected'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='block';if(data.phone)$('connectedPhone').textContent='+'+data.phone.slice(0,3)+' '+data.phone.slice(3,7)+'-'+data.phone.slice(7);}
-        else if(data.status==='qr'){$('qrPlaceholder').style.display='none';$('qrDisplay').style.display='block';$('connectedDisplay').style.display='none';}
-        else{$('qrPlaceholder').style.display='block';$('qrDisplay').style.display='none';$('connectedDisplay').style.display='none';}
+    $('loginBtn').onclick = () => connect(getPin());
+    const savedPin = localStorage.getItem('ticobot_pin');
+    if (savedPin) connect(savedPin);
+    else pins[0].focus();
+
+    // ===== SOCKET CONNECTION =====
+    function connect(pin) {
+      socket = io();
+      socket.on('connect', () => socket.emit('auth', pin));
+      socket.on('auth_success', () => {
+        localStorage.setItem('ticobot_pin', pin);
+        $('login').classList.add('hidden');
+        $('app').classList.add('active');
+        toast('✅ Conectado', 'success');
+        // Check notification permission
+        if (Notification.permission === 'granted') {
+          notificationsEnabled = true;
+          $('notifBtn').classList.add('enabled');
+        }
+      });
+      socket.on('auth_error', msg => {
+        $('loginError').textContent = msg;
+        pins.forEach(p => p.value = '');
+        pins[0].focus();
+        localStorage.removeItem('ticobot_pin');
       });
 
-      socket.on('bot_status',data=>{
-        botPaused=data.paused;
-        const btn=$('botToggle');
-        if(botPaused){btn.textContent='⏸️ Pausado';btn.className='bot-toggle paused';}
-        else{btn.textContent='▶️ Bot';btn.className='bot-toggle active';}
+      // Connection status
+      socket.on('connection_status', data => {
+        const badge = $('connBadge');
+        if (data.status === 'connected') {
+          badge.className = 'conn-badge on';
+          badge.textContent = '🟢 CONECTADO';
+          badge.onclick = null;
+          hideQR();
+        } else if (data.status === 'qr' || data.status === 'connecting') {
+          badge.className = 'conn-badge wait';
+          badge.textContent = '🟡 CONECTANDO';
+        } else {
+          badge.className = 'conn-badge off';
+          badge.textContent = '🔴 CONECTAR';
+          badge.onclick = showQR;
+        }
       });
 
-      socket.on('qr_code',data=>{$('qrImage').src=data.qr;});
-
-      // ✅ FIX 4: Persistir en localStorage al recibir init_data
-      socket.on('init_data',data=>{
-        pending=data.pending||[];
-        chats={};
-        (data.history||[]).forEach(m=>{if(!chats[m.waId])chats[m.waId]=[];chats[m.waId].push(m);});
-        contacts=data.contacts||[];
-        updateMetrics(data.metrics);
-        try {
-          localStorage.setItem('tb_pending', JSON.stringify(pending));
-          localStorage.setItem('tb_chats', JSON.stringify(chats));
-          localStorage.setItem('tb_contacts', JSON.stringify(contacts));
-        } catch(e) {}
-        renderPending(); renderChatList(); renderContacts();
+      // QR Code
+      socket.on('qr_code', data => {
+        $('qrContent').innerHTML = `<img src="${data.qr}" alt="QR"><p class="qr-instructions">1. Abrí WhatsApp<br>2. ⋮ → Dispositivos vinculados<br>3. Escaneá el QR</p>`;
       });
 
-      socket.on('contacts_list',data=>{contacts=data.contacts||[];try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();});
-      socket.on('contact_updated',data=>{const idx=contacts.findIndex(c=>c.waId===data.contact.waId);if(idx>=0)contacts[idx]=data.contact;else contacts.push(data.contact);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('✅ Contacto actualizado','success');});
-      socket.on('contact_added',data=>{contacts.push(data.contact);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('✅ Contacto agregado','success');});
-      socket.on('contact_deleted',data=>{contacts=contacts.filter(c=>c.waId!==data.waId);try{localStorage.setItem('tb_contacts',JSON.stringify(contacts));}catch(e){}renderContacts();toast('🗑️ Contacto eliminado','success');});
-
-      // ✅ FIX 4: Persistir pending en localStorage
-      socket.on('new_pending',item=>{
-        pending.unshift(item);
-        try { localStorage.setItem('tb_pending', JSON.stringify(pending)); } catch(e) {}
-        renderPending(); toast('📥 Nueva consulta','success');
-      });
-      socket.on('pending_resolved',data=>{
-        pending=pending.filter(p=>p.waId!==data.waId);
-        try { localStorage.setItem('tb_pending', JSON.stringify(pending)); } catch(e) {}
-        renderPending();
+      // Bot status
+      socket.on('bot_status', data => {
+        const btn = $('botToggle');
+        if (data.paused) {
+          btn.textContent = '⏸️ Pausado';
+          btn.className = 'bot-toggle paused';
+        } else {
+          btn.textContent = '▶️ Bot';
+          btn.className = 'bot-toggle active';
+        }
       });
 
-      // ✅ FIX 4: Persistir chats en localStorage
-      socket.on('new_message',msg=>{
-        if(!chats[msg.waId])chats[msg.waId]=[];
-        chats[msg.waId].push(msg);
-        try { localStorage.setItem('tb_chats', JSON.stringify(chats)); } catch(e) {}
+      // Init data
+      socket.on('init_data', data => {
+        // Process history into chats
+        chats = {};
+        (data.history || []).forEach(m => {
+          if (!chats[m.waId]) chats[m.waId] = { messages: [], pending: null };
+          chats[m.waId].messages.push(m);
+        });
+        // Process pending
+        (data.pending || []).forEach(p => {
+          if (!chats[p.waId]) chats[p.waId] = { messages: [], pending: null };
+          chats[p.waId].pending = p;
+        });
+        // Contacts
+        (data.contacts || []).forEach(c => contacts[c.waId] = c);
         renderChatList();
-        if(currentChat===msg.waId) renderChatMessages();
       });
 
-      socket.on('zone_received',data=>{currentShippingClient=data.waId;$('shippingClient').textContent=formatPhone(data.waId);$('shippingZone').textContent=data.zone;$('shippingPrecio').textContent='₡'+(data.precio||0).toLocaleString();$('inputShipping').value='';$('shippingModal').classList.add('active');toast('📍 '+data.zone,'success');});
-
-      // ✅ SINPE recibido: mostrar tarjeta para confirmar pago
-      socket.on('sinpe_received',data=>{
-        const sinpeItem={waId:data.waId,phone:data.phone||data.waId,name:data.name||'',producto:data.producto||'',talla_color:data.talla||'',foto_url:data.foto_url||null,tipo:'sinpe',created_at:new Date().toISOString()};
-        pending.unshift(sinpeItem);
-        try{localStorage.setItem('tb_pending',JSON.stringify(pending));}catch(e){}
-        renderPending();
-        toast('💰 Comprobante SINPE recibido','success');
-      });
-      socket.on('action_result',r=>{toast(r.success?'✅ '+r.message:'❌ '+r.message,r.success?'success':'error');$('priceModal').classList.remove('active');$('shippingModal').classList.remove('active');});
-      socket.on('status_result',r=>{toast(r.success?'🟢 Publicado':'❌ '+r.message,r.success?'success':'error');if(r.success){$('statusPreview').innerHTML='<span class="status-preview-placeholder">📷</span>';$('statusCaption').value='';statusImageBase64=null;}});
-      socket.on('metrics',data=>{updateMetrics(data.metrics);});
-      socket.on('chats_deleted',data=>{delete chats[data.waId];try{localStorage.setItem('tb_chats',JSON.stringify(chats));}catch(e){}renderChatList();if(currentChat===data.waId){$('chatView').classList.remove('active');currentChat=null;}});
-
-      // ✅ Resultados de búsqueda de historial
-      socket.on('history_results',data=>{
-        const el=$('histResults');
-        if(!data.messages||data.messages.length===0){el.innerHTML='<div class="card" style="text-align:center;color:var(--text-muted);padding:1rem;">No se encontraron resultados</div>';return;}
-        const grouped={};
-        data.messages.forEach(m=>{const key=m.waId||m.phone;if(!grouped[key])grouped[key]={phone:m.phone||key,name:m.name||'',msgs:[]};grouped[key].msgs.push(m);});
-        let html=`<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;text-align:center;">${data.count} mensajes encontrados</div>`;
-        Object.values(grouped).forEach(g=>{
-          html+=`<div class="card"><div class="card-header"><span class="card-phone">📱 ${formatPhone(g.phone)}${g.name?' ('+escapeHtml(g.name)+')':''}</span><span class="card-time">${g.msgs.length} msgs</span></div><div style="max-height:300px;overflow-y:auto;padding:0.5rem;">`;
-          g.msgs.forEach(m=>{const isOut=m.direction==='out';const time=new Date(m.timestamp).toLocaleString('es-CR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});html+=`<div style="margin-bottom:0.3rem;padding:0.3rem 0.5rem;border-radius:8px;font-size:0.85rem;${isOut?'background:#dcf8c6;text-align:right;':'background:#f0f0f0;'}">${escapeHtml(m.text)}<div style="font-size:0.7rem;color:var(--text-muted);">${time}</div></div>`;});
-          html+=`</div></div>`;
-        });
-        html+=`<button class="btn btn-secondary" onclick="document.getElementById('histResults').style.display='none';" style="width:100%;margin-top:0.5rem;">Cerrar resultados</button>`;
-        el.innerHTML=html;
-      });
-
-      // ✅ Historial: resultados de búsqueda
-      socket.on('history_results',data=>{
-        const div=$('histResults');
-        if(!data.messages||data.messages.length===0){
-          div.style.display='block';
-          div.innerHTML='<div class="card" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No se encontraron mensajes 🔍</div>';
-          return;
+      // New message
+      socket.on('new_message', msg => {
+        if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null };
+        chats[msg.waId].messages.push(msg);
+        renderChatList();
+        if (currentChat === msg.waId) renderChat();
+        if (msg.direction === 'in') {
+          showNotification('📥 Nuevo mensaje', msg.text?.slice(0, 50) || 'Mensaje recibido');
         }
-        div.style.display='block';
-        // Agrupar por teléfono
-        const grouped={};
-        data.messages.forEach(m=>{
-          const key=m.waId||m.phone;
-          if(!grouped[key])grouped[key]=[];
-          grouped[key].push(m);
-        });
-        let html=`<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem;">📊 ${data.count} mensajes encontrados</div>`;
-        for(const [waId,msgs] of Object.entries(grouped)){
-          const name=msgs[0].name||'';
-          html+=`<div class="card" style="margin-bottom:0.8rem;"><div style="font-weight:700;color:var(--primary-light);margin-bottom:0.5rem;">📱 ${formatPhone(waId)}${name?' ('+escapeHtml(name)+')':''} <span style="font-size:0.75rem;color:var(--text-muted);">(${msgs.length} msgs)</span></div>`;
-          html+=`<div style="max-height:300px;overflow-y:auto;border:1px solid var(--bg);border-radius:8px;padding:0.5rem;">`;
-          msgs.forEach(m=>{
-            const isIn=m.direction==='in';
-            const time=new Date(m.timestamp).toLocaleString('es-CR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-            html+=`<div style="display:flex;gap:0.5rem;margin-bottom:0.3rem;${isIn?'':'flex-direction:row-reverse;'}"><div style="background:${isIn?'#fff':'#dcf8c6'};padding:0.3rem 0.6rem;border-radius:8px;font-size:0.8rem;max-width:80%;box-shadow:0 1px 2px rgba(0,0,0,0.1);">${escapeHtml(m.text||'')}<div style="font-size:0.65rem;color:var(--text-muted);text-align:right;">${time}</div></div></div>`;
-          });
-          html+=`</div></div>`;
+      });
+
+      // New pending (stock query)
+      socket.on('new_pending', item => {
+        if (!chats[item.waId]) chats[item.waId] = { messages: [], pending: null };
+        chats[item.waId].pending = item;
+        renderChatList();
+        if (currentChat === item.waId) renderChat();
+        showNotification('📥 Nueva consulta', `${item.producto || 'Producto'} - ${formatPhone(item.waId)}`);
+      });
+
+      // SINPE received
+      socket.on('sinpe_received', data => {
+        if (!chats[data.waId]) chats[data.waId] = { messages: [], pending: null };
+        chats[data.waId].pending = { ...data, tipo: 'sinpe' };
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+        showNotification('💰 SINPE recibido', formatPhone(data.waId));
+      });
+
+      // Zone received - show shipping modal
+      socket.on('zone_received', data => {
+        shipClient = data.waId;
+        $('shipClient').textContent = formatPhone(data.waId);
+        $('shipZone').textContent = data.zone || '-';
+        $('shipPrice').textContent = '₡' + (data.precio || 0).toLocaleString();
+        $('shipInput').value = '';
+        $('shippingModal').classList.add('active');
+        showNotification('📍 Zona recibida', data.zone);
+      });
+
+      // Pending resolved
+      socket.on('pending_resolved', data => {
+        if (chats[data.waId]) {
+          chats[data.waId].pending = null;
         }
-        div.innerHTML=html;
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+      });
+
+      // Action result
+      socket.on('action_result', r => {
+        toast(r.success ? '✅ ' + r.message : '❌ ' + r.message, r.success ? 'success' : 'error');
+        hideShipModal();
+      });
+
+      // Contacts
+      socket.on('contacts_list', data => {
+        (data.contacts || []).forEach(c => contacts[c.waId] = c);
       });
     }
 
-    $('loginBtn').onclick=()=>connect(getPin());
-    const savedPin=localStorage.getItem('ticobot_pin');if(savedPin)connect(savedPin);else pins[0].focus();
+    // ===== QR =====
+    function showQR() {
+      $('qrOverlay').classList.add('active');
+      socket.emit('connect_whatsapp');
+    }
+    function hideQR() {
+      $('qrOverlay').classList.remove('active');
+    }
 
-    $$('.tab').forEach(tab=>{tab.onclick=()=>{$$('.tab').forEach(t=>t.classList.remove('active'));$$('.content').forEach(c=>c.classList.remove('active'));tab.classList.add('active');$('tab-'+tab.dataset.tab).classList.add('active');if(tab.dataset.tab==='metrics')socket.emit('get_metrics');if(tab.dataset.tab==='contacts')socket.emit('get_contacts');};});
+    // ===== RENDER CHAT LIST =====
+    function renderChatList() {
+      const list = $('chatList');
+      const filter = $('searchInput').value.toLowerCase();
+      
+      // Sort by last message time, pending first
+      const sorted = Object.keys(chats).sort((a, b) => {
+        const ap = chats[a].pending ? 1 : 0;
+        const bp = chats[b].pending ? 1 : 0;
+        if (ap !== bp) return bp - ap;
+        const aLast = chats[a].messages[chats[a].messages.length - 1];
+        const bLast = chats[b].messages[chats[b].messages.length - 1];
+        return new Date(bLast?.timestamp || 0) - new Date(aLast?.timestamp || 0);
+      });
 
-    function formatPhone(w){const d=String(w).replace(/\D/g,'');return d.length===11&&d.startsWith('506')?d.slice(0,3)+' '+d.slice(3,7)+'-'+d.slice(7):w;}
-    function timeAgo(d){if(!d)return'';const s=Math.floor((Date.now()-new Date(d))/1000);if(s<60)return'ahora';if(s<3600)return Math.floor(s/60)+'m';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
-    function escapeHtml(t){return String(t||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-    function toast(msg,type=''){const t=$('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.classList.remove('show'),3000);}
-    function updateMetrics(m){if(!m)return;$('mChats').textContent=m.chats_total||0;$('mMensajes').textContent=m.mensajes_enviados||0;$('mQuotes').textContent=m.quotes_sent||0;$('mSales').textContent=m.sinpe_confirmed||0;$('mEstados').textContent=m.estados_sent||0;$('mEnvios').textContent=m.delivery_envio||0;}
-
-    // Actualizar estado de tienda
-    function updateStoreStatus(){const now=new Date();const utc=now.getTime()+(now.getTimezoneOffset()*60000);const cr=new Date(utc-(6*60*60*1000));const h=cr.getHours(),min=cr.getMinutes();const open=h>=9&&(h<18||(h===18&&min<50));$('storeStatus').textContent=open?'Abierto':'Cerrado';$('storeStatus').className=open?'open':'closed';}
-    updateStoreStatus();setInterval(updateStoreStatus,60000);
-
-    // ✅ renderPending: stock queries + SINPE payment cards, botones se deshabilitan
-    function renderPending(){
-      const list=$('pendingList');
-      if(pending.length===0){list.innerHTML='';$('emptyPending').style.display='block';$('pendingBadge').style.display='none';return;}
-      $('emptyPending').style.display='none';$('pendingBadge').style.display='inline';$('pendingBadge').textContent=pending.length;
-      list.innerHTML=pending.map(p=>{
-        const resolved=p._resolved||false;
-        const isSinpe=p.tipo==='sinpe';
-        const actionLabel=p._action==='SI_HAY'?'✅ Confirmado':p._action==='NO_HAY'?'❌ Agotado':p._action==='PAGADO'?'💰 Pago confirmado':'';
-        let buttons='';
-        if(resolved){
-          buttons=`<div style="text-align:center;padding:0.5rem;font-weight:700;color:var(--text-muted);">${actionLabel}</div>`;
-        }else if(isSinpe){
-          buttons=`<div class="card-actions"><button class="btn btn-primary" style="background:#2d9cdb;" onclick="sendAction('${p.waId}','PAGADO',this)">💰 Confirmar Pago</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div>`;
-        }else{
-          buttons=`<div class="card-actions"><button class="btn btn-primary" onclick="sendAction('${p.waId}','SI_HAY',this)">✅ Sí Hay</button><button class="btn btn-danger" onclick="sendAction('${p.waId}','NO_HAY',this)">❌ No Hay</button><button class="btn btn-info" onclick="openChat('${p.waId}')">💬</button></div>`;
-        }
-        const headerIcon=isSinpe?'💰':'📱';
-        const headerLabel=isSinpe?'COMPROBANTE SINPE':'';
-        return `<div class="card" style="${resolved?'opacity:0.6;':''}${isSinpe&&!resolved?'border-left:4px solid #2d9cdb;':''}"><div class="card-header"><span class="card-phone">${headerIcon} ${formatPhone(p.phone||p.waId)}${p.name?' ('+escapeHtml(p.name)+')':''}</span><span class="card-time">${timeAgo(p.created_at)}</span></div>${headerLabel?`<div style="background:#e3f2fd;color:#1565c0;padding:0.3rem 0.6rem;border-radius:8px;font-size:0.75rem;font-weight:700;margin-bottom:0.5rem;text-align:center;">${headerLabel}</div>`:''}${p.foto_url?`<img class="card-image" src="${p.foto_url}" onerror="this.style.display='none'" onclick="viewImage(this.src)">`:''}<div class="card-details"><strong>👗 ${escapeHtml(p.producto||'Producto')}</strong><br>👕 Talla/Color: <strong>${escapeHtml(p.talla_color||'-')}</strong>${!isSinpe?`<br>🏷️ Código: ${escapeHtml(p.codigo||'-')}<br>💰 ₡${(p.precio||0).toLocaleString()}`:''}</div>${buttons}</div>`;
+      list.innerHTML = sorted.filter(waId => {
+        if (!filter) return true;
+        const c = contacts[waId];
+        return waId.includes(filter) || (c?.name || '').toLowerCase().includes(filter);
+      }).map(waId => {
+        const chat = chats[waId];
+        const last = chat.messages[chat.messages.length - 1];
+        const contact = contacts[waId];
+        const name = contact?.name || formatPhone(waId);
+        const hasPending = !!chat.pending;
+        const isSinpe = chat.pending?.tipo === 'sinpe';
+        const actionIcon = isSinpe ? '💰' : hasPending ? '🔔' : '';
+        
+        return `
+          <div class="chat-item ${currentChat === waId ? 'active' : ''} ${hasPending ? 'has-action' : ''}" onclick="openChat('${waId}')">
+            <div class="chat-avatar">
+              ${waId.slice(-2).toUpperCase()}
+              ${hasPending ? `<span class="badge">${actionIcon || '!'}</span>` : ''}
+            </div>
+            <div class="chat-info">
+              <div class="chat-name">${escapeHtml(name)}</div>
+              <div class="chat-preview">${escapeHtml(last?.text?.slice(0, 35) || '')}</div>
+            </div>
+            <div class="chat-meta">
+              <div class="chat-time">${timeAgo(last?.timestamp)}</div>
+              ${hasPending ? `<div class="chat-action-icon">${actionIcon}</div>` : ''}
+            </div>
+          </div>
+        `;
       }).join('');
     }
 
-    function renderChatList(){
-      const list=$('chatList'),ids=Object.keys(chats).sort((a,b)=>{const la=chats[a][chats[a].length-1],lb=chats[b][chats[b].length-1];return new Date(lb?.timestamp||0)-new Date(la?.timestamp||0);});
-      if(ids.length===0){list.innerHTML='';$('emptyChats').style.display='block';return;}
-      $('emptyChats').style.display='none';
-      list.innerHTML=ids.slice(0,50).map(waId=>{const msgs=chats[waId],last=msgs[msgs.length-1];return`<div class="card" style="padding:0.8rem;cursor:pointer;" onclick="openChat('${waId}')"><div style="display:flex;align-items:center;gap:0.8rem;"><div style="width:45px;height:45px;border-radius:50%;background:var(--primary-light);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">${waId.slice(-2)}</div><div style="flex:1;"><div style="font-weight:600;">${formatPhone(waId)}</div><div style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml((last?.text||'').slice(0,40))}</div></div><span style="font-size:0.75rem;color:var(--text-muted);">${timeAgo(last?.timestamp)}</span></div></div>`;}).join('');
+    $('searchInput').oninput = renderChatList;
+
+    // ===== OPEN/RENDER CHAT =====
+    function openChat(waId) {
+      currentChat = waId;
+      renderChatList();
+      renderChat();
+      
+      // Mobile: show chat area
+      $('sidebar').classList.add('hidden');
+      $('chatArea').classList.add('active');
+      $('chatArea').classList.remove('empty');
     }
 
-    function openChat(waId){currentChat=waId;$('chatName').textContent=formatPhone(waId);$('chatView').classList.add('active');renderChatMessages();}
-    function renderChatMessages(){const msgs=chats[currentChat]||[];$('chatMessages').innerHTML=msgs.map(m=>`<div class="message ${m.direction}">${m.image?`<img class="message-image" src="data:image/jpeg;base64,${m.image}" onclick="viewImage(this.src)">`:''}><div>${escapeHtml(m.text)}</div><div class="message-time">${new Date(m.timestamp).toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'})}</div></div>`).join('');$('chatMessages').scrollTop=$('chatMessages').scrollHeight;}
-
-    // ✅ Búsqueda de historial
-    function searchHist(){
-      const phone=$('histPhone').value.trim();
-      const from=$('histFrom').value;
-      const to=$('histTo').value;
-      if(!phone&&!from&&!to){toast('Ingresá al menos un filtro','error');return;}
-      const filters={};
-      if(phone)filters.phone=phone.replace(/[\s\-]/g,'');
-      if(from)filters.from=from;
-      if(to)filters.to=to;
-      socket.emit('search_history',filters);
-      $('histResults').style.display='block';
-      $('histResults').innerHTML='<div style="text-align:center;padding:1rem;color:var(--text-muted);">⏳ Buscando...</div>';
-    }
-    $('chatBack').onclick=()=>{$('chatView').classList.remove('active');currentChat=null;};
-    $('chatSend').onclick=()=>{const t=$('chatInput').value.trim();if(!t||!currentChat)return;socket.emit('action',{clientWaId:currentChat,actionType:'MENSAJE',payload:{texto:t}});$('chatInput').value='';};
-    $('chatInput').onkeypress=e=>{if(e.key==='Enter')$('chatSend').click();};
-    $('chatDelete').onclick=()=>{if(currentChat&&confirm('¿Borrar chat?'))socket.emit('delete_chats',{waId:currentChat});};
-
-    function openPriceModal(waId){currentClient=waId;$('modalClient').textContent=formatPhone(waId);$('inputPrice').value='';$('priceModal').classList.add('active');}
-    $('modalSendPrice').onclick=()=>{const p=parseInt($('inputPrice').value)||0;if(p<100){toast('⚠️ Precio inválido','error');return;}socket.emit('action',{clientWaId:currentClient,actionType:'PRECIO',payload:{price:p}});};
-    $('modalSendShipping').onclick=()=>{const s=parseInt($('inputShipping').value)||0;if(s<100){toast('⚠️ Envío inválido','error');return;}socket.emit('action',{clientWaId:currentShippingClient,actionType:'ENVIO',payload:{shipping:s}});};
-    $('modalNoShipping').onclick=()=>{socket.emit('action',{clientWaId:currentShippingClient,actionType:'NO_ENVIO_ZONA'});$('shippingModal').classList.remove('active');};
-
-    // CONTACTOS (ya inicializado arriba con localStorage)
-    let editingContact = null;
-    
-    function renderContacts(filter=''){
-      const list=$('contactList');
-      const filtered = filter ? contacts.filter(c => 
-        c.waId.includes(filter) || (c.name||'').toLowerCase().includes(filter.toLowerCase())
-      ) : contacts;
+    function renderChat() {
+      if (!currentChat || !chats[currentChat]) return;
       
-      if(filtered.length===0){list.innerHTML='';$('emptyContacts').style.display='block';return;}
-      $('emptyContacts').style.display='none';
+      const chat = chats[currentChat];
+      const contact = contacts[currentChat];
+      const name = contact?.name || formatPhone(currentChat);
       
-      list.innerHTML=filtered.map(c=>`
-        <div class="contact-card ${c.blocked?'contact-blocked':''}" onclick="openEditContact('${c.waId}')">
-          <div class="contact-avatar">${(c.name||c.waId).slice(-2).toUpperCase()}</div>
-          <div class="contact-info">
-            <div class="contact-name">${escapeHtml(c.name)||formatPhone(c.waId)}</div>
-            <div class="contact-phone">${formatPhone(c.waId)}</div>
-            <div class="contact-meta">🛒 ${c.purchases||0} compras · ${timeAgo(c.created_at)}</div>
+      $('chatArea').innerHTML = `
+        <div class="chat-header">
+          <button class="chat-header-back" onclick="closeChat()">←</button>
+          <div class="chat-header-avatar">${currentChat.slice(-2).toUpperCase()}</div>
+          <div class="chat-header-info">
+            <div class="chat-header-name">${escapeHtml(name)}</div>
+            <div class="chat-header-status">${formatPhone(currentChat)}</div>
           </div>
-          <div class="contact-actions" onclick="event.stopPropagation()">
-            <button class="contact-btn contact-btn-chat" onclick="openChat('${c.waId}')">💬</button>
-            <button class="contact-btn contact-btn-block" onclick="toggleBlock('${c.waId}',${!c.blocked})">${c.blocked?'🔓':'🚫'}</button>
+          <div class="chat-header-actions">
+            <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
           </div>
         </div>
-      `).join('');
+        <div class="messages-container" id="messagesContainer">
+          ${renderMessages(chat)}
+        </div>
+        <div class="chat-input-area">
+          <input type="text" class="chat-input" id="chatInput" placeholder="Escribí un mensaje...">
+          <button class="chat-send-btn" onclick="sendMessage()">➤</button>
+        </div>
+      `;
+      
+      // Enter to send
+      $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+      
+      // Scroll to bottom
+      const container = $('messagesContainer');
+      container.scrollTop = container.scrollHeight;
     }
-    
-    function openAddContact(){
-      $('inputContactPhone').value='';
-      $('inputContactName').value='';
-      $('addContactModal').classList.add('active');
+
+    function renderMessages(chat) {
+      let html = '';
+      
+      // Render messages
+      chat.messages.forEach(m => {
+        const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+        html += `
+          <div class="message ${m.direction}">
+            <div class="message-text">${escapeHtml(m.text)}</div>
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      });
+      
+      // Render pending action card if exists
+      if (chat.pending) {
+        const p = chat.pending;
+        const isSinpe = p.tipo === 'sinpe';
+        
+        html += `
+          <div class="action-card ${isSinpe ? 'sinpe' : ''}" id="actionCard">
+            <div class="action-card-header">
+              <span class="action-card-icon">${isSinpe ? '💰' : '🔔'}</span>
+              <span>${isSinpe ? 'CONFIRMAR PAGO SINPE' : 'CONFIRMAR DISPONIBILIDAD'}</span>
+            </div>
+            <div class="action-card-details">
+              <div class="action-card-detail">📦 <strong>${escapeHtml(p.producto || 'Producto')}</strong></div>
+              ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
+              ${p.talla_color ? `<div class="action-card-detail">👕 ${escapeHtml(p.talla_color)}</div>` : ''}
+              ${!isSinpe && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
+            </div>
+            <div class="action-card-buttons">
+              ${isSinpe ? `
+                <button class="action-btn primary" onclick="confirmAction('PAGADO')">💰 Confirmar Pago</button>
+              ` : `
+                <button class="action-btn primary" onclick="confirmAction('SI_HAY')">✅ Sí Hay</button>
+                <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
+              `}
+            </div>
+          </div>
+        `;
+      }
+      
+      return html;
     }
-    
-    function openEditContact(waId){
-      const c = contacts.find(x=>x.waId===waId);
-      if(!c)return;
-      editingContact = waId;
-      $('editContactPhone').textContent = formatPhone(waId);
-      $('inputEditName').value = c.name || '';
-      $('editContactModal').classList.add('active');
+
+    function closeChat() {
+      currentChat = null;
+      $('sidebar').classList.remove('hidden');
+      $('chatArea').classList.remove('active');
+      $('chatArea').classList.add('empty');
+      $('chatArea').innerHTML = `
+        <div class="empty-chat">
+          <div class="empty-chat-icon">💬</div>
+          <div class="empty-chat-text">Seleccioná un chat para empezar</div>
+        </div>
+      `;
+      renderChatList();
     }
-    
-    function toggleBlock(waId, block){
-      if(confirm(block?'¿Bloquear contacto?':'¿Desbloquear contacto?')){
-        socket.emit('toggle_block',{waId,block});
+
+    // ===== ACTIONS =====
+    function confirmAction(type) {
+      if (!currentChat) return;
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '⏳...';
+      
+      socket.emit('action', { clientWaId: currentChat, actionType: type });
+      
+      // Mark pending as resolved locally
+      setTimeout(() => {
+        if (chats[currentChat]) {
+          chats[currentChat].pending = null;
+          renderChat();
+          renderChatList();
+        }
+      }, 1000);
+    }
+
+    function sendMessage() {
+      const input = $('chatInput');
+      const text = input.value.trim();
+      if (!text || !currentChat) return;
+      
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      input.value = '';
+    }
+
+    function deleteChat() {
+      if (confirm('¿Borrar este chat?')) {
+        socket.emit('delete_chats', { waId: currentChat });
+        delete chats[currentChat];
+        closeChat();
       }
     }
-    
-    $('contactSearch').oninput=e=>renderContacts(e.target.value);
-    
-    $('modalAddContact').onclick=()=>{
-      let phone = $('inputContactPhone').value.replace(/\D/g,'');
-      if(phone.length===8) phone = '506' + phone;
-      if(phone.length!==11){toast('⚠️ Número inválido','error');return;}
-      const name = $('inputContactName').value.trim();
-      socket.emit('add_contact',{waId:phone,name});
-      $('addContactModal').classList.remove('active');
-    };
-    
-    $('modalSaveContact').onclick=()=>{
-      if(!editingContact)return;
-      const name = $('inputEditName').value.trim();
-      socket.emit('update_contact',{waId:editingContact,name});
-      $('editContactModal').classList.remove('active');
-    };
-    
-    $('modalDeleteContact').onclick=()=>{
-      if(!editingContact)return;
-      if(confirm('¿Eliminar este contacto?')){
-        socket.emit('delete_contact',{waId:editingContact});
-        $('editContactModal').classList.remove('active');
-      }
-    };
 
-    function sendAction(waId,type,btnEl){
-      if(!confirm('¿Confirmar?'))return;
-      // Deshabilitar botones visualmente
-      if(btnEl){const card=btnEl.closest('.card-actions');if(card)card.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='0.5';});}
-      // Marcar en pending array
-      const item=pending.find(p=>p.waId===waId);
-      if(item){item._resolved=true;item._action=type;}
-      socket.emit('action',{clientWaId:waId,actionType:type});
+    // ===== SHIPPING MODAL =====
+    function setShip(val) { $('shipInput').value = val; }
+    function hideShipModal() { $('shippingModal').classList.remove('active'); }
+    function sendShipping() {
+      const val = parseInt($('shipInput').value) || 0;
+      if (val < 100) { toast('⚠️ Monto inválido', 'error'); return; }
+      socket.emit('action', { clientWaId: shipClient, actionType: 'ENVIO', payload: { shipping: val } });
     }
-    // ✅ Buscar historial
-    function searchHist(){
-      const phone=$('histPhone').value.trim();
-      const from=$('histFrom').value;
-      const to=$('histTo').value;
-      if(!phone&&!from&&!to){toast('Ingresá teléfono o fechas','error');return;}
-      const filters={};
-      if(phone)filters.phone=phone.replace(/[\s\-]/g,'');
-      if(from)filters.from=from;
-      if(to)filters.to=to;
-      $('histResults').style.display='block';
-      $('histResults').innerHTML='<div style="text-align:center;padding:1rem;color:var(--text-muted);">Buscando... ⏳</div>';
-      socket.emit('search_history',filters);
+    function noShipping() {
+      socket.emit('action', { clientWaId: shipClient, actionType: 'NO_ENVIO_ZONA' });
+      hideShipModal();
     }
 
-    function viewImage(src){$('imageViewerImg').src=src;$('imageViewer').classList.add('active');}
-
-    $('connectBtn').onclick=()=>socket.emit('connect_whatsapp');
-    $('disconnectBtn').onclick=()=>{if(confirm('¿Desconectar?'))socket.emit('disconnect_whatsapp');};
-    $('botToggle').onclick=()=>{socket.emit('toggle_bot');};
-
-    $('statusSelectImage').onclick=()=>$('statusFileInput').click();
-    $('statusFileInput').onchange=e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{statusImageBase64=ev.target.result.split(',')[1];$('statusPreview').innerHTML=`<img src="${ev.target.result}">`;};reader.readAsDataURL(file);};
-    $('statusPublish').onclick=()=>{const caption=$('statusCaption').value.trim();if(!statusImageBase64&&!caption){toast('⚠️ Agregá imagen o texto','error');return;}socket.emit('post_status',statusImageBase64?{image:statusImageBase64,caption}:{textOnly:true,text:caption});};
-
-    $$('.modal-overlay').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('active');});
-
-    // ✅ Render inicial con datos de localStorage (antes de que llegue init_data del server)
-    renderPending(); renderChatList(); renderContacts();
+    // ===== BOT TOGGLE =====
+    $('botToggle').onclick = () => socket.emit('toggle_bot');
   </script>
 </body>
 </html>
