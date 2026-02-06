@@ -565,11 +565,29 @@ async function handleIncomingMessage(msg) {
   }
 
   // ============ ESTADO NEW ============
+
+  // ✅ PRIMERO: Chequear FAQs (incluso si viene con "hola" adelante)
+  const faqResp=checkFaqRegex(lower);
+  if(faqResp){
+    // Si también incluye saludo, saludar + responder FAQ
+    if(!session.saludo_enviado&&/hola|buenas|buenos|pura vida|hey/.test(lower)){
+      session.saludo_enviado=true;saveDataToDisk();
+      await sendTextWithTyping(waId,`¡Hola! Pura vida 🙌\n\n${faqResp}`);
+    }else{
+      await sendTextWithTyping(waId,faqResp);
+    }
+    return;
+  }
+
+  if(/^(gracias|muchas gracias)/.test(lower)){await sendTextWithTyping(waId,frase("gracias",waId));return;}
+
+  // SEGUNDO: Saludo puro (sin pregunta)
   if(!session.saludo_enviado&&/^(hola|buenas|buenos|pura vida|hey)/.test(lower)){
     session.saludo_enviado=true;saveDataToDisk();
     await sendTextWithTyping(waId,frase("saludos",waId));return;
   }
 
+  // TERCERO: Catálogo
   if(!session.catalogo_enviado&&(session.saludo_enviado||/tienen|hay|busco|quiero|necesito|faldas?|blusas?|vestidos?|jeans|pantalon|bolsos?|fajas?|ropa|catalogo|productos/.test(lower))){
     session.saludo_enviado=true;session.catalogo_enviado=true;saveDataToDisk();
     await sendTextWithTyping(waId,`${frase("catalogo",waId)}\n\n${CATALOG_URL}`);return;
@@ -578,12 +596,6 @@ async function handleIncomingMessage(msg) {
   if(session.catalogo_enviado&&/tienen|hay|busco|quiero|necesito/.test(lower)){
     await sendTextWithTyping(waId,`Revisá el catálogo y si te gusta algo, dale al botón 'Me interesa' 🙌\n\n${CATALOG_URL}`);return;
   }
-
-  if(/^(gracias|muchas gracias)/.test(lower)){await sendTextWithTyping(waId,frase("gracias",waId));return;}
-
-  // FAQs (estado NEW)
-  const faqResp=checkFaqRegex(lower);
-  if(faqResp){await sendTextWithTyping(waId,faqResp);return;}
 
   // Fallback
   if(!session.catalogo_enviado){
