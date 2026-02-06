@@ -558,15 +558,13 @@
         renderChatList();
       });
 
-      // New message
+      // New message - NO notificar (solo actualizar UI)
       socket.on('new_message', msg => {
         if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null };
         chats[msg.waId].messages.push(msg);
         renderChatList();
         if (currentChat === msg.waId) renderChat();
-        if (msg.direction === 'in') {
-          showNotification('📥 Nuevo mensaje', msg.text?.slice(0, 50) || 'Mensaje recibido');
-        }
+        // NO showNotification - solo notificar acciones del jefe
       });
 
       // New pending (stock query)
