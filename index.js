@@ -565,7 +565,8 @@ async function handleIncomingMessage(msg) {
       session.foto_externa = true;
       session.foto_base64 = imageBase64; // Guardar la foto para enviarla al dueño después
       session.saludo_enviado = true;
-      saveDataToDisk();
+      // NO guardar en disco (foto base64 es muy grande)
+      console.log(`📷 Foto guardada en sesión: ${imageBase64 ? Math.round(imageBase64.length/1024) + 'KB' : 'NULL'}`);
       await sendTextWithTyping(waId,
         `¡Hola! Pura vida 🙌 Dejame revisar ese producto.\n\n` +
         `¿Qué talla, color o tamaño te interesa? 👕`
@@ -583,7 +584,8 @@ async function handleIncomingMessage(msg) {
     session.talla_color = text.trim();
     session.producto = "Producto de foto";
     session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
-    saveDataToDisk();
+    
+    console.log(`📷 Creando quote con foto: ${session.foto_base64 ? Math.round(session.foto_base64.length/1024) + 'KB' : 'NULL'}`);
     
     // Notificar al dueño con la foto
     const quote = {
@@ -600,6 +602,10 @@ async function handleIncomingMessage(msg) {
     };
     pendingQuotes.set(waId, quote);
     io.emit("new_pending", quote);
+    
+    // Limpiar foto de sesión para no ocupar memoria
+    session.foto_base64 = null;
+    saveDataToDisk();
     
     await sendTextWithTyping(waId, frase("revisando", waId));
     return;
