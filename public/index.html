@@ -485,8 +485,27 @@
 
     // ===== SOCKET CONNECTION =====
     function connect(pin) {
-      socket = io();
-      socket.on('connect', () => socket.emit('auth', pin));
+      socket = io({
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
+      });
+      
+      socket.on('connect', () => {
+        console.log('🔌 Socket conectado');
+        socket.emit('auth', pin);
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('🔌 Socket desconectado');
+      });
+      
+      socket.on('reconnect', () => {
+        console.log('🔌 Socket reconectado - solicitando datos frescos');
+        socket.emit('auth', pin);
+      });
+      
       socket.on('auth_success', () => {
         localStorage.setItem('ticobot_pin', pin);
         $('login').classList.add('hidden');
@@ -895,6 +914,34 @@
 
     // ===== BOT TOGGLE =====
     $('botToggle').onclick = () => socket.emit('toggle_bot');
+    
+    // ===== ACTUALIZAR AL VOLVER A LA APP =====
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && socket) {
+        console.log('👁️ App visible - reconectando...');
+        // Si el socket está desconectado, reconectar
+        if (!socket.connected) {
+          socket.connect();
+        }
+        // Pedir datos frescos
+        const pin = localStorage.getItem('ticobot_pin');
+        if (pin) {
+          socket.emit('auth', pin);
+        }
+      }
+    });
+    
+    // También detectar cuando se desbloquea el teléfono
+    window.addEventListener('focus', () => {
+      if (socket && !socket.connected) {
+        console.log('👁️ Window focus - reconectando...');
+        socket.connect();
+        const pin = localStorage.getItem('ticobot_pin');
+        if (pin) {
+          setTimeout(() => socket.emit('auth', pin), 500);
+        }
+      }
+    });
   </script>
 </body>
 </html>
