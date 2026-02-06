@@ -178,7 +178,7 @@ setInterval(saveDataToDisk, 5 * 60 * 1000);
 const FRASES = {
   revisando: ["Dame un toque, voy a revisar si lo tenemos disponible 👍","Dejame chequearlo, ya te confirmo 👌","Un momento, voy a fijarme si queda en stock 🙌","Ya te confirmo disponibilidad, dame un ratito 😊","Voy a revisar de una vez 👍","Permíteme un momento, lo verifico 🙌","Dame chance, ya lo busco 😊","Un segundito, reviso si lo tenemos 👌","Ya miro y te cuento 🙌","Dejame ver si queda, ya te digo 👍"],
   saludos: ["¡Hola! Pura vida 🙌 ¿En qué te ayudo?","¡Hola! Con gusto te atiendo 😊","¡Buenas! Pura vida 🙌","¡Hola! ¿Cómo estás? 😊","¡Qué tal! Bienvenid@ 🙌","¡Hola! Qué gusto saludarte 👋","¡Buenas! ¿En qué te puedo servir? 😊","¡Hola! Aquí estamos para ayudarte 🙌","¡Pura vida! ¿Qué ocupás? 😊","¡Hola! Bienvenid@ 🐄"],
-  catalogo: ["Te paso el link con los productos disponibles para venta en línea. Si te gusta algo, le das click al botón 'Me interesa' 🙌","Aquí te dejo el catálogo con lo disponible. Si ves algo que te guste, dale al botón 'Me interesa' 😊","Te comparto el link de nuestros productos. Si algo te llama la atención, tocá 'Me interesa' 🙌"],
+  catalogo: ["Te paso el catálogo con los productos disponibles para venta en línea. Si te gusta algo, le das click al botón 'Me interesa' 🙌","Aquí te dejo los productos disponibles para venta en línea. Si ves algo que te guste, dale al botón 'Me interesa' 😊","Te comparto el catálogo de venta en línea. Si algo te llama la atención, tocá 'Me interesa' 🙌"],
   pedir_talla: ["¿Qué talla, tamaño o color lo necesitás? 👕","¿En qué talla y color lo ocupás? 😊","¿Qué talla/color te gustaría? 👗","¿Me decís la talla y el color que buscás? 🙌"],
   si_hay: ["¡Sí lo tenemos disponible! 🎉","¡Qué dicha, sí hay! 🙌","¡Perfecto, lo tenemos! 😊","¡Sí está disponible! 🎉","¡Claro que sí, hay en stock! 🙌"],
   te_interesa: ["¿Te interesa adquirir la prenda? 😊","¿Querés llevártelo? 🙌","¿Lo querés? 😊","¿Te gustaría comprarlo? 🙌"],
@@ -186,7 +186,7 @@ const FRASES = {
   no_quiere: ["¡Con gusto! 🙌 ¿Te puedo ayudar con algo más?","¡Está bien! 🙌 ¿Hay algo más en que te pueda ayudar?","No hay problema 👍 ¿Ocupás algo más?","Dale 🙌 ¿Te ayudo con alguna otra cosa?"],
   despedida: ["¡Pura vida! 🙌 Cualquier cosa aquí estamos. ¡Que te vaya bien!","¡Con gusto! 😊 Cuando ocupés, nos escribís. ¡Pura vida!","¡Dale! 🙌 Aquí estamos para cuando gustés. ¡Buena vibra!","¡Perfecto! 😊 Si necesitás algo en el futuro, con gusto te ayudamos. ¡Pura vida!"],
   no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo. ¿Querés ver algo más? 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 ¿Te interesa ver algo similar en el catálogo? 🙌"],
-  pedir_zona: ["¿De qué provincia y lugar nos escribís? 📍","¿De qué parte del país sos? 📍","Para calcular el envío, ¿de dónde sos? 📍","¿Me decís de qué zona sos? 📍","¿De dónde te lo enviaríamos? 📍"],
+  pedir_zona: ["¿Me podés decir de qué provincia y cantón nos escribís? 📍","Para calcular el envío, ¿de qué provincia y cantón sos? 📍","¿Me decís tu provincia y cantón? 📍","¿De qué provincia y cantón te lo enviaríamos? 📍"],
   pedir_metodo: ["¿Querés que te lo enviemos o preferís recogerlo en tienda? 📦🏪\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆","¿Cómo lo preferís? 🙌\n\n1. 📦 Envío a tu casa\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆"],
   nocturno: ["¡Hola! 🌙 Ya cerramos por hoy. Mañana a las 9am te atiendo con gusto 😊","Pura vida 🌙 Estamos fuera de horario. Te respondo mañana temprano 🙌","¡Buenas noches! 🌙 Nuestro horario es de 9am a 6:50pm. Mañana te ayudo 😊","Hola 🌙 Ya cerramos. Dejame tu consulta y mañana te confirmo 🙌"],
   gracias: ["¡Gracias a vos! 🙌","¡Con mucho gusto! 😊","¡Pura vida! 🙌","¡Gracias por la confianza! 💪","¡Tuanis! 🙌","¡Para servirte! 😊"],
@@ -532,7 +532,7 @@ async function handleIncomingMessage(msg) {
     if(lower==="si"||lower==="sí"||lower.includes("acuerdo")||lower.includes("dale")){
       const price=session.precio||0; const shipping=session.delivery_method==="envio"?(session.shipping_cost||0):0; const total=price+shipping;
       session.sinpe_reference=waId.slice(-4)+Date.now().toString(36).slice(-4).toUpperCase();
-      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n💰 Total: ₡${total.toLocaleString()}\n\nPara completar tu compra, hacé el SINPE:\n\n📱 SINPE: ${SINPE_NUMBER}\n👤 A nombre de: ${SINPE_NAME}\n📝 Referencia: ${session.sinpe_reference}\n\nCuando pagues, mandame el comprobante 🧾📸`);
+      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n💰 Total: ₡${total.toLocaleString()}\n\nPara completar tu compra, hacé el SINPE:\n\n📱 SINPE: ${SINPE_NUMBER}\n👤 A nombre de: ${SINPE_NAME}\n📝 En referencia escribí tu nombre\n\nCuando pagues, mandame el comprobante 🧾📸`);
       session.state="ESPERANDO_SINPE";
       io.emit("sale_pending",{waId,phone:profile.phone||waId,name:profile.name||"",total,reference:session.sinpe_reference,method:session.delivery_method,producto:session.producto,talla:session.talla_color});
       saveDataToDisk();return;
@@ -545,11 +545,13 @@ async function handleIncomingMessage(msg) {
 
   if(session.state==="ESPERANDO_SINPE"){
     if(msg.message?.imageMessage){
-      await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Verificando...");
-      io.emit("sinpe_received",{waId,reference:session.sinpe_reference});return;
+      await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
+      io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});return;
     }
-    if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")){
+    if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
       await sendTextWithTyping(waId,"Mandame la foto del comprobante 🧾📸");
+    }else{
+      await sendTextWithTyping(waId,"Dame un chance, estoy esperando tu comprobante de SINPE 🧾");
     }
     return;
   }
