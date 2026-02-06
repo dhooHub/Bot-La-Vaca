@@ -19,6 +19,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
 } from "@whiskeysockets/baileys";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -175,6 +176,7 @@ async function askAI(userMessage, conversationHistory = []) {
 
 function getStateDescription(state) {
   const map = {
+    ESPERANDO_DETALLES_FOTO: "Se le pidió qué talla, color o tamaño quiere del producto de la foto",
     ESPERANDO_TALLA: "Se le preguntó qué talla y color quiere",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Se le dijo que estamos verificando disponibilidad",
     PREGUNTANDO_INTERES: "Se le preguntó si quiere comprar el producto (sí o no)",
@@ -221,6 +223,7 @@ const FRASES = {
   fin_retiro: ["¡Pago confirmado! 🎉 Ya podés pasar a recogerlo:\n\n📍 {address}\n🕒 {hours}\n\n¡Gracias por tu compra! 🙌 ¡Pura vida!","¡Listo! 🎉 Tu producto te espera en tienda:\n\n📍 {address}\n🕒 {hours}\n\n¡Muchas gracias! 🙌"],
   primero_terminemos: ["¡Con gusto te ayudo con eso! 🙌 Pero primero terminemos con tu pedido actual, y después vemos lo otro 😊","¡Claro! Ahorita terminamos con lo que estamos viendo y luego te ayudo con eso 🙌","¡Sí! Dejame primero resolver tu pedido actual y después lo buscamos 😊"],
   recordatorio_flujo: {
+    ESPERANDO_DETALLES_FOTO: "Y sobre la foto que me mandaste, ¿qué talla, color o tamaño te interesa? 👕",
     ESPERANDO_TALLA: "Y sobre tu producto, ¿me decís la talla y color? 👕",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
     PREGUNTANDO_INTERES: "Y sobre el producto, ¿te interesa adquirirlo? 😊\n\n1. ✅ Sí\n2. ❌ No",
@@ -257,6 +260,8 @@ function getSession(waId) {
       shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, 
       // Datos de envío
       envio_nombre:null, envio_telefono:null, envio_direccion:null,
+      // Foto externa
+      foto_externa:false, foto_base64:null,
       saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() 
     });
   }
@@ -273,6 +278,7 @@ loadLidMap();
 function resetSession(session) {
   session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
   session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
+  session.foto_externa=false; session.foto_base64=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
 
@@ -363,14 +369,49 @@ function addPendingQuote(session) {
 
 function parseWebMessage(text) {
   if(!text.includes("interesado")||!text.includes("producto"))return null;
-  const result={producto:null,precio:null,codigo:null,foto_url:null,talla:null,color:null,tamano:null};
-  const productoMatch=text.match(/^([^\n]+)\nPrecio:/m); if(productoMatch)result.producto=productoMatch[1].trim();
-  const precioMatch=text.match(/Precio:\s*₡?\s*([\d\s,\.]+)/i); if(precioMatch)result.precio=parseInt(precioMatch[1].replace(/[\s,\.]/g,''))||0;
-  const codigoMatch=text.match(/Código:\s*(\w+)/i); if(codigoMatch)result.codigo=codigoMatch[1].trim();
-  if(result.codigo)result.foto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
-  const tallaMatch=text.match(/Talla:\s*(.+)/i); if(tallaMatch)result.talla=tallaMatch[1].trim();
-  const colorMatch=text.match(/Color:\s*(.+)/i); if(colorMatch)result.color=colorMatch[1].trim();
-  const tamanoMatch=text.match(/Tamaño:\s*(.+)/i); if(tamanoMatch)result.tamano=tamanoMatch[1].trim();
+  const result={producto:null,precio:null,codigo:null,foto_url:null,talla:null,color:null,tamano:null,producto_url:null};
+  
+  // Extraer nombre del producto (después de "producto:" hasta el salto de línea o "Precio:")
+  const productoMatch=text.match(/producto:\s*([^\n]+?)(?:\s*Precio:|$)/i); 
+  if(productoMatch)result.producto=productoMatch[1].trim();
+  
+  // Extraer precio (puede tener formato "₡8 175" o "₡8175" o con "(con X% OFF)")
+  const precioMatch=text.match(/Precio:\s*[₡¢]?\s*([\d\s,\.]+)/i); 
+  if(precioMatch)result.precio=parseInt(precioMatch[1].replace(/[\s,\.]/g,''))||0;
+  
+  // Extraer código
+  const codigoMatch=text.match(/Código:\s*(\d+)/i); 
+  if(codigoMatch)result.codigo=codigoMatch[1].trim();
+  
+  // Extraer URL del producto
+  const urlMatch=text.match(/(https?:\/\/[^\s]+producto[^\s]*)/i);
+  if(urlMatch)result.producto_url=urlMatch[1];
+  
+  // Extraer ID de la URL si no tenemos código
+  if(!result.codigo && result.producto_url){
+    const idMatch=result.producto_url.match(/[?&]id=(\d+)/i);
+    if(idMatch)result.codigo=idMatch[1];
+  }
+  
+  // Construir URL de imagen basada en el código
+  if(result.codigo){
+    // ✅ Ruta correcta: /lavaca/img/CODIGO.webp
+    result.foto_url=`${CATALOG_URL}/lavaca/img/${result.codigo}.webp`;
+  }
+  
+  // Extraer talla
+  const tallaMatch=text.match(/Talla:\s*([^\s\n]+)/i); 
+  if(tallaMatch)result.talla=tallaMatch[1].trim();
+  
+  // Extraer color
+  const colorMatch=text.match(/Color:\s*([^\n]+)/i); 
+  if(colorMatch)result.color=colorMatch[1].trim();
+  
+  // Extraer tamaño
+  const tamanoMatch=text.match(/Tamaño:\s*([^\n]+)/i); 
+  if(tamanoMatch)result.tamano=tamanoMatch[1].trim();
+  
+  console.log("📋 parseWebMessage:", JSON.stringify(result));
   return result;
 }
 
@@ -475,13 +516,27 @@ async function handleIncomingMessage(msg) {
   if(pushName&&!profile.name)profile.name=pushName; if(realPhone)profile.phone=realPhone; if(lidId)profile.lid=lidId;
 
   let text="";
+  const hasImage = !!msg.message?.imageMessage;
+  let imageBase64 = null;
+  
   if(msg.message?.conversation)text=msg.message.conversation;
   else if(msg.message?.extendedTextMessage?.text)text=msg.message.extendedTextMessage.text;
   else if(msg.message?.imageMessage?.caption)text=msg.message.imageMessage.caption;
 
+  // Descargar imagen si existe
+  if(hasImage){
+    try {
+      const stream = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+      if(stream){
+        imageBase64 = stream.toString('base64');
+        console.log(`📷 Imagen descargada: ${Math.round(stream.length/1024)}KB`);
+      }
+    } catch(e) { console.log("⚠️ Error descargando imagen:", e.message); }
+  }
+
   const displayPhone=realPhone?formatPhone(realPhone):waId;
-  addToChatHistory(waId,"in",text||"(mensaje)");
-  console.log(`📥 ${displayPhone}: ${text||"(mensaje)"}`);
+  addToChatHistory(waId,"in",text||(hasImage?"(foto)":"(mensaje)"), imageBase64);
+  console.log(`📥 ${displayPhone}: ${text||(hasImage?"(foto)":"(mensaje)")}`);
 
   if(profile.blocked)return;
   if(botPaused){console.log("⏸️ Bot pausado");return;}
@@ -499,6 +554,55 @@ async function handleIncomingMessage(msg) {
     if(session.nocturno_sent_at&&(Date.now()-session.nocturno_sent_at)<NOCTURNO_COOLDOWN){console.log(`🌙 Nocturno ya enviado`);return;}
     session.nocturno_sent_at=Date.now();
     await sendTextWithTyping(waId,frase("nocturno",waId));return;
+  }
+
+  // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
+  if(hasImage && session.state === "NEW"){
+    const webData = parseWebMessage(text);
+    // Si NO es mensaje estructurado del catálogo ("Me interesa")
+    if(!webData || !webData.codigo){
+      session.state = "ESPERANDO_DETALLES_FOTO";
+      session.foto_externa = true;
+      session.foto_base64 = imageBase64; // Guardar la foto para enviarla al dueño después
+      session.saludo_enviado = true;
+      saveDataToDisk();
+      await sendTextWithTyping(waId,
+        `¡Hola! Pura vida 🙌 Dejame revisar ese producto.\n\n` +
+        `¿Qué talla, color o tamaño te interesa? 👕`
+      );
+      return;
+    }
+  }
+
+  // ✅ Estado: Esperando detalles de foto externa
+  if(session.state === "ESPERANDO_DETALLES_FOTO"){
+    if(text.trim().length < 1){
+      await sendTextWithTyping(waId,"¿Qué talla, color o tamaño te interesa? 👕");
+      return;
+    }
+    session.talla_color = text.trim();
+    session.producto = "Producto de foto";
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    saveDataToDisk();
+    
+    // Notificar al dueño con la foto
+    const quote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: "📷 Producto de foto",
+      precio: null,
+      codigo: null,
+      foto_url: session.foto_base64 ? `data:image/jpeg;base64,${session.foto_base64}` : null,
+      talla_color: session.talla_color,
+      foto_externa: true,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, quote);
+    io.emit("new_pending", quote);
+    
+    await sendTextWithTyping(waId, frase("revisando", waId));
+    return;
   }
 
   // Detectar mensaje web ("Me interesa")
@@ -544,7 +648,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
