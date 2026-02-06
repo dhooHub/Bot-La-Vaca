@@ -198,7 +198,18 @@ function getStateDescription(state) {
 }
 
 // ============ PERSISTENCIA ============
-function saveDataToDisk() { try { fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:Array.from(sessions.values())},null,2)); saveHistory(); } catch(e){console.log("⚠️ Error guardando:",e.message);} }
+function saveDataToDisk() { 
+  try { 
+    // Limpiar foto_base64 de las sesiones antes de guardar (muy grandes)
+    const sessionsToSave = Array.from(sessions.values()).map(s => {
+      const copy = {...s};
+      delete copy.foto_base64; // No guardar imágenes en disco
+      return copy;
+    });
+    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave},null,2)); 
+    saveHistory(); 
+  } catch(e){console.log("⚠️ Error guardando:",e.message);} 
+}
 function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; console.log("📂 Datos cargados"); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
@@ -697,8 +708,12 @@ async function handleIncomingMessage(msg) {
     session.producto = "Producto de foto";
     session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
     
+    console.log(`📷 ESPERANDO_DETALLES_FOTO - talla_color: ${session.talla_color}`);
+    console.log(`📷 foto_base64 disponible: ${session.foto_base64 ? Math.round(session.foto_base64.length/1024) + 'KB' : 'NO - PERDIDA!'}`);
+    
     // Guardar imagen y notificar al dueño
     let fotoUrl = await guardarImagenFoto(waId, session.foto_base64);
+    console.log(`📷 fotoUrl generada: ${fotoUrl || 'NULL'}`);
     
     // Notificar al dueño con la foto
     const quote = {
@@ -714,6 +729,7 @@ async function handleIncomingMessage(msg) {
       created_at: new Date().toISOString()
     };
     pendingQuotes.set(waId, quote);
+    console.log(`📷 *** EMITIENDO new_pending para ${waId} ***`);
     io.emit("new_pending", quote);
     
     // Limpiar foto de sesión para no ocupar memoria
