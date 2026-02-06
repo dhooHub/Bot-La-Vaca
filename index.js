@@ -268,7 +268,60 @@ function parseWebMessage(text) {
   const tamanoMatch=text.match(/Tamaño:\s*(.+)/i); if(tamanoMatch)result.tamano=tamanoMatch[1].trim();
   return result;
 }
-Number.replace(/[^\d]/g,"");if(phone.length>=8)lidPhoneMap.set(lid,phone);}}saveLidMap();});
+
+// ============ BAILEYS CONEXIÓN ============
+async function connectWhatsApp() {
+  connectionStatus="connecting"; io.emit("connection_status",{status:connectionStatus});
+  if(!fs.existsSync(AUTH_FOLDER))fs.mkdirSync(AUTH_FOLDER,{recursive:true});
+  const{state,saveCreds}=await useMultiFileAuthState(AUTH_FOLDER);
+  const{version}=await fetchLatestBaileysVersion();
+  sock=makeWASocket({version,auth:{creds:state.creds,keys:makeCacheableSignalKeyStore(state.keys,logger)},logger,printQRInTerminal:false,browser:["TICObot","Chrome","1.0.0"],syncFullHistory:false,shouldIgnoreJid:(jid)=>jid?.endsWith("@g.us")||jid?.endsWith("@broadcast"),keepAliveIntervalMs:20000,connectTimeoutMs:120000,defaultQueryTimeoutMs:120000,retryRequestDelayMs:500,markOnlineOnConnect:false,emitOwnEvents:true,generateHighQualityLinkPreview:false});
+
+  sock.ev.on("connection.update",async(update)=>{
+    const{connection,lastDisconnect,qr}=update;
+    if(qr){qrCode=await QRCode.toDataURL(qr);connectionStatus="qr";io.emit("qr_code",{qr:qrCode});io.emit("connection_status",{status:connectionStatus});console.log("📱 QR listo");}
+    if(connection==="close"){
+      const reason=lastDisconnect?.error?.output?.statusCode;
+      console.log(`❌ Desconectado: código=${reason}`);
+      connectionStatus="disconnected";qrCode=null;connectedPhone="";
+      if(global._keepAliveInterval){clearInterval(global._keepAliveInterval);global._keepAliveInterval=null;}
+      io.emit("connection_status",{status:connectionStatus});
+      if(reason===DisconnectReason.loggedOut){try{fs.rmSync(AUTH_FOLDER,{recursive:true,force:true});}catch(e){}setTimeout(connectWhatsApp,5000);}
+      else if(reason===428||reason===408){const delay=Math.min(15000+(reconnectAttempts*5000),60000);reconnectAttempts++;setTimeout(connectWhatsApp,delay);}
+      else if(reason===515||reason===503){setTimeout(connectWhatsApp,5000);}
+      else{const delay=Math.min(3000*Math.pow(1.5,reconnectAttempts),60000);reconnectAttempts++;setTimeout(connectWhatsApp,delay);}
+    }
+    if(connection==="open"){
+      connectionStatus="connected";qrCode=null;reconnectAttempts=0;connectedPhone=sock.user?.id?.split(":")[0]||"";
+      io.emit("connection_status",{status:connectionStatus,phone:connectedPhone});console.log("✅ Conectado:",connectedPhone);
+      if(global._keepAliveInterval)clearInterval(global._keepAliveInterval);
+      global._keepAliveInterval=setInterval(async()=>{try{if(sock&&connectionStatus==="connected")await sock.sendPresenceUpdate("available");}catch(e){}},4*60*1000);
+    }
+  });
+
+  sock.ev.on("creds.update",saveCreds);
+
+  sock.ev.on("contacts.upsert",(contacts)=>{
+    for(const c of contacts){
+      if(c.id?.endsWith("@lid")&&c.phoneNumber){
+        const lid=fromJid(c.id);const phone=c.phoneNumber.replace(/[^\d]/g,"");
+        if(phone.length>=8){lidPhoneMap.set(lid,phone);if(profiles.has(lid)){const p=profiles.get(lid);p.phone=phone;if((c.notify||c.name)&&!p.name)p.name=c.notify||c.name;}}
+      }
+      const cId=fromJid(c.id||"");if(cId&&profiles.has(cId)&&(c.notify||c.name)){const p=profiles.get(cId);if(!p.name)p.name=c.notify||c.name;}
+    }
+    saveLidMap();
+  });
+
+  sock.ev.on("contacts.update",(updates)=>{
+    for(const u of updates){
+      if(u.id?.endsWith("@lid")&&u.phoneNumber){
+        const lid=fromJid(u.id);const phone=u.phoneNumber.replace(/[^\d]/g,"");
+        if(phone.length>=8)lidPhoneMap.set(lid,phone);
+      }
+    }
+    saveLidMap();
+  });
+
   try{sock.ev.on("lid-mapping.update",(mapping)=>{const items=Array.isArray(mapping)?mapping:[mapping];for(const m of items){if(m.lid&&m.pn){const lid=fromJid(m.lid);const phone=fromJid(m.pn);lidPhoneMap.set(lid,phone);if(profiles.has(lid)&&!profiles.has(phone)){const old=profiles.get(lid);old.phone=phone;profiles.set(phone,old);}}}saveLidMap();});}catch(e){}
 
   sock.ev.on("messages.upsert",async({messages,type})=>{
