@@ -101,11 +101,13 @@ LO QUE SÍ PODÉS RESPONDER:
 - Cambios: 8 días con factura y sin usar. No se hacen devoluciones de dinero.
 - Garantía: 30 días contra defectos de fábrica
 - Métodos de pago: SINPE Móvil y efectivo en tienda (NO tarjetas)
-- Que sí hacemos envíos a todo el país
+- ENVÍOS: Sí hacemos envíos a todo el país con Correos de Costa Rica:
+  * GAM (área metropolitana): ₡2,500
+  * Fuera de GAM: ₡3,500
+  * Tiempo de entrega: 4-5 días hábiles
 
 🚫 NUNCA RESPONDAS SOBRE (decí que ya te van a confirmar):
 - Precios de productos (decí: "Los precios los vemos cuando elijas el producto del catálogo 🙌")
-- Costos exactos de envío (decí: "El costo de envío te lo confirmo cuando me digás tu zona 🙌")
 - Números de SINPE o datos de pago (decí: "Los datos de pago te los paso cuando confirmemos tu pedido 🙌")
 - Disponibilidad de productos específicos (decí: "Revisá el catálogo en www.lavacacr.com y si te gusta algo, dale al botón 'Me interesa' 🙌")
 
@@ -800,8 +802,10 @@ async function handleIncomingMessage(msg) {
       const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
       await sendTextWithTyping(waId,
         `${saludo}¡Sí hacemos envíos a ${zona}! 🚚\n\n` +
-        `El costo exacto te lo confirmo cuando elijas tu producto.\n\n` +
-        `Revisá el catálogo y si te gusta algo, dale al botón 'Me interesa' 😊\n\n${CATALOG_URL}`
+        `📦 GAM (área metropolitana): ₡2,500\n` +
+        `📦 Fuera de GAM: ₡3,500\n` +
+        `⏱️ Tiempo: 4-5 días con Correos de CR\n\n` +
+        `Te invito a revisar el catálogo, si te gusta algo estamos para servirte 😊\n\n${CATALOG_URL}`
       );
       session.catalogo_enviado = true;
       saveDataToDisk();
@@ -815,9 +819,11 @@ async function handleIncomingMessage(msg) {
     saveDataToDisk();
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
-      `${saludo}¡Sí hacemos envíos a todo el país! 🚚\n\n` +
-      `El costo depende de tu zona.\n\n` +
-      `Revisá el catálogo y cuando elijas tu producto te confirmo el precio del envío 😊\n\n${CATALOG_URL}`
+      `${saludo}¡Sí, hacemos envíos a todo el país! 🚚\n\n` +
+      `📦 GAM (área metropolitana): ₡2,500\n` +
+      `📦 Fuera de GAM: ₡3,500\n` +
+      `⏱️ Tiempo: 4-5 días con Correos de CR\n\n` +
+      `Te invito a revisar el catálogo, si te gusta algo estamos para servirte 😊\n\n${CATALOG_URL}`
     );
     session.catalogo_enviado = true;
     saveDataToDisk();
