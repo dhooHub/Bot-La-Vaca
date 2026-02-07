@@ -1010,10 +1010,13 @@ async function handleIncomingMessage(msg) {
     session.client_zone = text.trim();
     session.state = "ZONA_RECIBIDA";
     
+    // PRIMERO responder al cliente
+    await sendTextWithTyping(waId,frase("espera_zona",waId));
+    
+    // DESPUÉS notificar al dueño
     console.log(`📍 Zona recibida de ${waId}: ${session.client_zone}`);
     io.emit("zone_received",{waId, zone:session.client_zone, producto:session.producto, codigo:session.codigo, precio:session.precio, talla_color:session.talla_color, foto_url:session.foto_url, provincia:session.envio_provincia, canton:session.envio_canton, distrito:session.envio_distrito});
     sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-    await sendTextWithTyping(waId,frase("espera_zona",waId));
     saveDataToDisk();return;
   }
 
@@ -1036,8 +1039,19 @@ async function handleIncomingMessage(msg) {
 
   if(session.state==="ESPERANDO_SINPE"){
     if(msg.message?.imageMessage){
+      // Guardar foto del comprobante
+      let comprobanteUrl = null;
+      try {
+        const stream = await downloadMediaMessage(msg, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
+        const imgBase64 = stream.toString('base64');
+        comprobanteUrl = await guardarImagenFoto(waId + "_sinpe", imgBase64);
+        console.log(`🧾 Comprobante SINPE guardado: ${comprobanteUrl}`);
+      } catch(e) {
+        console.log(`⚠️ Error guardando comprobante: ${e.message}`);
+      }
+      
       await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
-      io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});
+      io.emit("sinpe_received",{waId, reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, talla:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl});
       sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
       return;
     }
