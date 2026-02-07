@@ -289,7 +289,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     // ===== GLOBALS =====
-    let socket, currentChat = null, shipClient = null;
+    let socket, currentChat = null, shipClient = null, pendingChatOpen = null;
     let chats = {}, pending = {}, contacts = {};
     let notificationsEnabled = false;
     let swRegistration = null;
@@ -591,6 +591,14 @@
           notificationsEnabled = true;
           $('notifBtn').classList.add('enabled');
         }
+        // Auto-open chat from URL param (?chat=50670106802)
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatParam = urlParams.get('chat');
+        if (chatParam) {
+          pendingChatOpen = chatParam;
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        }
       });
       socket.on('auth_error', msg => {
         $('loginError').textContent = msg;
@@ -651,6 +659,14 @@
         (data.contacts || []).forEach(c => contacts[c.waId] = c);
         renderChatList();
         if (currentChat) renderChat();
+        // Auto-open chat from Pushover/Telegram link
+        if (pendingChatOpen) {
+          const chatId = pendingChatOpen;
+          pendingChatOpen = null;
+          if (chats[chatId]) {
+            setTimeout(() => openChat(chatId), 300);
+          }
+        }
       });
 
       // New message - NO notificar (solo actualizar UI)
@@ -834,9 +850,11 @@
       // Enter to send
       $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
       
-      // Scroll to bottom
-      const container = $('messagesContainer');
-      container.scrollTop = container.scrollHeight;
+      // Scroll to bottom (with delay to ensure DOM render)
+      requestAnimationFrame(() => {
+        const container = $('messagesContainer');
+        if (container) container.scrollTop = container.scrollHeight;
+      });
     }
 
     function renderMessages(chat) {
@@ -845,9 +863,9 @@
       // Render messages
       chat.messages.forEach(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-        // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
-        const hasImg = m.imageUrl && m.imageUrl.length > 100;
-        const imgSrc = hasImg ? (m.imageUrl.startsWith('data:') ? m.imageUrl : `data:image/jpeg;base64,${m.imageUrl}`) : null;
+        // Detectar si hay imagen (base64, data: URL, o ruta de archivo /images/)
+        const hasImg = m.imageUrl && (m.imageUrl.startsWith('/images/') || m.imageUrl.startsWith('data:') || m.imageUrl.length > 100);
+        const imgSrc = hasImg ? (m.imageUrl.startsWith('/images/') || m.imageUrl.startsWith('data:') ? m.imageUrl : `data:image/jpeg;base64,${m.imageUrl}`) : null;
         html += `
           <div class="message ${m.direction}">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
