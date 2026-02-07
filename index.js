@@ -234,7 +234,10 @@ function getStateDescription(state) {
     PAGO_CONFIRMADO_ENVIO: "Se confirmó el pago y se están pidiendo datos de envío",
     ESPERANDO_NOMBRE_ENVIO: "Se le pidió su nombre completo para el envío",
     ESPERANDO_TELEFONO_ENVIO: "Se le pidió su número de teléfono",
-    ESPERANDO_DIRECCION_ENVIO: "Se le pidió su dirección completa",
+    ESPERANDO_PROVINCIA_ENVIO: "Se le pidió su provincia",
+    ESPERANDO_CANTON_ENVIO: "Se le pidió su cantón",
+    ESPERANDO_DISTRITO_ENVIO: "Se le pidió su distrito",
+    ESPERANDO_SENAS_ENVIO: "Se le pidió otras señas de dirección",
     CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
   return map[state] || state;
@@ -296,7 +299,10 @@ const FRASES = {
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
     ESPERANDO_NOMBRE_ENVIO: "Y sobre tu envío, ¿cuál es tu nombre completo? 👤",
     ESPERANDO_TELEFONO_ENVIO: "Y sobre tu envío, ¿cuál es tu teléfono? 📱",
-    ESPERANDO_DIRECCION_ENVIO: "Y sobre tu envío, ¿cuál es tu dirección completa? 📍",
+    ESPERANDO_PROVINCIA_ENVIO: "Y sobre tu envío, ¿de qué provincia sos? 📍",
+    ESPERANDO_CANTON_ENVIO: "Y sobre tu envío, ¿de qué cantón? 🏘️",
+    ESPERANDO_DISTRITO_ENVIO: "Y sobre tu envío, ¿y el distrito? 📌",
+    ESPERANDO_SENAS_ENVIO: "Y sobre tu envío, ¿alguna otra seña para la dirección? 🏠",
     ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
@@ -324,7 +330,7 @@ function getSession(waId) {
       waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, talla_color:null, 
       shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, 
       // Datos de envío
-      envio_nombre:null, envio_telefono:null, envio_direccion:null,
+      envio_nombre:null, envio_telefono:null, envio_provincia:null, envio_canton:null, envio_distrito:null, envio_senas:null, envio_direccion:null,
       // Foto externa
       foto_externa:false, foto_base64:null, foto_url_guardada:null,
       saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() 
@@ -342,7 +348,7 @@ loadLidMap();
 
 function resetSession(session) {
   session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
-  session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
+  session.envio_nombre=null; session.envio_telefono=null; session.envio_provincia=null; session.envio_canton=null; session.envio_distrito=null; session.envio_senas=null; session.envio_direccion=null;
   session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
@@ -475,8 +481,14 @@ async function sendPushoverAlert(tipo, datos) {
       title = "💰 SINPE recibido";
       message = `📱 Ref: ${datos.reference || "?"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "ZONA") {
-      title = "📍 Zona recibida";
-      message = `🗺️ ${datos.zone || "?"}\n👤 ${phoneFormatted}`;
+      title = "📍 Datos de envío recibidos";
+      const s = datos.session || {};
+      message = `📦 ${s.producto || datos.producto || "Producto"}\n` +
+        `💰 ₡${(s.precio || datos.precio || 0).toLocaleString()}\n` +
+        `👤 ${s.envio_nombre || datos.nombre || "-"}\n` +
+        `📱 ${s.envio_telefono || datos.telefono || "-"}\n` +
+        `📍 ${datos.zone || "?"}\n` +
+        `👤 ${phoneFormatted}`;
     }
     
     if (!message) return;
@@ -536,8 +548,17 @@ async function sendTelegramAlert(tipo, datos) {
         `👤 ${phoneFormatted}\n\n` +
         `👉 [Confirmar Pago](${linkPanel})`;
     } else if (tipo === "ZONA") {
-      mensaje = `📍 *ZONA RECIBIDA*\n\n` +
-        `🗺️ ${datos.zone || "?"}\n` +
+      const s = datos.session || {};
+      mensaje = `📍 *DATOS DE ENVÍO*\n\n` +
+        `📦 ${s.producto || "Producto"}\n` +
+        `💰 ₡${(s.precio || 0).toLocaleString()}\n` +
+        `👕 ${s.talla_color || "-"}\n` +
+        `━━━━━━━━━━━━\n` +
+        `👤 ${s.envio_nombre || "-"}\n` +
+        `📱 ${s.envio_telefono || "-"}\n` +
+        `📍 ${s.envio_provincia || ""}, ${s.envio_canton || ""}, ${s.envio_distrito || ""}\n` +
+        `🏠 ${s.envio_senas || "-"}\n` +
+        `━━━━━━━━━━━━\n` +
         `👤 ${phoneFormatted}\n\n` +
         `👉 [Calcular Envío](${linkPanel})`;
     }
@@ -932,21 +953,18 @@ async function handleIncomingMessage(msg) {
   // Detectar mensaje web ("Me interesa")
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
-    // ✅ Guardar imagen: preferir adjunta > thumbnail del link preview > URL externa
+    // ✅ Imagen: guardar thumbnail localmente como respaldo, pero preferir URL del catálogo (full quality)
+    let fotoLocal = null;
     if(hasImage && imageBase64){
-      const fotoGuardada = await guardarImagenFoto(waId, imageBase64);
-      if(fotoGuardada){
-        webData.foto_url = fotoGuardada;
-        console.log(`📷 Imagen adjunta de catálogo guardada: ${fotoGuardada}`);
-      }
+      fotoLocal = await guardarImagenFoto(waId, imageBase64);
+      console.log(`📷 Imagen adjunta guardada: ${fotoLocal}`);
     } else if(linkPreviewJpeg){
-      const fotoGuardada = await guardarImagenFoto(waId, linkPreviewJpeg);
-      if(fotoGuardada){
-        webData.foto_url = fotoGuardada;
-        console.log(`🔗 Thumbnail de link preview guardado: ${fotoGuardada}`);
-      }
+      fotoLocal = await guardarImagenFoto(waId, linkPreviewJpeg);
+      console.log(`🔗 Thumbnail guardado: ${fotoLocal}`);
     }
-    // Si ninguna imagen se guardó, webData.foto_url mantiene la URL externa del catálogo
+    // Preferir URL del catálogo (full quality), con local como fallback
+    // webData.foto_url ya tiene: https://www.lavacacr.com/img/CODIGO.webp
+    if(fotoLocal) webData.foto_local = fotoLocal; // respaldo local
     // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
     const preguntaOtro = /(?:tienen|hay|viene|está|esta|tendrán|tendran|lo tienen|la tienen|tienen en|hay en|viene en|otro|otra)\s*(?:en\s+)?(?:color|talla|tamaño|tamano)?\s*(?:en\s+)?(rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|s|m|l|xl|xxl|xs|small|medium|large|\d+)/i.test(text);
     
@@ -987,7 +1005,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_PROVINCIA_ENVIO","ESPERANDO_CANTON_ENVIO","ESPERANDO_DISTRITO_ENVIO","ESPERANDO_SENAS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -1012,6 +1030,72 @@ async function handleIncomingMessage(msg) {
         return;
       }
       // RESPUESTA_FLUJO → continuar normalmente
+    }
+  }
+
+  // ✅ Detectar preguntas sobre envío en CUALQUIER estado (incluso NEW)
+  const regexPreguntaEnvio = /(?:hac[eé]n?\s*env[ií]o|costo\s*(?:de[l]?\s*)?env[ií]o|cu[áa]nto\s*(?:cuesta|sale|cobra|es)\s*(?:el\s*)?env[ií]o|env[ií]an?\s*a\s+\w|mandan?\s*a\s+\w|llega\s*(?:a|hasta)\s+\w|env[ií]os?\s*(?:a\s+\w)?)/i;
+  const regexSoloEnvio = /(?:hac[eé]n?\s*env[ií]o|env[ií]os?\??|tienen\s*env[ií]o)/i;
+  
+  if(regexPreguntaEnvio.test(text)){
+    // ¿Tiene zona específica?
+    const zonaMatch = text.match(/(?:a|en|para|hacia|hasta)\s+(san\s*jos[ée]|heredia|alajuela|cartago|puntarenas|lim[oó]n|guanacaste|p[ée]rez\s*zeled[oó]n|liberia|nicoya|santa\s*cruz|turrialba|san\s*carlos|[a-záéíóú\s]{3,25}?)(?:\s*[?,.!]|$)/i;
+    const zonaTexto = zonaMatch ? zonaMatch[1].trim() : null;
+    
+    // CASO 1: Pregunta general sin zona y sin producto activo
+    if(!zonaTexto && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || !session.producto)){
+      await sendTextWithTyping(waId,
+        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
+        `🏙️ GAM (área metropolitana): ₡2,500\n` +
+        `🌄 Fuera de GAM: ₡3,500\n` +
+        `🕐 Tarda entre 4-5 días hábiles si no hay demoras de Correos\n\n` +
+        `Si te interesa algo, podés revisar nuestro catálogo en línea 👇\n${CATALOG_URL}`
+      );
+      if(session.state === "PREGUNTANDO_ALGO_MAS") resetSession(session);
+      saveDataToDisk();
+      return;
+    }
+    
+    // CASO 2: Pregunta con zona específica Y hay producto activo → pedir provincia/cantón/distrito para calcular
+    if(zonaTexto && session.producto){
+      session.delivery_method = "envio";
+      session.state = "ESPERANDO_PROVINCIA_ENVIO";
+      await sendTextWithTyping(waId,
+        `¡Claro! Sí hacemos envíos con Correos de Costa Rica 📦\n\n` +
+        `🏙️ GAM: ₡2,500 | 🌄 Fuera de GAM: ₡3,500\n` +
+        `🕐 4-5 días hábiles\n\n` +
+        `Para calcularte el costo exacto necesito:\n📍 Provincia\n🏘️ Cantón\n📌 Distrito\n\n` +
+        `¿De qué provincia sos? 📍`
+      );
+      saveDataToDisk();
+      return;
+    }
+    
+    // CASO 2b: Pregunta con zona pero SIN producto activo
+    if(zonaTexto && !session.producto){
+      await sendTextWithTyping(waId,
+        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
+        `🏙️ GAM (área metropolitana): ₡2,500\n` +
+        `🌄 Fuera de GAM: ₡3,500\n` +
+        `🕐 Tarda entre 4-5 días hábiles si no hay demoras de Correos\n\n` +
+        `Si te interesa algo, podés revisar nuestro catálogo en línea 👇\n${CATALOG_URL}`
+      );
+      if(session.state === "PREGUNTANDO_ALGO_MAS") resetSession(session);
+      saveDataToDisk();
+      return;
+    }
+    
+    // CASO 3: Pregunta general pero hay producto activo → responder info + volver al flujo
+    if(session.producto){
+      const recordatorio = FRASES.recordatorio_flujo[session.state] || "";
+      await sendTextWithTyping(waId,
+        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
+        `🏙️ GAM: ₡2,500 | 🌄 Fuera de GAM: ₡3,500\n` +
+        `🕐 4-5 días hábiles\n` +
+        (recordatorio ? `\n${recordatorio}` : "")
+      );
+      saveDataToDisk();
+      return;
     }
   }
 
@@ -1055,8 +1139,8 @@ async function handleIncomingMessage(msg) {
     session.client_zone=text.trim();
     session.state="ZONA_RECIBIDA";
     io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio,nombre:session.envio_nombre,telefono:session.envio_telefono,direccion:session.envio_direccion});
-    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId, session});
+    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId, session});
     await sendTextWithTyping(waId,frase("espera_zona",waId));
     saveDataToDisk();return;
   }
@@ -1064,8 +1148,8 @@ async function handleIncomingMessage(msg) {
   if(session.state==="PREGUNTANDO_METODO"){
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
       session.delivery_method="envio"; account.metrics.delivery_envio+=1;
-      session.state="ESPERANDO_NOMBRE_ENVIO";
-      await sendTextWithTyping(waId,"¡Perfecto! 📦 Ocupo tus datos para el envío.\n\n¿Cuál es tu nombre completo? 👤");
+      session.state="ESPERANDO_PROVINCIA_ENVIO";
+      await sendTextWithTyping(waId,"¡Claro! 📦 Para calcularte el costo del envío necesito tu ubicación.\n\n¿De qué provincia sos? 📍");
       saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
@@ -1115,6 +1199,58 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
+  // ✅ PRE-PAGO: Solo provincia/cantón/distrito para calcular costo de envío
+  if(session.state==="ESPERANDO_PROVINCIA_ENVIO"){
+    if(text.trim().length < 3){
+      await sendTextWithTyping(waId,"Ocupo tu provincia 📍 (Ej: Heredia, San José, Alajuela...)");
+      return;
+    }
+    session.envio_provincia = text.trim();
+    session.state = "ESPERANDO_CANTON_ENVIO";
+    await sendTextWithTyping(waId,"¿De qué cantón? 🏘️");
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="ESPERANDO_CANTON_ENVIO"){
+    if(text.trim().length < 2){
+      await sendTextWithTyping(waId,"Ocupo tu cantón 🏘️");
+      return;
+    }
+    session.envio_canton = text.trim();
+    session.state = "ESPERANDO_DISTRITO_ENVIO";
+    await sendTextWithTyping(waId,"¿Y el distrito? 📌");
+    saveDataToDisk();return;
+  }
+
+  if(session.state==="ESPERANDO_DISTRITO_ENVIO"){
+    if(text.trim().length < 2){
+      await sendTextWithTyping(waId,"Ocupo tu distrito 📌");
+      return;
+    }
+    session.envio_distrito = text.trim();
+    session.client_zone = `${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}`;
+    session.state = "ZONA_RECIBIDA";
+    
+    // Notificar al dueño para que calcule el envío (solo zona, sin datos personales)
+    io.emit("zone_received",{
+      waId,
+      zone: session.client_zone,
+      producto: session.producto,
+      codigo: session.codigo,
+      precio: session.precio,
+      talla_color: session.talla_color,
+      foto_url: session.foto_url,
+      provincia: session.envio_provincia,
+      canton: session.envio_canton,
+      distrito: session.envio_distrito
+    });
+    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    await sendTextWithTyping(waId,frase("espera_zona",waId));
+    saveDataToDisk();return;
+  }
+
+  // ✅ POST-PAGO: Datos personales para el envío (nombre, teléfono, señas)
   if(session.state==="ESPERANDO_NOMBRE_ENVIO"){
     if(text.trim().length < 3){
       await sendTextWithTyping(waId,"Ocupo tu nombre completo para el envío 👤");
@@ -1133,28 +1269,45 @@ async function handleIncomingMessage(msg) {
       return;
     }
     session.envio_telefono = tel;
-    session.state = "ESPERANDO_DIRECCION_ENVIO";
-    await sendTextWithTyping(waId,"¿Cuál es tu dirección completa? 📍\n\n(Provincia, cantón, distrito y otras señas)");
+    session.state = "ESPERANDO_SENAS_ENVIO";
+    await sendTextWithTyping(waId,"¿Alguna seña para la dirección? 🏠\n(Ej: frente a la iglesia, casa color azul, etc.)");
     saveDataToDisk();return;
   }
 
-  if(session.state==="ESPERANDO_DIRECCION_ENVIO"){
-    if(text.trim().length < 10){
-      await sendTextWithTyping(waId,"Ocupo tu dirección completa 📍\n(Provincia, cantón, distrito y otras señas)");
-      return;
-    }
-    session.envio_direccion = text.trim();
-    session.state = "ESPERANDO_ZONA";
-    await sendTextWithTyping(waId,"¿De qué provincia y cantón sos? 📍\n(Para calcular el costo de envío)");
+  if(session.state==="ESPERANDO_SENAS_ENVIO"){
+    session.envio_senas = text.trim();
+    session.envio_direccion = `${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}. ${session.envio_senas}`;
+    session.state = "CONFIRMANDO_DATOS_ENVIO";
+    
+    const price = session.precio || 0;
+    const shipping = session.shipping_cost || 0;
+    const total = price + shipping;
+    
+    await sendTextWithTyping(waId,
+      `📋 *RESUMEN FINAL DE TU PEDIDO*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 ${session.producto || 'Artículo'}\n` +
+      `👕 ${session.talla_color || '-'}\n` +
+      `💰 Producto: ₡${price.toLocaleString()}\n` +
+      `🚚 Envío: ₡${shipping.toLocaleString()}\n` +
+      `💵 *Total: ₡${total.toLocaleString()}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📍 *DATOS DE ENVÍO*\n` +
+      `👤 ${session.envio_nombre}\n` +
+      `📱 ${session.envio_telefono}\n` +
+      `🏠 ${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}\n` +
+      `📝 ${session.envio_senas}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `¿Todo correcto?\n\n1. ✅ Sí, todo bien\n2. ❌ No, quiero corregir`
+    );
     saveDataToDisk();return;
   }
   if(session.state==="CONFIRMANDO_DATOS_ENVIO"){
     if(lower==="1"||lower==="si"||lower==="sí"||lower.includes("bien")||lower.includes("correcto")){
-      profile.purchases = (profile.purchases||0) + 1;
       
       await sendTextWithTyping(waId,
         `¡Perfecto! 🎉 Tu pedido está confirmado.\n\n` +
-        `🚚 Te llega en aproximadamente 8 días hábiles.\n\n` +
+        `🚚 Te llega en aproximadamente ${DELIVERY_DAYS}.\n\n` +
         `Te avisamos cuando lo despachemos.\n\n` +
         `¡Muchas gracias por tu compra! 🙌\n¡Pura vida! 🐄`
       );
@@ -1169,6 +1322,10 @@ async function handleIncomingMessage(msg) {
         method: "envio",
         envio_nombre: session.envio_nombre,
         envio_telefono: session.envio_telefono,
+        envio_provincia: session.envio_provincia,
+        envio_canton: session.envio_canton,
+        envio_distrito: session.envio_distrito,
+        envio_senas: session.envio_senas,
         envio_direccion: session.envio_direccion,
         total: (session.precio||0) + (session.shipping_cost||0)
       });
@@ -1182,6 +1339,7 @@ async function handleIncomingMessage(msg) {
       session.state = "ESPERANDO_NOMBRE_ENVIO";
       session.envio_nombre = null;
       session.envio_telefono = null;
+      session.envio_senas = null;
       session.envio_direccion = null;
       await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\n¿Cuál es tu nombre completo? 👤");
       saveDataToDisk();return;
@@ -1409,13 +1567,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
       `💰 Producto: ₡${price.toLocaleString()}\n` +
       `🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n` +
       `💵 *Total: ₡${total.toLocaleString()}*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📍 *DATOS DE ENVÍO*\n` +
-      `👤 ${session.envio_nombre || '-'}\n` +
-      `📱 ${session.envio_telefono || '-'}\n` +
-      `🏠 ${session.envio_direccion || '-'}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
+      `¿Estás de acuerdo?\n\n1. ✅ Sí, quiero comprarlo\n2. ❌ No, gracias\n\nResponde con el número 👆`
     );
     saveDataToDisk();
     return { success: true, message: `Envío ₡${shipping.toLocaleString()} enviado` };
@@ -1435,19 +1588,15 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const profile = getProfile(clientWaId);
     profile.purchases = (profile.purchases || 0) + 1;
     if (session.delivery_method === "envio") {
-      session.state = "PAGO_CONFIRMADO";
+      // POST-PAGO: Ahora sí pedir datos personales para el envío
+      session.state = "ESPERANDO_NOMBRE_ENVIO";
       await sendTextWithTyping(clientWaId,
-        `¡Pago confirmado! 🎉\n\n` +
-        `Tu pedido va en camino pronto 🚚\n` +
-        `📍 Envío a: ${session.envio_direccion || '-'}\n` +
-        `⏱️ Tiempo estimado: ${DELIVERY_DAYS}\n\n` +
-        `Te avisamos cuando lo despachemos.\n\n` +
-        `¡Muchas gracias por tu compra! 🙌 ¡Pura vida! 🐄`
+        `¡Pago confirmado! 🎉 ¡Muchas gracias!\n\n` +
+        `Ahora necesito tus datos para enviarte el paquete 📦\n\n` +
+        `¿Cuál es tu nombre completo? 👤`
       );
-      io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "envio" });
-      resetSession(session);
       saveDataToDisk();
-      return { success: true, message: "Pago confirmado, envío" };
+      return { success: true, message: "Pago confirmado, pidiendo datos de envío" };
     } else {
       session.state = "PAGO_CONFIRMADO";
       let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", STORE_HOURS_TEXT);
