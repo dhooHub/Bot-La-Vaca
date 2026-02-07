@@ -1169,8 +1169,39 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // ✅ Productos que manejamos en tienda física (no en catálogo online)
-  const productosEnTiendaFisica = /uniforme|escolar|escuela|colegio|niño|niña|niños|niñas|hombre|caballero|masculino|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
+  // ✅ UNIFORMES ESCOLARES → Avisar al usuario (caso especial)
+  const productosEscolares = /uniforme|escolar|escolares|escuela|colegio|colegial|kinder/i;
+  if(productosEscolares.test(lower)){
+    session.saludo_enviado = true;
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    saveDataToDisk();
+    
+    // Notificar al usuario
+    const quote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: `🎒 Uniformes: ${text.trim()}`,
+      precio: null,
+      codigo: null,
+      foto_url: null,
+      talla_color: null,
+      consulta_uniformes: true,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, quote);
+    io.emit("new_pending", quote);
+    sendTelegramAlert("PRODUCTO_CATALOGO", quote);
+    
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,
+      `${saludo}¡Claro! Dejame consultar sobre uniformes escolares. Un momento... 🎒`
+    );
+    return;
+  }
+
+  // ✅ Productos que manejamos en tienda física (ropa caballeros/niños - NO uniformes)
+  const productosEnTiendaFisica = /niño|niña|niños|niñas|hombre|caballero|masculino|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
   if(productosEnTiendaFisica.test(lower)){
     session.saludo_enviado = true;
     saveDataToDisk();
