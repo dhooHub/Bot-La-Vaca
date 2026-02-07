@@ -716,8 +716,9 @@ async function handleIncomingMessage(msg) {
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
   // Detectar incluso si NO está en NEW (nueva consulta con foto)
+  // ⚠️ NO interceptar si estamos esperando comprobante SINPE
   console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}`);
-  if(hasImage){
+  if(hasImage && session.state !== "ESPERANDO_SINPE"){
     const webData = parseWebMessage(text);
     console.log(`🔍 webData: ${webData ? JSON.stringify(webData) : 'null'}`);
     // Si NO es mensaje estructurado del catálogo ("Me interesa")
@@ -1043,16 +1044,12 @@ async function handleIncomingMessage(msg) {
   }
 
   if(session.state==="ESPERANDO_SINPE"){
-    if(msg.message?.imageMessage){
-      // Guardar foto del comprobante
+    if(hasImage){
+      // Guardar foto del comprobante (ya descargada arriba como imageBase64)
       let comprobanteUrl = null;
-      try {
-        const stream = await downloadMediaMessage(msg, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
-        const imgBase64 = stream.toString('base64');
-        comprobanteUrl = await guardarImagenFoto(waId + "_sinpe", imgBase64);
+      if(imageBase64){
+        comprobanteUrl = await guardarImagenFoto(waId + "_sinpe", imageBase64);
         console.log(`🧾 Comprobante SINPE guardado: ${comprobanteUrl}`);
-      } catch(e) {
-        console.log(`⚠️ Error guardando comprobante: ${e.message}`);
       }
       
       await sendTextWithTyping(waId,"¡Recibido! 🧾 Déjame verificarlo con el banco, ya te confirmo 🙌");
@@ -1060,7 +1057,12 @@ async function handleIncomingMessage(msg) {
       const shipping = session.delivery_method === "envio" ? (session.shipping_cost || 0) : 0;
       const total = price + shipping;
       session.comprobante_url = comprobanteUrl;
-      io.emit("sinpe_received",{waId, reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, codigo:session.codigo, precio:price, shipping_cost:shipping, total, talla:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl, zone:session.client_zone});
+      
+      const sinpeData = {waId, tipo:"sinpe", reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, codigo:session.codigo, precio:price, shipping_cost:shipping, total, talla_color:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl, zone:session.client_zone, created_at:new Date().toISOString()};
+      
+      // Guardar como pending para que persista si panel no está abierto
+      pendingQuotes.set(waId, sinpeData);
+      io.emit("sinpe_received", sinpeData);
       sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
       saveDataToDisk();
       return;
@@ -1389,6 +1391,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
 
   if (actionType === "PAGADO") {
     account.metrics.sinpe_confirmed += 1;
+    pendingQuotes.delete(clientWaId);
+    io.emit("pending_resolved", { waId: clientWaId });
     if (session.delivery_method === "envio") {
       session.state = "ESPERANDO_DATOS_ENVIO";
       await sendTextWithTyping(clientWaId,
@@ -1423,6 +1427,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
   if (actionType === "SINPE_ERROR") {
     session.state = "ESPERANDO_SINPE";
     session.comprobante_url = null;
+    pendingQuotes.delete(clientWaId);
+    io.emit("pending_resolved", { waId: clientWaId });
     await sendTextWithTyping(clientWaId,
       `⚠️ Hay un problema con el comprobante que enviaste.\n\n` +
       `Por favor mandame de nuevo una foto clara del comprobante de SINPE 🧾📸\n\n` +
