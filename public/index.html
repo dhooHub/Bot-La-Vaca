@@ -812,6 +812,12 @@
       $('sidebar').classList.add('hidden');
       $('chatArea').classList.add('active');
       $('chatArea').classList.remove('empty');
+      
+      // Scroll al fondo después del layout change
+      setTimeout(() => {
+        const c = $('messagesContainer');
+        if(c) c.scrollTop = c.scrollHeight;
+      }, 200);
     }
 
     function renderChat() {
@@ -845,9 +851,11 @@
       // Enter to send
       $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
       
-      // Scroll to bottom
+      // Scroll to bottom (inmediato + delayed para esperar imágenes)
       const container = $('messagesContainer');
       container.scrollTop = container.scrollHeight;
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 500);
     }
 
     function renderMessages(chat) {
