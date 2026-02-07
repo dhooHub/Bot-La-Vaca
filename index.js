@@ -737,7 +737,7 @@ async function handleIncomingMessage(msg) {
 
   // FIX 2: Nocturno dedup (8 horas)
   if(!isStoreOpen()){
-    const NOCTURNO_COOLDOWN=8*60*60*1000;
+    const NOCTURNO_COOLDOWN=1*60*60*1000;
     if(session.nocturno_sent_at&&(Date.now()-session.nocturno_sent_at)<NOCTURNO_COOLDOWN){console.log(`🌙 Nocturno ya enviado`);return;}
     session.nocturno_sent_at=Date.now();
     await sendTextWithTyping(waId, FRASES.nocturno_func(waId));return;
