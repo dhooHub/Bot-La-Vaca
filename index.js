@@ -1039,7 +1039,7 @@ async function handleIncomingMessage(msg) {
   
   if(regexPreguntaEnvio.test(text)){
     // ¿Tiene zona específica?
-    const zonaMatch = text.match(/(?:a|en|para|hacia|hasta)\s+(san\s*jos[ée]|heredia|alajuela|cartago|puntarenas|lim[oó]n|guanacaste|p[ée]rez\s*zeled[oó]n|liberia|nicoya|santa\s*cruz|turrialba|san\s*carlos|[a-záéíóú\s]{3,25}?)(?:\s*[?,.!]|$)/i;
+    const zonaMatch = text.match(/(?:a|en|para|hacia|hasta)\s+(san\s*jose|heredia|alajuela|cartago|puntarenas|limon|guanacaste|perez\s*zeledon|liberia|nicoya|santa\s*cruz|turrialba|san\s*carlos|[\w\s]{3,25}?)(?:\s*[?,.!]|$)/i);
     const zonaTexto = zonaMatch ? zonaMatch[1].trim() : null;
     
     // CASO 1: Pregunta general sin zona y sin producto activo
