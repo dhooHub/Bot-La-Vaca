@@ -37,15 +37,24 @@ const PORT = process.env.PORT || 3000;
 const PANEL_PIN = process.env.PANEL_PIN || "1234";
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const HOURS_START = 9;
-const HOURS_END_HOUR = 18;
-const HOURS_END_MIN = 50;
-const HOURS_DAY = "9am - 6:50pm";
+// Horarios WhatsApp por día (0=Domingo, 1=Lunes, ..., 6=Sábado)
+const WA_SCHEDULE = {
+  0: { open: 10, close_h: 17, close_m: 0 },  // Domingo 10am-5pm
+  1: { open: 9, close_h: 18, close_m: 30 },   // Lunes 9am-6:30pm
+  2: { open: 9, close_h: 18, close_m: 30 },   // Martes
+  3: { open: 9, close_h: 18, close_m: 30 },   // Miércoles
+  4: { open: 9, close_h: 18, close_m: 30 },   // Jueves
+  5: { open: 9, close_h: 18, close_m: 30 },   // Viernes
+  6: { open: 9, close_h: 18, close_m: 30 },   // Sábado 9am-6:30pm
+};
+const STORE_HOURS_TEXT = "Lun.-Sab. 9am a 7pm | Dom. 10am a 6pm";
+const WA_HOURS_TEXT = "Lun.-Sab. 9am a 6:30pm | Dom. 10am a 5pm";
+const STORE_LOCATION = "Heredia, 100 mts sur de la esquina del Testy";
 const DELAY_MIN = 15;
 const DELAY_MAX = 60;
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
-const STORE_ADDRESS = process.env.STORE_ADDRESS || "";
+const STORE_ADDRESS = process.env.STORE_ADDRESS || "Heredia, 100 mts sur de la esquina del Testy";
 const MAPS_URL = process.env.MAPS_URL || "";
 const SINPE_NUMBER = process.env.SINPE_NUMBER || "";
 const SINPE_NAME = process.env.SINPE_NAME || "";
@@ -59,7 +68,7 @@ const AUTH_FOLDER = path.join(PERSISTENT_DIR, "auth_baileys");
 const DATA_FOLDER = PERSISTENT_DIR;
 
 // Telegram config
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8572915797:AAH09-bWAlKwHG5gh3ElOZpDAsuyNwNNqG4";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "172868898";
 const PANEL_URL = process.env.PANEL_URL || "https://tico-bot-lite.onrender.com";
 
@@ -83,8 +92,36 @@ function normalizePhone(input) { const d = String(input||"").replace(/[^\d]/g,""
 function toJid(phone) { return normalizePhone(phone)+"@s.whatsapp.net"; }
 function fromJid(jid) { return jid?jid.replace(/@.*/,""):""; }
 function formatPhone(waId) { const d=normalizePhone(waId); if(d.length===11&&d.startsWith("506"))return`${d.slice(0,3)} ${d.slice(3,7)}-${d.slice(7)}`; return waId; }
-function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes()}; }
-function isStoreOpen() { const{hour,minute}=getCostaRicaTime(); if(hour<HOURS_START)return false; if(hour>HOURS_END_HOUR)return false; if(hour===HOURS_END_HOUR&&minute>=HOURS_END_MIN)return false; return true; }
+function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes(),day:cr.getDay()}; }
+function isStoreOpen() { 
+  const{hour,minute,day}=getCostaRicaTime(); 
+  const schedule=WA_SCHEDULE[day]; 
+  if(!schedule)return false; 
+  if(hour<schedule.open)return false; 
+  if(hour>schedule.close_h)return false; 
+  if(hour===schedule.close_h&&minute>=schedule.close_m)return false; 
+  return true; 
+}
+function getNextOpenTime() {
+  const{day,hour}=getCostaRicaTime();
+  const schedule=WA_SCHEDULE[day];
+  // Si aún no abre hoy
+  if(schedule && hour < schedule.open) {
+    const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+    return `hoy ${dias[day]} a las ${schedule.open === 9 ? "9am" : "10am"}`;
+  }
+  // Buscar siguiente día que abre
+  for(let i=1;i<=7;i++){
+    const nextDay=(day+i)%7;
+    const nextSch=WA_SCHEDULE[nextDay];
+    if(nextSch){
+      const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+      if(i===1) return `mañana ${dias[nextDay]} a las ${nextSch.open === 9 ? "9am" : "10am"}`;
+      return `el ${dias[nextDay]} a las ${nextSch.open === 9 ? "9am" : "10am"}`;
+    }
+  }
+  return "mañana";
+}
 function norm(s="") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
 function getHumanDelay() { return(Math.floor(Math.random()*(DELAY_MAX-DELAY_MIN+1))+DELAY_MIN)*1000; }
 function sleep(ms) { return new Promise(resolve=>setTimeout(resolve,ms)); }
@@ -96,8 +133,9 @@ const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de rop
 
 INFORMACIÓN DE LA TIENDA:
 - Nombre: La Vaca CR
-- Ubicación: Heredia centro, 200m sur de Correos de CR
-- Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
+- Ubicación: Heredia, 100 mts sur de la esquina del Testy
+- Horario tienda: Lunes a Viernes 9am-7pm, Sábado 9am-7pm, Domingo 10am-6pm
+- Horario WhatsApp: Lunes a Viernes 9am-6:30pm, Sábado 9am-7pm, Domingo 10am-5pm
 - Teléfono: 2237-3335
 - WhatsApp: +506 6483-6565
 - Catálogo online: www.lavacacr.com
@@ -232,7 +270,16 @@ const FRASES = {
   no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo. ¿Querés ver algo más? 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 ¿Te interesa ver algo similar en el catálogo? 🙌"],
   pedir_zona: ["¿Me podés decir de qué provincia y cantón nos escribís? 📍","Para calcular el envío, ¿de qué provincia y cantón sos? 📍","¿Me decís tu provincia y cantón? 📍","¿De qué provincia y cantón te lo enviaríamos? 📍"],
   pedir_metodo: ["¿Querés que te lo enviemos o preferís recogerlo en tienda? 📦🏪\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆","¿Cómo lo preferís? 🙌\n\n1. 📦 Envío a tu casa\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆"],
-  nocturno: ["¡Hola! 🌙 Ya cerramos por hoy. Mañana a las 9am te atiendo con gusto 😊","Pura vida 🌙 Estamos fuera de horario. Te respondo mañana temprano 🙌","¡Buenas noches! 🌙 Nuestro horario es de 9am a 6:50pm. Mañana te ayudo 😊","Hola 🌙 Ya cerramos. Dejame tu consulta y mañana te confirmo 🙌"],
+  nocturno_func: function(waId) {
+    const nextOpen = getNextOpenTime();
+    return `¡Hola! 🙌 Te informo que la atención por WhatsApp es de:\n\n` +
+      `📱 ${WA_HOURS_TEXT}\n\n` +
+      `Con todo gusto te atendemos ${nextOpen} 😊\n\n` +
+      `Además te informo que nuestra tienda está abierta:\n\n` +
+      `🏪 ${STORE_HOURS_TEXT}\n` +
+      `📍 ${STORE_LOCATION}\n\n` +
+      `¡Te esperamos! 🐄`;
+  },
   gracias: ["¡Gracias a vos! 🙌","¡Con mucho gusto! 😊","¡Pura vida! 🙌","¡Gracias por la confianza! 💪","¡Tuanis! 🙌","¡Para servirte! 😊"],
   espera_zona: ["¡Anotado! 📝 Dame un momento para calcular el envío 🙌","Perfecto 📝 Ya reviso cuánto sale a tu zona 😊","Listo 📝 Dejame calcular el envío 🙌"],
   espera_vendedor: ["Ya estoy revisando, un momento 🙌","Dame chance, estoy verificando 😊","Un momento, ya te confirmo 🙌"],
@@ -693,7 +740,7 @@ async function handleIncomingMessage(msg) {
     const NOCTURNO_COOLDOWN=8*60*60*1000;
     if(session.nocturno_sent_at&&(Date.now()-session.nocturno_sent_at)<NOCTURNO_COOLDOWN){console.log(`🌙 Nocturno ya enviado`);return;}
     session.nocturno_sent_at=Date.now();
-    await sendTextWithTyping(waId,frase("nocturno",waId));return;
+    await sendTextWithTyping(waId, FRASES.nocturno_func(waId));return;
   }
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
@@ -947,7 +994,7 @@ async function handleIncomingMessage(msg) {
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
       session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO"; account.metrics.delivery_recoger+=1;
       const price=session.precio||0;
-      await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
+      await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${STORE_HOURS_TEXT}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
       saveDataToDisk();return;
     }
     await sendTextWithTyping(waId,frase("pedir_metodo",waId));return;
@@ -1327,7 +1374,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.state = "PAGO_CONFIRMADO";
       const profile = getProfile(clientWaId);
       profile.purchases = (profile.purchases || 0) + 1;
-      let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", HOURS_DAY);
+      let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", STORE_HOURS_TEXT);
       await sendTextWithTyping(clientWaId, msgFin);
       io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "recoger" });
       resetSession(session);
@@ -1350,7 +1397,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.state = "PRECIO_TOTAL_ENVIADO";
       account.metrics.delivery_recoger += 1;
       await sendTextWithTyping(clientWaId,
-        `No hacemos envíos a ${session.client_zone || "esa zona"} 😔\n\nPero podés recoger en tienda:\n🏪 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n📦 ${session.producto || 'Artículo'}\n💰 Precio: ₡${price.toLocaleString()}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
+        `No hacemos envíos a ${session.client_zone || "esa zona"} 😔\n\nPero podés recoger en tienda:\n🏪 ${STORE_ADDRESS}\n🕒 ${STORE_HOURS_TEXT}\n\n📦 ${session.producto || 'Artículo'}\n💰 Precio: ₡${price.toLocaleString()}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
       );
     } else {
       await sendTextWithTyping(clientWaId, "No hacemos envíos a esa zona 😔");
@@ -1410,7 +1457,7 @@ server.listen(PORT, () => {
 ╔═══════════════════════════════════════════════════╗
 ║  🐄 TICO-bot - La Vaca CR                         ║
 ╠═══════════════════════════════════════════════════╣
-║  🕒 Horario: ${HOURS_DAY.padEnd(36)}║
+║  🕒 Horario: ${STORE_HOURS_TEXT.padEnd(36)}║
 ║  ⏱️ Delay: ${(DELAY_MIN + "-" + DELAY_MAX + " seg").padEnd(37)}║
 ║  🌐 Catálogo: ${CATALOG_URL.slice(0,33).padEnd(34)}║
 ║  📱 Panel: http://localhost:${PORT}/                  ║
