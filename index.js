@@ -452,7 +452,8 @@ async function guardarImagenFoto(waId, base64Data) {
 // ✅ Descargar imagen del catálogo (full quality) y guardarla localmente
 async function descargarImagenCatalogo(codigo, waId) {
   try {
-    const url = `${CATALOG_URL}/img/${codigo}.webp`;
+    const catalogBase = CATALOG_URL.startsWith("http") ? CATALOG_URL : `https://${CATALOG_URL}`;
+    const url = new URL(`/img/${codigo}.webp`, catalogBase).toString();
     console.log(`📷 Descargando imagen catálogo: ${url}`);
     const response = await fetch(url);
     if (!response.ok) {
@@ -1242,6 +1243,7 @@ async function handleIncomingMessage(msg) {
     session.client_zone = text.trim();
     session.state = "ZONA_RECIBIDA";
     
+    console.log(`📍 Zona recibida de ${waId}: ${session.client_zone} - Emitiendo zone_received...`);
     io.emit("zone_received",{
       waId,
       zone: session.client_zone,
@@ -1343,9 +1345,12 @@ async function handleIncomingMessage(msg) {
       session.state = "ESPERANDO_DATOS_ENVIO";
       session.envio_nombre = null;
       session.envio_telefono = null;
+      session.envio_provincia = null;
+      session.envio_canton = null;
+      session.envio_distrito = null;
       session.envio_senas = null;
       session.envio_direccion = null;
-      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nEscribí separado por comas:\n*Nombre completo, Teléfono, Señas de dirección*\n\n(Ej: María López, 88881234, frente a la iglesia católica)");
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nEscribí separado por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
       saveDataToDisk();return;
     }
     
@@ -1651,7 +1656,14 @@ io.on("connection", (socket) => {
       socket.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
       socket.emit("bot_status", { paused: botPaused });
       if (qrCode) socket.emit("qr_code", { qr: qrCode });
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics });
+      // Buscar sesiones esperando costo de envío
+      const pendingZones = [];
+      for(const [waId, s] of sessions.entries()){
+        if(s.state === "ZONA_RECIBIDA"){
+          pendingZones.push({waId, zone: s.client_zone, producto: s.producto, codigo: s.codigo, precio: s.precio, talla_color: s.talla_color, foto_url: s.foto_url, provincia: s.envio_provincia, canton: s.envio_canton, distrito: s.envio_distrito});
+        }
+      }
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
