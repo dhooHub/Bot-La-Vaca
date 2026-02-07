@@ -1155,29 +1155,63 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // ✅ Detectar productos que NO están en catálogo online pero SÍ en tienda física
-  const productosEnTienda = /uniforme|escolar|escuela|colegio|niño|niña|niños|niñas|hombre|caballero|masculino|faja|fajas|bolso|bolsos|cartera|carteras|mochila|maletín|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
-  if(productosEnTienda.test(lower)){
+  // ✅ Productos que definitivamente NO vendemos (zapatos) → Respuesta directa
+  const productosNoVendemos = /zapato|zapatos|tenis|zapatilla|zapatillas|calzado|sandalia|sandalias|tacones|botas/i;
+  if(productosNoVendemos.test(lower)){
     session.saludo_enviado = true;
     saveDataToDisk();
-    
-    // Notificar al dueño sobre consulta de producto en tienda
-    io.emit("store_product_inquiry", {
-      waId,
-      phone: profile.phone || waId,
-      name: profile.name || "",
-      producto: text.trim(),
-      timestamp: new Date().toISOString()
-    });
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,
+      `${saludo}No vendemos zapatos, solamente ropa para damas, caballeros y niños 👕\n\n` +
+      `Nos podés visitar en:\n📍 ${STORE_ADDRESS}\n\n` +
+      `Por ahora vendemos en línea por WhatsApp ropa para damas que podés revisar acá:\n🛍️ ${CATALOG_URL}`
+    );
+    return;
+  }
+
+  // ✅ Productos que manejamos en tienda física (no en catálogo online)
+  const productosEnTiendaFisica = /uniforme|escolar|escuela|colegio|niño|niña|niños|niñas|hombre|caballero|masculino|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
+  if(productosEnTiendaFisica.test(lower)){
+    session.saludo_enviado = true;
+    saveDataToDisk();
     
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
       `${saludo}Esos productos los manejamos en nuestra tienda física 🏪\n\n` +
-      `Te invitamos a visitarnos donde podés ver toda la variedad:\n\n` +
-      `📍 Heredia centro, 200m sur de Correos de CR\n` +
-      `🕒 Lunes a Sábado 9am-7pm, Domingo 10am-6pm\n` +
-      `📞 2237-3335\n\n` +
+      `Te invitamos a visitarnos:\n📍 ${STORE_ADDRESS}\n\n` +
       `¡Con gusto te atendemos! 😊`
+    );
+    return;
+  }
+
+  // ✅ Productos desconocidos/diferentes → Avisar al dueño para que decida
+  const preguntaPorProducto = /tienen|venden|hay|busco|necesito|consigo|manejan/i;
+  const productoDesconocido = /faja|fajas|bolso|bolsos|cartera|carteras|mochila|maletín|accesorio|accesorios|joya|joyas|reloj|relojes|gorra|gorras|sombrero|perfume|cosmetico|maquillaje/i;
+  if(preguntaPorProducto.test(lower) && productoDesconocido.test(lower)){
+    session.saludo_enviado = true;
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    saveDataToDisk();
+    
+    // Notificar al dueño para que decida
+    const quote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: `❓ Consulta: ${text.trim()}`,
+      precio: null,
+      codigo: null,
+      foto_url: null,
+      talla_color: null,
+      consulta_producto: true,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, quote);
+    io.emit("new_pending", quote);
+    sendTelegramAlert("PRODUCTO_CATALOGO", quote);
+    
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    await sendTextWithTyping(waId,
+      `${saludo}Dejame consultar si tenemos ese producto disponible. Un momento... 🔍`
     );
     return;
   }
