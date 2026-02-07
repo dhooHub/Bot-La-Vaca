@@ -635,8 +635,8 @@ function parseWebMessage(text) {
   
   // Construir URL de imagen basada en el código
   if(result.codigo){
-    // ✅ Ruta correcta: /lavaca/img/CODIGO.webp
-    result.foto_url=`${CATALOG_URL}/lavaca/img/${result.codigo}.webp`;
+    // ✅ Ruta correcta: /img/CODIGO.webp
+    result.foto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
   }
   
   // Extraer talla
