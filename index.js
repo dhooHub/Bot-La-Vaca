@@ -71,6 +71,8 @@ const DATA_FOLDER = PERSISTENT_DIR;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "172868898";
 const PANEL_URL = process.env.PANEL_URL || "https://tico-bot-lite.onrender.com";
+const PUSHOVER_USER_KEY = process.env.PUSHOVER_USER_KEY || "";
+const PUSHOVER_APP_TOKEN = process.env.PUSHOVER_APP_TOKEN || "";
 
 // Servir imágenes guardadas
 app.use('/images', express.static(path.join(PERSISTENT_DIR, 'images')));
@@ -105,12 +107,10 @@ function isStoreOpen() {
 function getNextOpenTime() {
   const{day,hour}=getCostaRicaTime();
   const schedule=WA_SCHEDULE[day];
-  // Si aún no abre hoy
   if(schedule && hour < schedule.open) {
     const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
     return `hoy ${dias[day]} a las ${schedule.open === 9 ? "9am" : "10am"}`;
   }
-  // Buscar siguiente día que abre
   for(let i=1;i<=7;i++){
     const nextDay=(day+i)%7;
     const nextSch=WA_SCHEDULE[nextDay];
@@ -135,7 +135,7 @@ INFORMACIÓN DE LA TIENDA:
 - Nombre: La Vaca CR
 - Ubicación: Heredia, 100 mts sur de la esquina del Testy
 - Horario tienda: Lunes a Viernes 9am-7pm, Sábado 9am-7pm, Domingo 10am-6pm
-- Horario WhatsApp: Lunes a Viernes 9am-6:30pm, Sábado 9am-7pm, Domingo 10am-5pm
+- Horario WhatsApp: Lunes a Sábado 9am-6:30pm, Domingo 10am-5pm
 - Teléfono: 2237-3335
 - WhatsApp: +506 6483-6565
 - Catálogo online: www.lavacacr.com
@@ -454,6 +454,59 @@ async function guardarImagenFoto(waId, base64Data) {
   }
 }
 
+// ✅ Función para enviar alertas a Pushover
+async function sendPushoverAlert(tipo, datos) {
+  if (!PUSHOVER_USER_KEY || !PUSHOVER_APP_TOKEN) return;
+  
+  try {
+    const phone = datos.phone || datos.waId || "Desconocido";
+    const phoneFormatted = formatPhone(phone);
+    const chatLink = `${PANEL_URL}/?chat=${normalizePhone(phone)}`;
+    
+    let title = "";
+    let message = "";
+    
+    if (tipo === "PRODUCTO_FOTO") {
+      title = "🔔 Nueva consulta";
+      message = `📷 Producto de foto\n👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
+    } else if (tipo === "PRODUCTO_CATALOGO") {
+      title = "🔔 Nueva consulta";
+      message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
+    } else if (tipo === "SINPE") {
+      title = "💰 SINPE recibido";
+      message = `📱 Ref: ${datos.reference || "?"}\n👤 ${phoneFormatted}`;
+    } else if (tipo === "ZONA") {
+      title = "📍 Zona recibida";
+      message = `🗺️ ${datos.zone || "?"}\n👤 ${phoneFormatted}`;
+    }
+    
+    if (!message) return;
+    
+    const response = await fetch("https://api.pushover.net/1/messages.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: PUSHOVER_APP_TOKEN,
+        user: PUSHOVER_USER_KEY,
+        title,
+        message,
+        url: chatLink,
+        url_title: "Abrir chat",
+        priority: 1,
+        sound: "cashregister"
+      })
+    });
+    
+    if (response.ok) {
+      console.log(`📲 Pushover enviado: ${tipo}`);
+    } else {
+      console.log(`⚠️ Pushover error:`, await response.text());
+    }
+  } catch (e) {
+    console.log(`⚠️ Pushover error: ${e.message}`);
+  }
+}
+
 // ✅ Función para enviar alertas a Telegram
 async function sendTelegramAlert(tipo, datos) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
@@ -552,6 +605,7 @@ function addPendingQuote(session) {
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
   // Enviar a Telegram
   sendTelegramAlert("PRODUCTO_CATALOGO", quote);
+    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
 }
 
 function parseWebMessage(text) {
@@ -796,6 +850,7 @@ async function handleIncomingMessage(msg) {
           io.emit("new_pending", quote);
           // Enviar a Telegram
           sendTelegramAlert("PRODUCTO_FOTO", quote);
+    sendPushoverAlert("PRODUCTO_FOTO", quote);
           
           saveDataToDisk();
           
@@ -853,6 +908,7 @@ async function handleIncomingMessage(msg) {
     console.log(`📷 *** EMITIDO! ***`);
     // Enviar a Telegram
     sendTelegramAlert("PRODUCTO_FOTO", quote);
+    sendPushoverAlert("PRODUCTO_FOTO", quote);
     
     saveDataToDisk();
     
@@ -975,6 +1031,7 @@ async function handleIncomingMessage(msg) {
       session.delivery_method="envio"; session.state="ZONA_RECIBIDA";
       io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
       sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
       await sendTextWithTyping(waId,frase("espera_zona",waId));
     }else{
       session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO";
@@ -989,6 +1046,7 @@ async function handleIncomingMessage(msg) {
       session.delivery_method="envio"; session.state="ZONA_RECIBIDA"; account.metrics.delivery_envio+=1;
       io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
       sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
       await sendTextWithTyping(waId,frase("espera_zona",waId)); saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
@@ -1022,6 +1080,7 @@ async function handleIncomingMessage(msg) {
       await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
       io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});
       sendTelegramAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
+    sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
       return;
     }
     if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
@@ -1239,6 +1298,7 @@ async function handleIncomingMessage(msg) {
     pendingQuotes.set(waId, quote);
     io.emit("new_pending", quote);
     sendTelegramAlert("PRODUCTO_CATALOGO", quote);
+    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
     
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
@@ -1286,6 +1346,7 @@ async function handleIncomingMessage(msg) {
     pendingQuotes.set(waId, quote);
     io.emit("new_pending", quote);
     sendTelegramAlert("PRODUCTO_CATALOGO", quote);
+    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
     
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
