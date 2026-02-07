@@ -895,13 +895,24 @@
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
               ${p.talla_color ? `<div class="action-card-detail">👕 ${escapeHtml(p.talla_color)}</div>` : ''}
               ${!isSinpe && !isTienda && !isFotoExterna && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
+              ${isSinpe ? `
+                <div class="action-card-detail">💰 Producto: ₡${(p.precio || 0).toLocaleString()}</div>
+                ${p.shipping_cost ? `<div class="action-card-detail">🚚 Envío: ₡${(p.shipping_cost || 0).toLocaleString()}</div>` : ''}
+                <div class="action-card-detail"><strong>💵 Total: ₡${(p.total || 0).toLocaleString()}</strong></div>
+                ${p.zone ? `<div class="action-card-detail">📍 Zona: ${escapeHtml(p.zone)}</div>` : ''}
+                <div class="action-card-detail">📱 ${escapeHtml(p.method === 'envio' ? 'Envío' : 'Retiro en tienda')}</div>
+                <div style="margin:10px 0;padding:8px;background:#fff3cd;border-radius:8px;text-align:center">
+                  <div style="font-weight:bold;margin-bottom:6px">🧾 COMPROBANTE SINPE</div>
+                  ${p.comprobante_url ? `<img src="${p.comprobante_url}" onclick="viewImage(this.src)" style="max-width:100%;max-height:250px;border-radius:8px;cursor:pointer;border:2px solid #ddd" alt="Comprobante">` : '<div style="color:#999;font-style:italic">📷 El cliente no adjuntó foto</div>'}
+                  ${p.reference ? `<div style="margin-top:6px;font-size:0.85rem">📝 Ref: ${escapeHtml(p.reference)}</div>` : ''}
+                </div>
+              ` : ''}
               ${isTienda ? `<div class="action-card-detail" style="color:#666;font-style:italic;">⚠️ Este producto no está en catálogo online.<br>El cliente fue invitado a visitar la tienda.</div>` : ''}
             </div>
             <div class="action-card-buttons">
               ${isSinpe ? `
-                ${p.comprobante_url ? `<img class="action-card-image" src="${p.comprobante_url}" onclick="viewImage(this.src)" style="max-height:200px;border-radius:8px;margin-bottom:8px;cursor:pointer" alt="Comprobante SINPE">` : '<div style="color:#999;font-style:italic;margin-bottom:8px">📷 Sin foto de comprobante</div>'}
-                ${p.reference ? `<div class="action-card-detail" style="margin-bottom:8px">📝 Ref: ${escapeHtml(p.reference)}</div>` : ''}
-                <button class="action-btn primary" onclick="confirmAction('PAGADO')">💰 Confirmar Pago</button>
+                <button class="action-btn primary" onclick="confirmAction('PAGADO')">✅ Pago Confirmado</button>
+                <button class="action-btn danger" onclick="confirmAction('SINPE_ERROR')">❌ Error Comprobante</button>
               ` : isTienda ? `
                 <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
               ` : `
