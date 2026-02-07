@@ -445,7 +445,6 @@ async function guardarImagenFoto(waId, base64Data) {
     const imgFileName = `foto_${normalizePhone(waId)}_${Date.now()}.jpg`;
     const imgDir = path.join(PERSISTENT_DIR, "images");
     const imgPath = path.join(imgDir, imgFileName);
-    // Crear carpeta si no existe
     if (!fs.existsSync(imgDir)) {
       fs.mkdirSync(imgDir, { recursive: true });
     }
@@ -454,8 +453,33 @@ async function guardarImagenFoto(waId, base64Data) {
     return `/images/${imgFileName}`;
   } catch(e) {
     console.log(`⚠️ Error guardando imagen: ${e.message}`);
-    // Fallback a base64 (menos eficiente pero funciona)
     return `data:image/jpeg;base64,${base64Data}`;
+  }
+}
+
+// ✅ Descargar imagen del catálogo (full quality) y guardarla localmente
+async function descargarImagenCatalogo(codigo, waId) {
+  try {
+    const url = `${CATALOG_URL}/img/${codigo}.webp`;
+    console.log(`📷 Descargando imagen catálogo: ${url}`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.log(`⚠️ Error descargando imagen catálogo: ${response.status}`);
+      return null;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const imgFileName = `cat_${codigo}_${Date.now()}.webp`;
+    const imgDir = path.join(PERSISTENT_DIR, "images");
+    const imgPath = path.join(imgDir, imgFileName);
+    if (!fs.existsSync(imgDir)) {
+      fs.mkdirSync(imgDir, { recursive: true });
+    }
+    fs.writeFileSync(imgPath, buffer);
+    console.log(`📷 Imagen catálogo guardada: ${imgPath} (${Math.round(buffer.length/1024)}KB)`);
+    return `/images/${imgFileName}`;
+  } catch(e) {
+    console.log(`⚠️ Error descargando imagen catálogo: ${e.message}`);
+    return null;
   }
 }
 
@@ -953,18 +977,25 @@ async function handleIncomingMessage(msg) {
   // Detectar mensaje web ("Me interesa")
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
-    // ✅ Imagen: guardar thumbnail localmente como respaldo, pero preferir URL del catálogo (full quality)
+    // ✅ Imagen: descargar full quality del catálogo y guardar localmente
     let fotoLocal = null;
+    // 1. Si el cliente adjuntó imagen real (alta calidad)
     if(hasImage && imageBase64){
       fotoLocal = await guardarImagenFoto(waId, imageBase64);
       console.log(`📷 Imagen adjunta guardada: ${fotoLocal}`);
-    } else if(linkPreviewJpeg){
-      fotoLocal = await guardarImagenFoto(waId, linkPreviewJpeg);
-      console.log(`🔗 Thumbnail guardado: ${fotoLocal}`);
     }
-    // Preferir URL del catálogo (full quality), con local como fallback
-    // webData.foto_url ya tiene: https://www.lavacacr.com/img/CODIGO.webp
-    if(fotoLocal) webData.foto_local = fotoLocal; // respaldo local
+    // 2. Si no, descargar la imagen full quality del catálogo
+    if(!fotoLocal && webData.codigo){
+      fotoLocal = await descargarImagenCatalogo(webData.codigo, waId);
+      console.log(`📷 Imagen catálogo descargada: ${fotoLocal}`);
+    }
+    // 3. Fallback: thumbnail del link preview (baja calidad)
+    if(!fotoLocal && linkPreviewJpeg){
+      fotoLocal = await guardarImagenFoto(waId, linkPreviewJpeg);
+      console.log(`🔗 Thumbnail guardado como fallback: ${fotoLocal}`);
+    }
+    // Usar imagen local si se guardó, sino URL externa
+    if(fotoLocal) webData.foto_url = fotoLocal;
     // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
     const preguntaOtro = /(?:tienen|hay|viene|está|esta|tendrán|tendran|lo tienen|la tienen|tienen en|hay en|viene en|otro|otra)\s*(?:en\s+)?(?:color|talla|tamaño|tamano)?\s*(?:en\s+)?(rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|s|m|l|xl|xxl|xs|small|medium|large|\d+)/i.test(text);
     
