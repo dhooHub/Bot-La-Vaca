@@ -37,24 +37,15 @@ const PORT = process.env.PORT || 3000;
 const PANEL_PIN = process.env.PANEL_PIN || "1234";
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-// Horarios WhatsApp por día (0=Domingo, 1=Lunes, ..., 6=Sábado)
-const WA_SCHEDULE = {
-  0: { open: 10, close_h: 17, close_m: 0 },  // Domingo 10am-5pm
-  1: { open: 9, close_h: 18, close_m: 30 },   // Lunes 9am-6:30pm
-  2: { open: 9, close_h: 18, close_m: 30 },   // Martes
-  3: { open: 9, close_h: 18, close_m: 30 },   // Miércoles
-  4: { open: 9, close_h: 18, close_m: 30 },   // Jueves
-  5: { open: 9, close_h: 18, close_m: 30 },   // Viernes
-  6: { open: 9, close_h: 18, close_m: 30 },   // Sábado 9am-6:30pm
-};
-const STORE_HOURS_TEXT = "Lun.-Sab. 9am a 7pm | Dom. 10am a 6pm";
-const WA_HOURS_TEXT = "Lun.-Sab. 9am a 6:30pm | Dom. 10am a 5pm";
-const STORE_LOCATION = "Heredia, 100 mts sur de la esquina del Testy";
+const HOURS_START = 9;
+const HOURS_END_HOUR = 18;
+const HOURS_END_MIN = 50;
+const HOURS_DAY = "9am - 6:50pm";
 const DELAY_MIN = 15;
 const DELAY_MAX = 60;
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
-const STORE_ADDRESS = process.env.STORE_ADDRESS || "Heredia, 100 mts sur de la esquina del Testy";
+const STORE_ADDRESS = process.env.STORE_ADDRESS || "";
 const MAPS_URL = process.env.MAPS_URL || "";
 const SINPE_NUMBER = process.env.SINPE_NUMBER || "";
 const SINPE_NAME = process.env.SINPE_NAME || "";
@@ -67,12 +58,10 @@ const PERSISTENT_DIR = "/data";
 const AUTH_FOLDER = path.join(PERSISTENT_DIR, "auth_baileys");
 const DATA_FOLDER = PERSISTENT_DIR;
 
-// Telegram config
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "172868898";
-const PANEL_URL = process.env.PANEL_URL || "https://tico-bot-lite.onrender.com";
+// Pushover config
 const PUSHOVER_USER_KEY = process.env.PUSHOVER_USER_KEY || "";
 const PUSHOVER_APP_TOKEN = process.env.PUSHOVER_APP_TOKEN || "";
+const PANEL_URL = process.env.PANEL_URL || "https://tico-bot-lite.onrender.com";
 
 // Servir imágenes guardadas
 app.use('/images', express.static(path.join(PERSISTENT_DIR, 'images')));
@@ -94,34 +83,8 @@ function normalizePhone(input) { const d = String(input||"").replace(/[^\d]/g,""
 function toJid(phone) { return normalizePhone(phone)+"@s.whatsapp.net"; }
 function fromJid(jid) { return jid?jid.replace(/@.*/,""):""; }
 function formatPhone(waId) { const d=normalizePhone(waId); if(d.length===11&&d.startsWith("506"))return`${d.slice(0,3)} ${d.slice(3,7)}-${d.slice(7)}`; return waId; }
-function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes(),day:cr.getDay()}; }
-function isStoreOpen() { 
-  const{hour,minute,day}=getCostaRicaTime(); 
-  const schedule=WA_SCHEDULE[day]; 
-  if(!schedule)return false; 
-  if(hour<schedule.open)return false; 
-  if(hour>schedule.close_h)return false; 
-  if(hour===schedule.close_h&&minute>=schedule.close_m)return false; 
-  return true; 
-}
-function getNextOpenTime() {
-  const{day,hour}=getCostaRicaTime();
-  const schedule=WA_SCHEDULE[day];
-  if(schedule && hour < schedule.open) {
-    const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
-    return `hoy ${dias[day]} a las ${schedule.open === 9 ? "9am" : "10am"}`;
-  }
-  for(let i=1;i<=7;i++){
-    const nextDay=(day+i)%7;
-    const nextSch=WA_SCHEDULE[nextDay];
-    if(nextSch){
-      const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
-      if(i===1) return `mañana ${dias[nextDay]} a las ${nextSch.open === 9 ? "9am" : "10am"}`;
-      return `el ${dias[nextDay]} a las ${nextSch.open === 9 ? "9am" : "10am"}`;
-    }
-  }
-  return "mañana";
-}
+function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes()}; }
+function isStoreOpen() { const{hour,minute}=getCostaRicaTime(); if(hour<HOURS_START)return false; if(hour>HOURS_END_HOUR)return false; if(hour===HOURS_END_HOUR&&minute>=HOURS_END_MIN)return false; return true; }
 function norm(s="") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
 function getHumanDelay() { return(Math.floor(Math.random()*(DELAY_MAX-DELAY_MIN+1))+DELAY_MIN)*1000; }
 function sleep(ms) { return new Promise(resolve=>setTimeout(resolve,ms)); }
@@ -133,9 +96,8 @@ const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de rop
 
 INFORMACIÓN DE LA TIENDA:
 - Nombre: La Vaca CR
-- Ubicación: Heredia, 100 mts sur de la esquina del Testy
-- Horario tienda: Lunes a Viernes 9am-7pm, Sábado 9am-7pm, Domingo 10am-6pm
-- Horario WhatsApp: Lunes a Sábado 9am-6:30pm, Domingo 10am-5pm
+- Ubicación: Heredia centro, 200m sur de Correos de CR
+- Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
 - Teléfono: 2237-3335
 - WhatsApp: +506 6483-6565
 - Catálogo online: www.lavacacr.com
@@ -226,13 +188,11 @@ function getStateDescription(state) {
     ESPERANDO_TALLA: "Se le preguntó qué talla y color quiere",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Se le dijo que estamos verificando disponibilidad",
     PREGUNTANDO_INTERES: "Se le preguntó si quiere comprar el producto (sí o no)",
-    ESPERANDO_ZONA: "Se le preguntó de qué zona del país es",
     PREGUNTANDO_METODO: "Se le preguntó si quiere envío o retiro en tienda",
+    ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia - Cantón - Distrito",
     ZONA_RECIBIDA: "Se le dijo que estamos calculando el envío",
     PRECIO_TOTAL_ENVIADO: "Se le mostró el precio total y se preguntó si está de acuerdo",
     ESPERANDO_SINPE: "Se le dieron los datos de SINPE y se espera el comprobante",
-    PAGO_CONFIRMADO_ENVIO: "Se confirmó el pago y se están pidiendo datos de envío",
-    ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia - Cantón - Distrito",
     ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono, provincia, cantón, distrito y señas",
     CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
@@ -269,16 +229,7 @@ const FRASES = {
   no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo. ¿Querés ver algo más? 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 ¿Te interesa ver algo similar en el catálogo? 🙌"],
   pedir_zona: ["¿Me podés decir de qué provincia y cantón nos escribís? 📍","Para calcular el envío, ¿de qué provincia y cantón sos? 📍","¿Me decís tu provincia y cantón? 📍","¿De qué provincia y cantón te lo enviaríamos? 📍"],
   pedir_metodo: ["¿Querés que te lo enviemos o preferís recogerlo en tienda? 📦🏪\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆","¿Cómo lo preferís? 🙌\n\n1. 📦 Envío a tu casa\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆"],
-  nocturno_func: function(waId) {
-    const nextOpen = getNextOpenTime();
-    return `¡Hola! 🙌 Te informo que la atención por WhatsApp es de:\n\n` +
-      `📱 ${WA_HOURS_TEXT}\n\n` +
-      `Con todo gusto te atendemos ${nextOpen} 😊\n\n` +
-      `Además te informo que nuestra tienda está abierta:\n\n` +
-      `🏪 ${STORE_HOURS_TEXT}\n` +
-      `📍 ${STORE_LOCATION}\n\n` +
-      `¡Te esperamos! 🐄`;
-  },
+  nocturno: ["¡Hola! 🌙 Ya cerramos por hoy. Mañana a las 9am te atiendo con gusto 😊","Pura vida 🌙 Estamos fuera de horario. Te respondo mañana temprano 🙌","¡Buenas noches! 🌙 Nuestro horario es de 9am a 6:50pm. Mañana te ayudo 😊","Hola 🌙 Ya cerramos. Dejame tu consulta y mañana te confirmo 🙌"],
   gracias: ["¡Gracias a vos! 🙌","¡Con mucho gusto! 😊","¡Pura vida! 🙌","¡Gracias por la confianza! 💪","¡Tuanis! 🙌","¡Para servirte! 😊"],
   espera_zona: ["¡Anotado! 📝 Dame un momento para calcular el envío 🙌","Perfecto 📝 Ya reviso cuánto sale a tu zona 😊","Listo 📝 Dejame calcular el envío 🙌"],
   espera_vendedor: ["Ya estoy revisando, un momento 🙌","Dame chance, estoy verificando 😊","Un momento, ya te confirmo 🙌"],
@@ -292,13 +243,13 @@ const FRASES = {
     ESPERANDO_TALLA: "Y sobre tu producto, ¿me decís la talla y color? 👕",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
     PREGUNTANDO_INTERES: "Y sobre el producto, ¿te interesa adquirirlo? 😊\n\n1. ✅ Sí\n2. ❌ No",
+    ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
     ESPERANDO_UBICACION_ENVIO: "Y sobre tu envío, escribí tu *Provincia - Cantón - Distrito* 📍",
-    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, escribí separado por comas: *Nombre, Teléfono, Provincia, Cantón, Distrito, Señas* 📦",
-    ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
     ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
+    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, escribí separado por comas: *Nombre, Teléfono, Provincia, Cantón, Distrito, Señas* 📦",
     CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
@@ -322,7 +273,7 @@ function getSession(waId) {
       waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, talla_color:null, 
       shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, 
       // Datos de envío
-      envio_nombre:null, envio_telefono:null, envio_provincia:null, envio_canton:null, envio_distrito:null, envio_senas:null, envio_direccion:null,
+      envio_nombre:null, envio_telefono:null, envio_direccion:null,
       // Foto externa
       foto_externa:false, foto_base64:null, foto_url_guardada:null,
       saludo_enviado:false, catalogo_enviado:false, nocturno_sent_at:null, last_activity:Date.now() 
@@ -340,7 +291,7 @@ loadLidMap();
 
 function resetSession(session) {
   session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
-  session.envio_nombre=null; session.envio_telefono=null; session.envio_provincia=null; session.envio_canton=null; session.envio_distrito=null; session.envio_senas=null; session.envio_direccion=null;
+  session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
   session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
@@ -489,26 +440,20 @@ async function sendPushoverAlert(tipo, datos) {
     let message = "";
     
     if (tipo === "PRODUCTO_FOTO") {
-      title = "🔔 Nueva consulta";
-      message = `📷 Producto de foto\n👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
+      title = "📷 Nueva consulta - Foto";
+      message = `👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "PRODUCTO_CATALOGO") {
-      title = "🔔 Nueva consulta";
-      message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
+      title = "📦 Nueva consulta - Catálogo";
+      message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "-"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "SINPE") {
       title = "💰 SINPE recibido";
       message = `📱 Ref: ${datos.reference || "?"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "ZONA") {
-      title = "📍 Datos de envío recibidos";
-      const s = datos.session || {};
-      message = `📦 ${s.producto || datos.producto || "Producto"}\n` +
-        `💰 ₡${(s.precio || datos.precio || 0).toLocaleString()}\n` +
-        `👤 ${s.envio_nombre || datos.nombre || "-"}\n` +
-        `📱 ${s.envio_telefono || datos.telefono || "-"}\n` +
-        `📍 ${datos.zone || "?"}\n` +
-        `👤 ${phoneFormatted}`;
+      title = "📍 Zona recibida - Calcular envío";
+      message = `🗺️ ${datos.zone || "?"}\n👤 ${phoneFormatted}`;
     }
     
-    if (!message) return;
+    if (!title) return;
     
     const response = await fetch("https://api.pushover.net/1/messages.json", {
       method: "POST",
@@ -519,7 +464,7 @@ async function sendPushoverAlert(tipo, datos) {
         title,
         message,
         url: chatLink,
-        url_title: "Abrir chat",
+        url_title: "Abrir Panel",
         priority: 1,
         sound: "cashregister"
       })
@@ -532,75 +477,6 @@ async function sendPushoverAlert(tipo, datos) {
     }
   } catch (e) {
     console.log(`⚠️ Pushover error: ${e.message}`);
-  }
-}
-
-// ✅ Función para enviar alertas a Telegram
-async function sendTelegramAlert(tipo, datos) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-  
-  try {
-    const phone = datos.phone || datos.waId || "Desconocido";
-    const phoneFormatted = formatPhone(phone);
-    const linkPanel = `${PANEL_URL}`;
-    
-    let mensaje = "";
-    
-    if (tipo === "PRODUCTO_FOTO") {
-      mensaje = `🔔 *NUEVA CONSULTA*\n\n` +
-        `📷 Producto de foto\n` +
-        `👕 ${datos.talla_color || "Sin especificar"}\n` +
-        `👤 ${phoneFormatted}\n\n` +
-        `👉 [Abrir Panel](${linkPanel})`;
-    } else if (tipo === "PRODUCTO_CATALOGO") {
-      mensaje = `🔔 *NUEVA CONSULTA*\n\n` +
-        `📦 ${datos.producto || "Producto"}\n` +
-        `💰 ₡${(datos.precio || 0).toLocaleString()}\n` +
-        `👕 ${datos.talla_color || "Sin especificar"}\n` +
-        `👤 ${phoneFormatted}\n\n` +
-        `👉 [Abrir Panel](${linkPanel})`;
-    } else if (tipo === "SINPE") {
-      mensaje = `💰 *SINPE RECIBIDO*\n\n` +
-        `📱 Referencia: ${datos.reference || "?"}\n` +
-        `👤 ${phoneFormatted}\n\n` +
-        `👉 [Confirmar Pago](${linkPanel})`;
-    } else if (tipo === "ZONA") {
-      const s = datos.session || {};
-      mensaje = `📍 *DATOS DE ENVÍO*\n\n` +
-        `📦 ${s.producto || "Producto"}\n` +
-        `💰 ₡${(s.precio || 0).toLocaleString()}\n` +
-        `👕 ${s.talla_color || "-"}\n` +
-        `━━━━━━━━━━━━\n` +
-        `👤 ${s.envio_nombre || "-"}\n` +
-        `📱 ${s.envio_telefono || "-"}\n` +
-        `📍 ${s.envio_provincia || ""}, ${s.envio_canton || ""}, ${s.envio_distrito || ""}\n` +
-        `🏠 ${s.envio_senas || "-"}\n` +
-        `━━━━━━━━━━━━\n` +
-        `👤 ${phoneFormatted}\n\n` +
-        `👉 [Calcular Envío](${linkPanel})`;
-    }
-    
-    if (!mensaje) return;
-    
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: mensaje,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-      })
-    });
-    
-    if (response.ok) {
-      console.log(`📲 Telegram enviado: ${tipo}`);
-    } else {
-      console.log(`⚠️ Telegram error:`, await response.text());
-    }
-  } catch (e) {
-    console.log(`⚠️ Telegram error: ${e.message}`);
   }
 }
 
@@ -640,9 +516,8 @@ function addPendingQuote(session) {
   const profile=getProfile(session.waId);
   const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, created_at:new Date().toISOString() };
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
-  // Enviar a Telegram
-  sendTelegramAlert("PRODUCTO_CATALOGO", quote);
-    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+  // Enviar notificación
+  sendPushoverAlert("PRODUCTO_CATALOGO", quote);
 }
 
 function parseWebMessage(text) {
@@ -673,8 +548,8 @@ function parseWebMessage(text) {
   
   // Construir URL de imagen basada en el código
   if(result.codigo){
-    // ✅ Ruta correcta: /img/CODIGO.webp
-    result.foto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
+    // ✅ Ruta correcta: /lavaca/img/CODIGO.webp
+    result.foto_url=`${CATALOG_URL}/lavaca/img/${result.codigo}.webp`;
   }
   
   // Extraer talla
@@ -801,7 +676,7 @@ async function handleIncomingMessage(msg) {
   else if(msg.message?.extendedTextMessage?.text)text=msg.message.extendedTextMessage.text;
   else if(msg.message?.imageMessage?.caption)text=msg.message.imageMessage.caption;
 
-  // Descargar imagen si existe (foto adjunta real)
+  // Descargar imagen si existe
   if(hasImage){
     try {
       const stream = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
@@ -810,20 +685,6 @@ async function handleIncomingMessage(msg) {
         console.log(`📷 Imagen descargada: ${Math.round(stream.length/1024)}KB`);
       }
     } catch(e) { console.log("⚠️ Error descargando imagen:", e.message); }
-  }
-  
-  // ✅ Extraer thumbnail del link preview (para mensajes "Me interesa" del catálogo)
-  let linkPreviewJpeg = null;
-  const extMsg = msg.message?.extendedTextMessage;
-  if(extMsg && !hasImage){
-    // jpegThumbnail viene como Buffer en Baileys
-    if(extMsg.jpegThumbnail){
-      try {
-        const thumbBuf = Buffer.isBuffer(extMsg.jpegThumbnail) ? extMsg.jpegThumbnail : Buffer.from(extMsg.jpegThumbnail, 'base64');
-        linkPreviewJpeg = thumbBuf.toString('base64');
-        console.log(`🔗 Link preview thumbnail: ${Math.round(thumbBuf.length/1024)}KB`);
-      } catch(e) { console.log("⚠️ Error extrayendo thumbnail:", e.message); }
-    }
   }
 
   const displayPhone=realPhone?formatPhone(realPhone):waId;
@@ -842,10 +703,10 @@ async function handleIncomingMessage(msg) {
 
   // FIX 2: Nocturno dedup (8 horas)
   if(!isStoreOpen()){
-    const NOCTURNO_COOLDOWN=1*60*60*1000;
+    const NOCTURNO_COOLDOWN=8*60*60*1000;
     if(session.nocturno_sent_at&&(Date.now()-session.nocturno_sent_at)<NOCTURNO_COOLDOWN){console.log(`🌙 Nocturno ya enviado`);return;}
     session.nocturno_sent_at=Date.now();
-    await sendTextWithTyping(waId, FRASES.nocturno_func(waId));return;
+    await sendTextWithTyping(waId,frase("nocturno",waId));return;
   }
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
@@ -899,9 +760,8 @@ async function handleIncomingMessage(msg) {
           pendingQuotes.set(waId, quote);
           console.log(`📷 *** EMITIENDO new_pending (con detalles) ***`);
           io.emit("new_pending", quote);
-          // Enviar a Telegram
-          sendTelegramAlert("PRODUCTO_FOTO", quote);
-    sendPushoverAlert("PRODUCTO_FOTO", quote);
+          // Enviar notificación
+          sendPushoverAlert("PRODUCTO_FOTO", quote);
           
           saveDataToDisk();
           
@@ -957,8 +817,7 @@ async function handleIncomingMessage(msg) {
     console.log(`📷 Sockets conectados: ${io.engine.clientsCount}`);
     io.emit("new_pending", quote);
     console.log(`📷 *** EMITIDO! ***`);
-    // Enviar a Telegram
-    sendTelegramAlert("PRODUCTO_FOTO", quote);
+    // Enviar notificación
     sendPushoverAlert("PRODUCTO_FOTO", quote);
     
     saveDataToDisk();
@@ -970,25 +829,6 @@ async function handleIncomingMessage(msg) {
   // Detectar mensaje web ("Me interesa")
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
-    // ✅ Imagen: descargar full quality del catálogo y guardar localmente
-    let fotoLocal = null;
-    // 1. Si el cliente adjuntó imagen real (alta calidad)
-    if(hasImage && imageBase64){
-      fotoLocal = await guardarImagenFoto(waId, imageBase64);
-      console.log(`📷 Imagen adjunta guardada: ${fotoLocal}`);
-    }
-    // 2. Si no, descargar la imagen full quality del catálogo
-    if(!fotoLocal && webData.codigo){
-      fotoLocal = await descargarImagenCatalogo(webData.codigo, waId);
-      console.log(`📷 Imagen catálogo descargada: ${fotoLocal}`);
-    }
-    // 3. Fallback: thumbnail del link preview (baja calidad)
-    if(!fotoLocal && linkPreviewJpeg){
-      fotoLocal = await guardarImagenFoto(waId, linkPreviewJpeg);
-      console.log(`🔗 Thumbnail guardado como fallback: ${fotoLocal}`);
-    }
-    // Usar imagen local si se guardó, sino URL externa
-    if(fotoLocal) webData.foto_url = fotoLocal;
     // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
     const preguntaOtro = /(?:tienen|hay|viene|está|esta|tendrán|tendran|lo tienen|la tienen|tienen en|hay en|viene en|otro|otra)\s*(?:en\s+)?(?:color|talla|tamaño|tamano)?\s*(?:en\s+)?(rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|s|m|l|xl|xxl|xs|small|medium|large|\d+)/i.test(text);
     
@@ -1004,7 +844,18 @@ async function handleIncomingMessage(msg) {
       return;
     }
     
-    session.producto=webData.producto; session.precio=webData.precio; session.codigo=webData.codigo; session.foto_url=webData.foto_url;
+    // ✅ Descargar imagen full quality del catálogo localmente
+    let fotoLocal = null;
+    if(webData.codigo){
+      fotoLocal = await descargarImagenCatalogo(webData.codigo, waId);
+    }
+    if(!fotoLocal && msg.message?.extendedTextMessage?.jpegThumbnail){
+      const thumbBase64 = Buffer.from(msg.message.extendedTextMessage.jpegThumbnail).toString('base64');
+      fotoLocal = await guardarImagenFoto(waId, thumbBase64);
+      console.log(`🔗 Thumbnail guardado como fallback: ${fotoLocal}`);
+    }
+    
+    session.producto=webData.producto; session.precio=webData.precio; session.codigo=webData.codigo; session.foto_url=fotoLocal || webData.foto_url;
     let detalles=[];
     if(webData.talla)detalles.push(`Talla: ${webData.talla}`);
     if(webData.color)detalles.push(`Color: ${webData.color}`);
@@ -1029,7 +880,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_UBICACION_ENVIO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_UBICACION_ENVIO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -1054,72 +905,6 @@ async function handleIncomingMessage(msg) {
         return;
       }
       // RESPUESTA_FLUJO → continuar normalmente
-    }
-  }
-
-  // ✅ Detectar preguntas sobre envío en CUALQUIER estado (incluso NEW)
-  const regexPreguntaEnvio = /(?:hac[eé]n?\s*env[ií]o|costo\s*(?:de[l]?\s*)?env[ií]o|cu[áa]nto\s*(?:cuesta|sale|cobra|es)\s*(?:el\s*)?env[ií]o|env[ií]an?\s*a\s+\w|mandan?\s*a\s+\w|llega\s*(?:a|hasta)\s+\w|env[ií]os?\s*(?:a\s+\w)?)/i;
-  const regexSoloEnvio = /(?:hac[eé]n?\s*env[ií]o|env[ií]os?\??|tienen\s*env[ií]o)/i;
-  
-  if(regexPreguntaEnvio.test(text)){
-    // ¿Tiene zona específica?
-    const zonaMatch = text.match(/(?:a|en|para|hacia|hasta)\s+(san\s*jose|heredia|alajuela|cartago|puntarenas|limon|guanacaste|perez\s*zeledon|liberia|nicoya|santa\s*cruz|turrialba|san\s*carlos|[\w\s]{3,25}?)(?:\s*[?,.!]|$)/i);
-    const zonaTexto = zonaMatch ? zonaMatch[1].trim() : null;
-    
-    // CASO 1: Pregunta general sin zona y sin producto activo
-    if(!zonaTexto && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || !session.producto)){
-      await sendTextWithTyping(waId,
-        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
-        `🏙️ GAM (área metropolitana): ₡2,500\n` +
-        `🌄 Fuera de GAM: ₡3,500\n` +
-        `🕐 Tarda entre 4-5 días hábiles si no hay demoras de Correos\n\n` +
-        `Si te interesa algo, podés revisar nuestro catálogo en línea 👇\n${CATALOG_URL}`
-      );
-      if(session.state === "PREGUNTANDO_ALGO_MAS") resetSession(session);
-      saveDataToDisk();
-      return;
-    }
-    
-    // CASO 2: Pregunta con zona específica Y hay producto activo
-    if(zonaTexto && session.producto){
-      session.delivery_method = "envio";
-      session.state = "ESPERANDO_UBICACION_ENVIO";
-      await sendTextWithTyping(waId,
-        `¡Claro! Sí hacemos envíos con Correos de Costa Rica 📦\n\n` +
-        `🏙️ GAM: ₡2,500 | 🌄 Fuera de GAM: ₡3,500\n` +
-        `🕐 4-5 días hábiles\n\n` +
-        `Para calcularte el costo exacto escribí tu *Provincia - Cantón - Distrito* 📍\n` +
-        `(Ej: Heredia - Central - Mercedes)`
-      );
-      saveDataToDisk();
-      return;
-    }
-    
-    // CASO 2b: Pregunta con zona pero SIN producto activo
-    if(zonaTexto && !session.producto){
-      await sendTextWithTyping(waId,
-        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
-        `🏙️ GAM (área metropolitana): ₡2,500\n` +
-        `🌄 Fuera de GAM: ₡3,500\n` +
-        `🕐 Tarda entre 4-5 días hábiles si no hay demoras de Correos\n\n` +
-        `Si te interesa algo, podés revisar nuestro catálogo en línea 👇\n${CATALOG_URL}`
-      );
-      if(session.state === "PREGUNTANDO_ALGO_MAS") resetSession(session);
-      saveDataToDisk();
-      return;
-    }
-    
-    // CASO 3: Pregunta general pero hay producto activo → responder info + volver al flujo
-    if(session.producto){
-      const recordatorio = FRASES.recordatorio_flujo[session.state] || "";
-      await sendTextWithTyping(waId,
-        `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
-        `🏙️ GAM: ₡2,500 | 🌄 Fuera de GAM: ₡3,500\n` +
-        `🕐 4-5 días hábiles\n` +
-        (recordatorio ? `\n${recordatorio}` : "")
-      );
-      saveDataToDisk();
-      return;
     }
   }
 
@@ -1159,16 +944,6 @@ async function handleIncomingMessage(msg) {
     // Caerá en la lógica de NEW abajo
   }
 
-  if(session.state==="ESPERANDO_ZONA"){
-    session.client_zone=text.trim();
-    session.state="ZONA_RECIBIDA";
-    io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio,nombre:session.envio_nombre,telefono:session.envio_telefono,direccion:session.envio_direccion});
-    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId, session});
-    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId, session});
-    await sendTextWithTyping(waId,frase("espera_zona",waId));
-    saveDataToDisk();return;
-  }
-
   if(session.state==="PREGUNTANDO_METODO"){
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
       session.delivery_method="envio"; account.metrics.delivery_envio+=1;
@@ -1177,17 +952,38 @@ async function handleIncomingMessage(msg) {
       saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
-      session.delivery_method="recoger"; account.metrics.delivery_recoger+=1;
-      session.state="PREGUNTANDO_ALGO_MAS";
-      await sendTextWithTyping(waId,
-        `¡Perfecto! 🏪 Te esperamos en tienda para recoger tu producto.\n\n` +
-        `📍 ${STORE_ADDRESS}\n` +
-        `🕒 ${STORE_HOURS_TEXT}\n\n` +
-        `¿Te puedo ayudar con algo más? 😊`
-      );
+      session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO"; account.metrics.delivery_recoger+=1;
+      const price=session.precio||0;
+      await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
       saveDataToDisk();return;
     }
     await sendTextWithTyping(waId,frase("pedir_metodo",waId));return;
+  }
+
+  // PRE-PAGO: Provincia-Cantón-Distrito en 1 sola pregunta
+  if(session.state==="ESPERANDO_UBICACION_ENVIO"){
+    if(text.trim().length < 5){
+      await sendTextWithTyping(waId,"Ocupo tu ubicación 📍\n\nEscribí tu *Provincia - Cantón - Distrito*\n(Ej: Heredia - Central - Mercedes)");
+      return;
+    }
+    const partes = text.split(/[-,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    if(partes.length >= 3){
+      session.envio_provincia = partes[0];
+      session.envio_canton = partes[1];
+      session.envio_distrito = partes[2];
+    } else {
+      session.envio_provincia = text.trim();
+      session.envio_canton = "";
+      session.envio_distrito = "";
+    }
+    session.client_zone = text.trim();
+    session.state = "ZONA_RECIBIDA";
+    
+    console.log(`📍 Zona recibida de ${waId}: ${session.client_zone}`);
+    io.emit("zone_received",{waId, zone:session.client_zone, producto:session.producto, codigo:session.codigo, precio:session.precio, talla_color:session.talla_color, foto_url:session.foto_url, provincia:session.envio_provincia, canton:session.envio_canton, distrito:session.envio_distrito});
+    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    await sendTextWithTyping(waId,frase("espera_zona",waId));
+    saveDataToDisk();return;
   }
 
   if(session.state==="ZONA_RECIBIDA"){await sendTextWithTyping(waId,"Estoy calculando el envío, un momento 🙌");return;}
@@ -1211,8 +1007,7 @@ async function handleIncomingMessage(msg) {
     if(msg.message?.imageMessage){
       await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
       io.emit("sinpe_received",{waId,reference:session.sinpe_reference,phone:profile.phone||waId,name:profile.name||"",producto:session.producto,talla:session.talla_color,method:session.delivery_method,foto_url:session.foto_url});
-      sendTelegramAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
-    sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
+      sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
       return;
     }
     if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
@@ -1223,46 +1018,7 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // ✅ PRE-PAGO: Solo provincia/cantón/distrito para calcular costo de envío
-  // ✅ PRE-PAGO: Provincia-Cantón-Distrito en un solo mensaje
-  if(session.state==="ESPERANDO_UBICACION_ENVIO"){
-    if(text.trim().length < 5){
-      await sendTextWithTyping(waId,"Ocupo tu ubicación 📍\n\nEscribí tu *Provincia - Cantón - Distrito*\n(Ej: Heredia - Central - Mercedes)");
-      return;
-    }
-    const partes = text.split(/[-,\/]/).map(p => p.trim()).filter(p => p.length > 0);
-    if(partes.length >= 3){
-      session.envio_provincia = partes[0];
-      session.envio_canton = partes[1];
-      session.envio_distrito = partes[2];
-    } else {
-      session.envio_provincia = text.trim();
-      session.envio_canton = "";
-      session.envio_distrito = "";
-    }
-    session.client_zone = text.trim();
-    session.state = "ZONA_RECIBIDA";
-    
-    console.log(`📍 Zona recibida de ${waId}: ${session.client_zone} - Emitiendo zone_received...`);
-    io.emit("zone_received",{
-      waId,
-      zone: session.client_zone,
-      producto: session.producto,
-      codigo: session.codigo,
-      precio: session.precio,
-      talla_color: session.talla_color,
-      foto_url: session.foto_url,
-      provincia: session.envio_provincia,
-      canton: session.envio_canton,
-      distrito: session.envio_distrito
-    });
-    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-    await sendTextWithTyping(waId,frase("espera_zona",waId));
-    saveDataToDisk();return;
-  }
-
-  // ✅ POST-PAGO: Nombre, Teléfono, Provincia, Cantón, Distrito, Señas en UN solo mensaje
+  // POST-PAGO: Nombre, Teléfono, Provincia, Cantón, Distrito, Señas en 1 sola pregunta
   if(session.state==="ESPERANDO_DATOS_ENVIO"){
     const lineas = text.split(/[,\n]/).map(l => l.trim()).filter(l => l.length > 0);
     
@@ -1308,12 +1064,14 @@ async function handleIncomingMessage(msg) {
     );
     saveDataToDisk();return;
   }
+
   if(session.state==="CONFIRMANDO_DATOS_ENVIO"){
     if(lower==="1"||lower==="si"||lower==="sí"||lower.includes("bien")||lower.includes("correcto")){
+      profile.purchases = (profile.purchases||0) + 1;
       
       await sendTextWithTyping(waId,
         `¡Perfecto! 🎉 Tu pedido está confirmado.\n\n` +
-        `🚚 Te llega en aproximadamente ${DELIVERY_DAYS}.\n\n` +
+        `🚚 Te llega en aproximadamente 8 días hábiles.\n\n` +
         `Te avisamos cuando lo despachemos.\n\n` +
         `¡Muchas gracias por tu compra! 🙌\n¡Pura vida! 🐄`
       );
@@ -1328,10 +1086,6 @@ async function handleIncomingMessage(msg) {
         method: "envio",
         envio_nombre: session.envio_nombre,
         envio_telefono: session.envio_telefono,
-        envio_provincia: session.envio_provincia,
-        envio_canton: session.envio_canton,
-        envio_distrito: session.envio_distrito,
-        envio_senas: session.envio_senas,
         envio_direccion: session.envio_direccion,
         total: (session.precio||0) + (session.shipping_cost||0)
       });
@@ -1345,10 +1099,6 @@ async function handleIncomingMessage(msg) {
       session.state = "ESPERANDO_DATOS_ENVIO";
       session.envio_nombre = null;
       session.envio_telefono = null;
-      session.envio_provincia = null;
-      session.envio_canton = null;
-      session.envio_distrito = null;
-      session.envio_senas = null;
       session.envio_direccion = null;
       await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nEscribí separado por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
       saveDataToDisk();return;
@@ -1457,7 +1207,6 @@ async function handleIncomingMessage(msg) {
     };
     pendingQuotes.set(waId, quote);
     io.emit("new_pending", quote);
-    sendTelegramAlert("PRODUCTO_CATALOGO", quote);
     sendPushoverAlert("PRODUCTO_CATALOGO", quote);
     
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
@@ -1505,7 +1254,6 @@ async function handleIncomingMessage(msg) {
     };
     pendingQuotes.set(waId, quote);
     io.emit("new_pending", quote);
-    sendTelegramAlert("PRODUCTO_CATALOGO", quote);
     sendPushoverAlert("PRODUCTO_CATALOGO", quote);
     
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
@@ -1569,15 +1317,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const price = session.precio || 0;
     const total = price + shipping;
     await sendTextWithTyping(clientWaId,
-      `📋 *RESUMEN DE TU PEDIDO*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📦 Producto: ${session.producto || 'Artículo'}\n` +
-      `👕 ${session.talla_color || '-'}\n` +
-      `💰 Producto: ₡${price.toLocaleString()}\n` +
-      `🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n` +
-      `💵 *Total: ₡${total.toLocaleString()}*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `¿Estás de acuerdo?\n\n1. ✅ Sí, quiero comprarlo\n2. ❌ No, gracias\n\nResponde con el número 👆`
+      `📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 Producto: ₡${price.toLocaleString()}\n🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n━━━━━━━━━━━━━━\n💵 *Total: ₡${total.toLocaleString()}*\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
     );
     saveDataToDisk();
     return { success: true, message: `Envío ₡${shipping.toLocaleString()} enviado` };
@@ -1594,10 +1334,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
 
   if (actionType === "PAGADO") {
     account.metrics.sinpe_confirmed += 1;
-    const profile = getProfile(clientWaId);
-    profile.purchases = (profile.purchases || 0) + 1;
     if (session.delivery_method === "envio") {
-      // POST-PAGO: Pedir datos personales para el envío en UN mensaje
       session.state = "ESPERANDO_DATOS_ENVIO";
       await sendTextWithTyping(clientWaId,
         `¡Pago confirmado! 🎉 ¡Muchas gracias!\n\n` +
@@ -1610,7 +1347,9 @@ async function executeAction(clientWaId, actionType, data = {}) {
       return { success: true, message: "Pago confirmado, pidiendo datos de envío" };
     } else {
       session.state = "PAGO_CONFIRMADO";
-      let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", STORE_HOURS_TEXT);
+      const profile = getProfile(clientWaId);
+      profile.purchases = (profile.purchases || 0) + 1;
+      let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", HOURS_DAY);
       await sendTextWithTyping(clientWaId, msgFin);
       io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "recoger" });
       resetSession(session);
@@ -1633,7 +1372,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.state = "PRECIO_TOTAL_ENVIADO";
       account.metrics.delivery_recoger += 1;
       await sendTextWithTyping(clientWaId,
-        `No hacemos envíos a ${session.client_zone || "esa zona"} 😔\n\nPero podés recoger en tienda:\n🏪 ${STORE_ADDRESS}\n🕒 ${STORE_HOURS_TEXT}\n\n📦 ${session.producto || 'Artículo'}\n💰 Precio: ₡${price.toLocaleString()}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
+        `No hacemos envíos a ${session.client_zone || "esa zona"} 😔\n\nPero podés recoger en tienda:\n🏪 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n📦 ${session.producto || 'Artículo'}\n💰 Precio: ₡${price.toLocaleString()}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
       );
     } else {
       await sendTextWithTyping(clientWaId, "No hacemos envíos a esa zona 😔");
@@ -1658,9 +1397,9 @@ io.on("connection", (socket) => {
       if (qrCode) socket.emit("qr_code", { qr: qrCode });
       // Buscar sesiones esperando costo de envío
       const pendingZones = [];
-      for(const [waId, s] of sessions.entries()){
+      for(const [wId, s] of sessions.entries()){
         if(s.state === "ZONA_RECIBIDA"){
-          pendingZones.push({waId, zone: s.client_zone, producto: s.producto, codigo: s.codigo, precio: s.precio, talla_color: s.talla_color, foto_url: s.foto_url, provincia: s.envio_provincia, canton: s.envio_canton, distrito: s.envio_distrito});
+          pendingZones.push({waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
         }
       }
       socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics });
@@ -1700,7 +1439,7 @@ server.listen(PORT, () => {
 ╔═══════════════════════════════════════════════════╗
 ║  🐄 TICO-bot - La Vaca CR                         ║
 ╠═══════════════════════════════════════════════════╣
-║  🕒 Horario: ${STORE_HOURS_TEXT.padEnd(36)}║
+║  🕒 Horario: ${HOURS_DAY.padEnd(36)}║
 ║  ⏱️ Delay: ${(DELAY_MIN + "-" + DELAY_MAX + " seg").padEnd(37)}║
 ║  🌐 Catálogo: ${CATALOG_URL.slice(0,33).padEnd(34)}║
 ║  📱 Panel: http://localhost:${PORT}/                  ║
