@@ -605,6 +605,39 @@ async function connectWhatsApp() {
       io.emit("connection_status",{status:connectionStatus,phone:connectedPhone});console.log("✅ Conectado:",connectedPhone);
       if(global._keepAliveInterval)clearInterval(global._keepAliveInterval);
       global._keepAliveInterval=setInterval(async()=>{try{if(sock&&connectionStatus==="connected")await sock.sendPresenceUpdate("available");}catch(e){}},4*60*1000);
+      
+      // ✅ Restaurar tareas pendientes después de reconexión/deploy
+      setTimeout(() => {
+        let restored = 0;
+        for(const [wId, s] of sessions.entries()){
+          const profile = getProfile(wId);
+          const phone = profile.phone || wId;
+          
+          // Re-emitir zonas pendientes (dueño no calculó envío)
+          if(s.state === "ZONA_RECIBIDA"){
+            io.emit("zone_received",{waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
+            sendPushoverAlert("ZONA", {waId:wId, zone:s.client_zone, phone});
+            restored++;
+          }
+          // Re-emitir confirmaciones de vendedor pendientes
+          if(s.state === "ESPERANDO_CONFIRMACION_VENDEDOR" && !pendingQuotes.has(wId)){
+            const quote = {waId:wId, phone, name:profile.name||"", producto:s.producto||"Producto", precio:s.precio, codigo:s.codigo, foto_url:s.foto_url||s.foto_url_guardada, talla_color:s.talla_color, foto_externa:s.foto_externa, created_at:new Date().toISOString()};
+            pendingQuotes.set(wId, quote);
+            io.emit("new_pending", quote);
+            restored++;
+          }
+          // Re-emitir SINPE pendientes
+          if(s.state === "ESPERANDO_SINPE" && s.comprobante_url && !pendingQuotes.has(wId)){
+            const price = s.precio||0;
+            const shipping = s.delivery_method==="envio"?(s.shipping_cost||0):0;
+            const sinpeData = {waId:wId, tipo:"sinpe", reference:s.sinpe_reference, phone, name:profile.name||"", producto:s.producto, codigo:s.codigo, precio:price, shipping_cost:shipping, total:price+shipping, talla_color:s.talla_color, method:s.delivery_method, foto_url:s.foto_url, comprobante_url:s.comprobante_url, zone:s.client_zone, created_at:new Date().toISOString()};
+            pendingQuotes.set(wId, sinpeData);
+            io.emit("sinpe_received", sinpeData);
+            restored++;
+          }
+        }
+        if(restored > 0) console.log(`🔄 ${restored} tarea(s) pendiente(s) restaurada(s)`);
+      }, 3000); // Esperar 3 seg para que panel se conecte
     }
   });
 
