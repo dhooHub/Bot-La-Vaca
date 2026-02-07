@@ -232,12 +232,8 @@ function getStateDescription(state) {
     PRECIO_TOTAL_ENVIADO: "Se le mostró el precio total y se preguntó si está de acuerdo",
     ESPERANDO_SINPE: "Se le dieron los datos de SINPE y se espera el comprobante",
     PAGO_CONFIRMADO_ENVIO: "Se confirmó el pago y se están pidiendo datos de envío",
-    ESPERANDO_NOMBRE_ENVIO: "Se le pidió su nombre completo para el envío",
-    ESPERANDO_TELEFONO_ENVIO: "Se le pidió su número de teléfono",
-    ESPERANDO_PROVINCIA_ENVIO: "Se le pidió su provincia",
-    ESPERANDO_CANTON_ENVIO: "Se le pidió su cantón",
-    ESPERANDO_DISTRITO_ENVIO: "Se le pidió su distrito",
-    ESPERANDO_SENAS_ENVIO: "Se le pidió otras señas de dirección",
+    ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia - Cantón - Distrito",
+    ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono, provincia, cantón, distrito y señas",
     CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
   return map[state] || state;
@@ -297,12 +293,8 @@ const FRASES = {
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
     PREGUNTANDO_INTERES: "Y sobre el producto, ¿te interesa adquirirlo? 😊\n\n1. ✅ Sí\n2. ❌ No",
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
-    ESPERANDO_NOMBRE_ENVIO: "Y sobre tu envío, ¿cuál es tu nombre completo? 👤",
-    ESPERANDO_TELEFONO_ENVIO: "Y sobre tu envío, ¿cuál es tu teléfono? 📱",
-    ESPERANDO_PROVINCIA_ENVIO: "Y sobre tu envío, ¿de qué provincia sos? 📍",
-    ESPERANDO_CANTON_ENVIO: "Y sobre tu envío, ¿de qué cantón? 🏘️",
-    ESPERANDO_DISTRITO_ENVIO: "Y sobre tu envío, ¿y el distrito? 📌",
-    ESPERANDO_SENAS_ENVIO: "Y sobre tu envío, ¿alguna otra seña para la dirección? 🏠",
+    ESPERANDO_UBICACION_ENVIO: "Y sobre tu envío, escribí tu *Provincia - Cantón - Distrito* 📍",
+    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, escribí separado por comas: *Nombre, Teléfono, Provincia, Cantón, Distrito, Señas* 📦",
     ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
@@ -1036,7 +1028,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_PROVINCIA_ENVIO","ESPERANDO_CANTON_ENVIO","ESPERANDO_DISTRITO_ENVIO","ESPERANDO_SENAS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_UBICACION_ENVIO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -1087,16 +1079,16 @@ async function handleIncomingMessage(msg) {
       return;
     }
     
-    // CASO 2: Pregunta con zona específica Y hay producto activo → pedir provincia/cantón/distrito para calcular
+    // CASO 2: Pregunta con zona específica Y hay producto activo
     if(zonaTexto && session.producto){
       session.delivery_method = "envio";
-      session.state = "ESPERANDO_PROVINCIA_ENVIO";
+      session.state = "ESPERANDO_UBICACION_ENVIO";
       await sendTextWithTyping(waId,
         `¡Claro! Sí hacemos envíos con Correos de Costa Rica 📦\n\n` +
         `🏙️ GAM: ₡2,500 | 🌄 Fuera de GAM: ₡3,500\n` +
         `🕐 4-5 días hábiles\n\n` +
-        `Para calcularte el costo exacto necesito:\n📍 Provincia\n🏘️ Cantón\n📌 Distrito\n\n` +
-        `¿De qué provincia sos? 📍`
+        `Para calcularte el costo exacto escribí tu *Provincia - Cantón - Distrito* 📍\n` +
+        `(Ej: Heredia - Central - Mercedes)`
       );
       saveDataToDisk();
       return;
@@ -1179,8 +1171,8 @@ async function handleIncomingMessage(msg) {
   if(session.state==="PREGUNTANDO_METODO"){
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
       session.delivery_method="envio"; account.metrics.delivery_envio+=1;
-      session.state="ESPERANDO_PROVINCIA_ENVIO";
-      await sendTextWithTyping(waId,"¡Claro! 📦 Para calcularte el costo del envío necesito tu ubicación.\n\n¿De qué provincia sos? 📍");
+      session.state="ESPERANDO_UBICACION_ENVIO";
+      await sendTextWithTyping(waId,"¡Claro! 📦 Para calcularte el costo del envío necesito tu ubicación.\n\nEscribí tu *Provincia - Cantón - Distrito* 📍\n(Ej: Heredia - Central - Mercedes)");
       saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
@@ -1231,38 +1223,25 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ PRE-PAGO: Solo provincia/cantón/distrito para calcular costo de envío
-  if(session.state==="ESPERANDO_PROVINCIA_ENVIO"){
-    if(text.trim().length < 3){
-      await sendTextWithTyping(waId,"Ocupo tu provincia 📍 (Ej: Heredia, San José, Alajuela...)");
+  // ✅ PRE-PAGO: Provincia-Cantón-Distrito en un solo mensaje
+  if(session.state==="ESPERANDO_UBICACION_ENVIO"){
+    if(text.trim().length < 5){
+      await sendTextWithTyping(waId,"Ocupo tu ubicación 📍\n\nEscribí tu *Provincia - Cantón - Distrito*\n(Ej: Heredia - Central - Mercedes)");
       return;
     }
-    session.envio_provincia = text.trim();
-    session.state = "ESPERANDO_CANTON_ENVIO";
-    await sendTextWithTyping(waId,"¿De qué cantón? 🏘️");
-    saveDataToDisk();return;
-  }
-
-  if(session.state==="ESPERANDO_CANTON_ENVIO"){
-    if(text.trim().length < 2){
-      await sendTextWithTyping(waId,"Ocupo tu cantón 🏘️");
-      return;
+    const partes = text.split(/[-,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    if(partes.length >= 3){
+      session.envio_provincia = partes[0];
+      session.envio_canton = partes[1];
+      session.envio_distrito = partes[2];
+    } else {
+      session.envio_provincia = text.trim();
+      session.envio_canton = "";
+      session.envio_distrito = "";
     }
-    session.envio_canton = text.trim();
-    session.state = "ESPERANDO_DISTRITO_ENVIO";
-    await sendTextWithTyping(waId,"¿Y el distrito? 📌");
-    saveDataToDisk();return;
-  }
-
-  if(session.state==="ESPERANDO_DISTRITO_ENVIO"){
-    if(text.trim().length < 2){
-      await sendTextWithTyping(waId,"Ocupo tu distrito 📌");
-      return;
-    }
-    session.envio_distrito = text.trim();
-    session.client_zone = `${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}`;
+    session.client_zone = text.trim();
     session.state = "ZONA_RECIBIDA";
     
-    // Notificar al dueño para que calcule el envío (solo zona, sin datos personales)
     io.emit("zone_received",{
       waId,
       zone: session.client_zone,
@@ -1281,32 +1260,26 @@ async function handleIncomingMessage(msg) {
     saveDataToDisk();return;
   }
 
-  // ✅ POST-PAGO: Datos personales para el envío (nombre, teléfono, señas)
-  if(session.state==="ESPERANDO_NOMBRE_ENVIO"){
-    if(text.trim().length < 3){
-      await sendTextWithTyping(waId,"Ocupo tu nombre completo para el envío 👤");
+  // ✅ POST-PAGO: Nombre, Teléfono, Provincia, Cantón, Distrito, Señas en UN solo mensaje
+  if(session.state==="ESPERANDO_DATOS_ENVIO"){
+    const lineas = text.split(/[,\n]/).map(l => l.trim()).filter(l => l.length > 0);
+    
+    if(lineas.length < 6){
+      await sendTextWithTyping(waId,"Ocupo los 6 datos para el envío 📦\n\nEscribí separado por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
       return;
     }
-    session.envio_nombre = text.trim();
-    session.state = "ESPERANDO_TELEFONO_ENVIO";
-    await sendTextWithTyping(waId,"¿Cuál es tu número de teléfono? 📱");
-    saveDataToDisk();return;
-  }
-
-  if(session.state==="ESPERANDO_TELEFONO_ENVIO"){
-    const tel = text.replace(/[^\d]/g,"");
+    
+    session.envio_nombre = lineas[0];
+    const tel = lineas[1].replace(/[^\d]/g,"");
     if(tel.length < 8){
-      await sendTextWithTyping(waId,"Ocupo un número de teléfono válido 📱 (8 dígitos)");
+      await sendTextWithTyping(waId,"El teléfono no parece válido 📱\n\nEscribí de nuevo los 6 datos separados por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*");
       return;
     }
     session.envio_telefono = tel;
-    session.state = "ESPERANDO_SENAS_ENVIO";
-    await sendTextWithTyping(waId,"¿Alguna seña para la dirección? 🏠\n(Ej: frente a la iglesia, casa color azul, etc.)");
-    saveDataToDisk();return;
-  }
-
-  if(session.state==="ESPERANDO_SENAS_ENVIO"){
-    session.envio_senas = text.trim();
+    session.envio_provincia = lineas[2];
+    session.envio_canton = lineas[3];
+    session.envio_distrito = lineas[4];
+    session.envio_senas = lineas.slice(5).join(", ");
     session.envio_direccion = `${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}. ${session.envio_senas}`;
     session.state = "CONFIRMANDO_DATOS_ENVIO";
     
@@ -1367,12 +1340,12 @@ async function handleIncomingMessage(msg) {
     }
     
     if(lower==="2"||lower==="no"||lower.includes("corregir")){
-      session.state = "ESPERANDO_NOMBRE_ENVIO";
+      session.state = "ESPERANDO_DATOS_ENVIO";
       session.envio_nombre = null;
       session.envio_telefono = null;
       session.envio_senas = null;
       session.envio_direccion = null;
-      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\n¿Cuál es tu nombre completo? 👤");
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nEscribí separado por comas:\n*Nombre completo, Teléfono, Señas de dirección*\n\n(Ej: María López, 88881234, frente a la iglesia católica)");
       saveDataToDisk();return;
     }
     
@@ -1619,12 +1592,14 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const profile = getProfile(clientWaId);
     profile.purchases = (profile.purchases || 0) + 1;
     if (session.delivery_method === "envio") {
-      // POST-PAGO: Ahora sí pedir datos personales para el envío
-      session.state = "ESPERANDO_NOMBRE_ENVIO";
+      // POST-PAGO: Pedir datos personales para el envío en UN mensaje
+      session.state = "ESPERANDO_DATOS_ENVIO";
       await sendTextWithTyping(clientWaId,
         `¡Pago confirmado! 🎉 ¡Muchas gracias!\n\n` +
         `Ahora necesito tus datos para enviarte el paquete 📦\n\n` +
-        `¿Cuál es tu nombre completo? 👤`
+        `Escribí cada dato separado por coma:\n` +
+        `*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n` +
+        `(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)`
       );
       saveDataToDisk();
       return { success: true, message: "Pago confirmado, pidiendo datos de envío" };
