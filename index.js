@@ -763,7 +763,7 @@ async function handleIncomingMessage(msg) {
   else if(msg.message?.extendedTextMessage?.text)text=msg.message.extendedTextMessage.text;
   else if(msg.message?.imageMessage?.caption)text=msg.message.imageMessage.caption;
 
-  // Descargar imagen si existe
+  // Descargar imagen si existe (foto adjunta real)
   if(hasImage){
     try {
       const stream = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
@@ -772,6 +772,20 @@ async function handleIncomingMessage(msg) {
         console.log(`📷 Imagen descargada: ${Math.round(stream.length/1024)}KB`);
       }
     } catch(e) { console.log("⚠️ Error descargando imagen:", e.message); }
+  }
+  
+  // ✅ Extraer thumbnail del link preview (para mensajes "Me interesa" del catálogo)
+  let linkPreviewJpeg = null;
+  const extMsg = msg.message?.extendedTextMessage;
+  if(extMsg && !hasImage){
+    // jpegThumbnail viene como Buffer en Baileys
+    if(extMsg.jpegThumbnail){
+      try {
+        const thumbBuf = Buffer.isBuffer(extMsg.jpegThumbnail) ? extMsg.jpegThumbnail : Buffer.from(extMsg.jpegThumbnail, 'base64');
+        linkPreviewJpeg = thumbBuf.toString('base64');
+        console.log(`🔗 Link preview thumbnail: ${Math.round(thumbBuf.length/1024)}KB`);
+      } catch(e) { console.log("⚠️ Error extrayendo thumbnail:", e.message); }
+    }
   }
 
   const displayPhone=realPhone?formatPhone(realPhone):waId;
@@ -918,6 +932,21 @@ async function handleIncomingMessage(msg) {
   // Detectar mensaje web ("Me interesa")
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
+    // ✅ Guardar imagen: preferir adjunta > thumbnail del link preview > URL externa
+    if(hasImage && imageBase64){
+      const fotoGuardada = await guardarImagenFoto(waId, imageBase64);
+      if(fotoGuardada){
+        webData.foto_url = fotoGuardada;
+        console.log(`📷 Imagen adjunta de catálogo guardada: ${fotoGuardada}`);
+      }
+    } else if(linkPreviewJpeg){
+      const fotoGuardada = await guardarImagenFoto(waId, linkPreviewJpeg);
+      if(fotoGuardada){
+        webData.foto_url = fotoGuardada;
+        console.log(`🔗 Thumbnail de link preview guardado: ${fotoGuardada}`);
+      }
+    }
+    // Si ninguna imagen se guardó, webData.foto_url mantiene la URL externa del catálogo
     // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
     const preguntaOtro = /(?:tienen|hay|viene|está|esta|tendrán|tendran|lo tienen|la tienen|tienen en|hay en|viene en|otro|otra)\s*(?:en\s+)?(?:color|talla|tamaño|tamano)?\s*(?:en\s+)?(rojo|azul|negro|blanco|rosado|rosa|verde|amarillo|morado|gris|beige|café|cafe|naranja|celeste|lila|fucsia|coral|vino|s|m|l|xl|xxl|xs|small|medium|large|\d+)/i.test(text);
     
