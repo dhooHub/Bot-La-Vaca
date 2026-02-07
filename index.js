@@ -908,6 +908,37 @@ async function handleIncomingMessage(msg) {
     }
   }
 
+  // ✅ Detectar preguntas sobre envío en cualquier estado de venta activa
+  const ESTADOS_VENTA_ACTIVA = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+  const regexPreguntaEnvio = /(?:hac[eé]n?\s*env[ií]o|costo\s*(?:de[l]?\s*)?env[ií]o|cu[áa]nto\s*(?:cuesta|sale|cobra|es)\s*(?:el\s*)?env[ií]o|env[ií]an?\s*a\s+\w|mandan?\s*a\s+\w|llega\s*a\s+\w|env[ií]os?\s*a\s+\w)/i;
+  
+  if(ESTADOS_VENTA_ACTIVA.includes(session.state) && regexPreguntaEnvio.test(text)){
+    const zonaMatch = text.match(/(?:a|en|para|hacia)\s+(san\s*jos[ée]|heredia|alajuela|cartago|puntarenas|lim[oó]n|guanacaste|gam|[a-záéíóú\s]{3,20}?)(?:\s*[?,.]|$)/i);
+    const zonaTexto = zonaMatch ? zonaMatch[1].trim() : null;
+    
+    let respEnvio = `¡Claro! Sí hacemos envíos a todo el país con Correos de Costa Rica 📦\n\n` +
+      `🏙️ GAM (área metropolitana): ₡2,500\n` +
+      `🌄 Fuera de GAM: ₡3,500\n` +
+      `🕐 Tarda entre 4-5 días hábiles en llegar\n`;
+    
+    const tieneSi = /\bsi\b|sí|quiero|dale|claro|por\s*fa|me\s*interesa/i.test(text);
+    
+    if(session.state === "PREGUNTANDO_INTERES" && tieneSi){
+      account.metrics.intent_yes+=1;
+      session.state="PREGUNTANDO_METODO";
+      respEnvio += `\nPara calcular el monto exacto ocupo tus datos de envío 😊\n\n${frase("pedir_metodo",waId)}`;
+    } else if(session.state === "PREGUNTANDO_INTERES"){
+      respEnvio += `\nEntonces, ¿te interesa adquirir la prenda? 😊\n\n1. ✅ Sí, quiero\n2. ❌ No, gracias`;
+    } else {
+      const recordatorio = FRASES.recordatorio_flujo[session.state] || "";
+      if(recordatorio) respEnvio += `\n${recordatorio}`;
+    }
+    
+    await sendTextWithTyping(waId, respEnvio);
+    saveDataToDisk();
+    return;
+  }
+
   // ============ MÁQUINA DE ESTADOS ============
 
   if(session.state==="ESPERANDO_TALLA"){
