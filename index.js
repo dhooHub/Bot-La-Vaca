@@ -41,8 +41,8 @@ const HOURS_START = 9;
 const HOURS_END_HOUR = 18;
 const HOURS_END_MIN = 50;
 const HOURS_DAY = "9am - 6:50pm";
-const DELAY_MIN = 15;
-const DELAY_MAX = 60;
+const DELAY_MIN = 5;
+const DELAY_MAX = 20;
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
 const STORE_ADDRESS = process.env.STORE_ADDRESS || "";
@@ -249,7 +249,7 @@ const FRASES = {
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
     ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
-    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, escribí separado por comas: *Nombre, Teléfono, Provincia, Cantón, Distrito, Señas* 📦",
+    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, ocupo: *Nombre, Teléfono, Provincia, Cantón, Distrito y Señas* 📦",
     CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
@@ -460,19 +460,24 @@ async function sendPushoverAlert(tipo, datos) {
     
     if (!title) return;
     
+    // Priority 1 = alto (suena como alarma, requiere retry+expire)
+    const pushBody = {
+      token: PUSHOVER_APP_TOKEN,
+      user: PUSHOVER_USER_KEY,
+      title,
+      message,
+      url: chatLink,
+      url_title: "Abrir Panel",
+      priority: 1,
+      retry: 60,
+      expire: 600,
+      sound: "cashregister"
+    };
+    
     const response = await fetch("https://api.pushover.net/1/messages.json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: PUSHOVER_APP_TOKEN,
-        user: PUSHOVER_USER_KEY,
-        title,
-        message,
-        url: chatLink,
-        url_title: "Abrir Panel",
-        priority: 1,
-        sound: "cashregister"
-      })
+      body: JSON.stringify(pushBody)
     });
     
     if (response.ok) {
@@ -965,7 +970,7 @@ async function handleIncomingMessage(msg) {
       await sendTextWithTyping(waId,frase("no_quiere",waId));
       saveDataToDisk();return;
     }
-    await sendTextWithTyping(waId,"¿Te interesa adquirir la prenda? 😊\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆");return;
+    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. ✅ Sí\n2. ❌ No");return;
   }
 
   if(session.state==="PREGUNTANDO_ALGO_MAS"){
@@ -994,7 +999,7 @@ async function handleIncomingMessage(msg) {
       await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
       saveDataToDisk();return;
     }
-    await sendTextWithTyping(waId,frase("pedir_metodo",waId));return;
+    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda");return;
   }
 
   // PRE-PAGO: Provincia-Cantón-Distrito en 1 sola pregunta
@@ -1040,6 +1045,7 @@ async function handleIncomingMessage(msg) {
     if(lower==="no"||lower.includes("no")){
       session.state="PREGUNTANDO_ALGO_MAS"; await sendTextWithTyping(waId,frase("no_quiere",waId)); saveDataToDisk();return;
     }
+    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. ✅ Sí\n2. ❌ No");
     return;
   }
 
@@ -1075,35 +1081,22 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // POST-PAGO: Nombre, Teléfono, Provincia, Cantón, Distrito, Señas en 1 sola pregunta
+  // POST-PAGO: Datos de envío - aceptar lo que sea, el dueño revisa
   if(session.state==="ESPERANDO_DATOS_ENVIO"){
-    const lineas = text.split(/[,\n]/).map(l => l.trim()).filter(l => l.length > 0);
-    
-    if(lineas.length < 6){
-      await sendTextWithTyping(waId,"Ocupo los 6 datos para el envío 📦\n\nEscribí separado por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
+    if(text.trim().length < 3){
+      await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*");
       return;
     }
     
-    session.envio_nombre = lineas[0];
-    const tel = lineas[1].replace(/[^\d]/g,"");
-    if(tel.length < 8){
-      await sendTextWithTyping(waId,"El teléfono no parece válido 📱\n\nEscribí de nuevo los 6 datos separados por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*");
-      return;
-    }
-    session.envio_telefono = tel;
-    session.envio_provincia = lineas[2];
-    session.envio_canton = lineas[3];
-    session.envio_distrito = lineas[4];
-    session.envio_senas = lineas.slice(5).join(", ");
-    session.envio_direccion = `${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}. ${session.envio_senas}`;
+    session.envio_datos_raw = text.trim();
+    session.envio_direccion = text.trim();
     session.state = "CONFIRMANDO_DATOS_ENVIO";
     
     const price = session.precio || 0;
     const shipping = session.shipping_cost || 0;
     const total = price + shipping;
     
-    await sendTextWithTyping(waId,
-      `📋 *RESUMEN FINAL DE TU PEDIDO*\n` +
+    const resumen = `📋 *RESUMEN DE TU PEDIDO*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `📦 ${session.producto || 'Artículo'}\n` +
       `👕 ${session.talla_color || '-'}\n` +
@@ -1112,13 +1105,24 @@ async function handleIncomingMessage(msg) {
       `💵 *Total: ₡${total.toLocaleString()}*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `📍 *DATOS DE ENVÍO*\n` +
-      `👤 ${session.envio_nombre}\n` +
-      `📱 ${session.envio_telefono}\n` +
-      `🏠 ${session.envio_provincia}, ${session.envio_canton}, ${session.envio_distrito}\n` +
-      `📝 ${session.envio_senas}\n` +
+      `${session.envio_datos_raw}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `¿Todo correcto?\n\n1. ✅ Sí, todo bien\n2. ❌ No, quiero corregir`
-    );
+      `¿Todo correcto?\n\n1. ✅ Sí, todo bien\n2. ❌ No, quiero corregir`;
+    
+    // Enviar con foto del producto si existe
+    let fotoEnviada = false;
+    if(session.foto_url && !session.foto_url.startsWith('data:')){
+      try {
+        const imgPath = path.join(PERSISTENT_DIR, session.foto_url);
+        if(fs.existsSync(imgPath)){
+          const imgBuffer = fs.readFileSync(imgPath);
+          await sock.sendMessage(waId, { image: imgBuffer, caption: resumen });
+          fotoEnviada = true;
+          console.log(`📷 Resumen enviado con foto del producto`);
+        }
+      } catch(e) { console.log(`⚠️ Error enviando foto en resumen: ${e.message}`); }
+    }
+    if(!fotoEnviada) await sendTextWithTyping(waId, resumen);
     saveDataToDisk();return;
   }
 
@@ -1136,13 +1140,12 @@ async function handleIncomingMessage(msg) {
       io.emit("sale_completed",{
         waId,
         phone: profile.phone||waId,
-        name: session.envio_nombre || profile.name || "",
+        name: profile.name || "",
         producto: session.producto,
         codigo: session.codigo,
         talla: session.talla_color,
         method: "envio",
-        envio_nombre: session.envio_nombre,
-        envio_telefono: session.envio_telefono,
+        envio_datos: session.envio_datos_raw,
         envio_direccion: session.envio_direccion,
         total: (session.precio||0) + (session.shipping_cost||0)
       });
@@ -1157,11 +1160,11 @@ async function handleIncomingMessage(msg) {
       session.envio_nombre = null;
       session.envio_telefono = null;
       session.envio_direccion = null;
-      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nEscribí separado por comas:\n*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nOcupo:\n*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
       saveDataToDisk();return;
     }
     
-    await sendTextWithTyping(waId,"Por favor respondé:\n\n1. ✅ Sí, todo está bien\n2. ❌ No, quiero corregir");
+    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. ✅ Sí, todo bien\n2. ❌ No, quiero corregir");
     return;
   }
 
@@ -1398,8 +1401,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
       await sendTextWithTyping(clientWaId,
         `¡Pago confirmado! 🎉 ¡Muchas gracias!\n\n` +
         `Ahora necesito tus datos para enviarte el paquete 📦\n\n` +
-        `Escribí cada dato separado por coma:\n` +
-        `*Nombre, Teléfono, Provincia, Cantón, Distrito, Señas*\n\n` +
+        `Ocupo:\n` +
+        `*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*\n\n` +
         `(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)`
       );
       saveDataToDisk();
