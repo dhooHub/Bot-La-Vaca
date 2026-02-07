@@ -652,6 +652,15 @@
         renderChatList();
         if (currentChat) renderChat();
         
+        // Auto-abrir chat específico si viene de Pushover (?chat=XXXX)
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatParam = urlParams.get('chat');
+        if (chatParam && chats[chatParam]) {
+          openChat(chatParam);
+          // Limpiar URL para que no reabra al refrescar
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        
         // Auto-abrir modal de envío si hay zonas pendientes
         if (data.pendingZones && data.pendingZones.length > 0) {
           const z = data.pendingZones[0];
