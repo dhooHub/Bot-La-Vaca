@@ -899,6 +899,8 @@
             </div>
             <div class="action-card-buttons">
               ${isSinpe ? `
+                ${p.comprobante_url ? `<img class="action-card-image" src="${p.comprobante_url}" onclick="viewImage(this.src)" style="max-height:200px;border-radius:8px;margin-bottom:8px;cursor:pointer" alt="Comprobante SINPE">` : '<div style="color:#999;font-style:italic;margin-bottom:8px">📷 Sin foto de comprobante</div>'}
+                ${p.reference ? `<div class="action-card-detail" style="margin-bottom:8px">📝 Ref: ${escapeHtml(p.reference)}</div>` : ''}
                 <button class="action-btn primary" onclick="confirmAction('PAGADO')">💰 Confirmar Pago</button>
               ` : isTienda ? `
                 <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
@@ -940,14 +942,20 @@
 
     function confirmAction(type) {
       if (!currentChat) return;
-      stopAlert(); // Detener alarma
+      stopAlert();
+      
+      // Deshabilitar TODOS los botones de acción
+      const allBtns = document.querySelectorAll('.action-btn');
+      allBtns.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = '0.4';
+      });
       const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = '⏳...';
+      btn.textContent = '⏳ Enviando...';
+      btn.style.background = '#999';
       
       socket.emit('action', { clientWaId: currentChat, actionType: type });
       
-      // Mark pending as resolved locally
       setTimeout(() => {
         if (chats[currentChat]) {
           chats[currentChat].pending = null;
@@ -980,11 +988,16 @@
     function sendShipping() {
       const val = parseInt($('shipInput').value) || 0;
       if (val < 100) { toast('⚠️ Monto inválido', 'error'); return; }
+      // Deshabilitar botones del modal
+      const modalBtns = document.querySelectorAll('#shippingModal .modal-btn, #shippingModal .quick-price');
+      modalBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
       socket.emit('action', { clientWaId: shipClient, actionType: 'ENVIO', payload: { shipping: val } });
     }
     function noShipping() {
+      const modalBtns = document.querySelectorAll('#shippingModal .modal-btn, #shippingModal .quick-price');
+      modalBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
       socket.emit('action', { clientWaId: shipClient, actionType: 'NO_ENVIO_ZONA' });
-      hideShipModal();
+      setTimeout(() => hideShipModal(), 500);
     }
 
     // ===== IMAGE VIEWER =====
