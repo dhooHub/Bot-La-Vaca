@@ -293,15 +293,14 @@ const FRASES = {
     ESPERANDO_TALLA: "Y sobre tu producto, ¿me decís la talla y color? 👕",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
     PREGUNTANDO_INTERES: "Y sobre el producto, ¿te interesa adquirirlo? 😊\n\n1. ✅ Sí\n2. ❌ No",
-    ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
-    ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
-    PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
-    ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
-    PAGO_CONFIRMADO_ENVIO: "Y sobre tu envío, ocupo tus datos 📍",
     ESPERANDO_NOMBRE_ENVIO: "Y sobre tu envío, ¿cuál es tu nombre completo? 👤",
     ESPERANDO_TELEFONO_ENVIO: "Y sobre tu envío, ¿cuál es tu teléfono? 📱",
     ESPERANDO_DIRECCION_ENVIO: "Y sobre tu envío, ¿cuál es tu dirección completa? 📍",
+    ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
+    ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
+    PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
+    ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
     CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
@@ -959,7 +958,7 @@ async function handleIncomingMessage(msg) {
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","PAGO_CONFIRMADO_ENVIO","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","ESPERANDO_ZONA","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_NOMBRE_ENVIO","ESPERANDO_TELEFONO_ENVIO","ESPERANDO_DIRECCION_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -998,8 +997,8 @@ async function handleIncomingMessage(msg) {
 
   if(session.state==="PREGUNTANDO_INTERES"){
     if(lower==="si"||lower==="sí"||lower.includes("quiero")||lower.includes("interesa")){
-      account.metrics.intent_yes+=1; session.state="ESPERANDO_ZONA";
-      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n${frase("pedir_zona",waId)}`);
+      account.metrics.intent_yes+=1; session.state="PREGUNTANDO_METODO";
+      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n${frase("pedir_metodo",waId)}`);
       saveDataToDisk();return;
     }
     if(lower==="no"||lower.includes("no me")){
@@ -1025,34 +1024,30 @@ async function handleIncomingMessage(msg) {
 
   if(session.state==="ESPERANDO_ZONA"){
     session.client_zone=text.trim();
-    if(offersShipping()&&offersPickup()){
-      session.state="PREGUNTANDO_METODO"; await sendTextWithTyping(waId,frase("pedir_metodo",waId));
-    }else if(offersShipping()){
-      session.delivery_method="envio"; session.state="ZONA_RECIBIDA";
-      io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
-      sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
+    session.state="ZONA_RECIBIDA";
+    io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio,nombre:session.envio_nombre,telefono:session.envio_telefono,direccion:session.envio_direccion});
+    sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
     sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-      await sendTextWithTyping(waId,frase("espera_zona",waId));
-    }else{
-      session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO";
-      const price=session.precio||0;
-      await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
-    }
+    await sendTextWithTyping(waId,frase("espera_zona",waId));
     saveDataToDisk();return;
   }
 
   if(session.state==="PREGUNTANDO_METODO"){
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
-      session.delivery_method="envio"; session.state="ZONA_RECIBIDA"; account.metrics.delivery_envio+=1;
-      io.emit("zone_received",{waId,zone:session.client_zone,precio:session.precio});
-      sendTelegramAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-    sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
-      await sendTextWithTyping(waId,frase("espera_zona",waId)); saveDataToDisk();return;
+      session.delivery_method="envio"; account.metrics.delivery_envio+=1;
+      session.state="ESPERANDO_NOMBRE_ENVIO";
+      await sendTextWithTyping(waId,"¡Perfecto! 📦 Ocupo tus datos para el envío.\n\n¿Cuál es tu nombre completo? 👤");
+      saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
-      session.delivery_method="recoger"; session.state="PRECIO_TOTAL_ENVIADO"; account.metrics.delivery_recoger+=1;
-      const price=session.precio||0;
-      await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${STORE_HOURS_TEXT}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
+      session.delivery_method="recoger"; account.metrics.delivery_recoger+=1;
+      session.state="PREGUNTANDO_ALGO_MAS";
+      await sendTextWithTyping(waId,
+        `¡Perfecto! 🏪 Te esperamos en tienda para recoger tu producto.\n\n` +
+        `📍 ${STORE_ADDRESS}\n` +
+        `🕒 ${STORE_HOURS_TEXT}\n\n` +
+        `¿Te puedo ayudar con algo más? 😊`
+      );
       saveDataToDisk();return;
     }
     await sendTextWithTyping(waId,frase("pedir_metodo",waId));return;
@@ -1091,13 +1086,6 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  if(session.state==="PAGO_CONFIRMADO_ENVIO"){
-    // Paso 1: Pedir nombre
-    session.state="ESPERANDO_NOMBRE_ENVIO";
-    await sendTextWithTyping(waId,"¡Pago recibido! 🎉\n\nAhora ocupo tus datos para el envío.\n\n¿Cuál es tu nombre completo? 👤");
-    saveDataToDisk();return;
-  }
-
   if(session.state==="ESPERANDO_NOMBRE_ENVIO"){
     if(text.trim().length < 3){
       await sendTextWithTyping(waId,"Ocupo tu nombre completo para el envío 👤");
@@ -1127,34 +1115,10 @@ async function handleIncomingMessage(msg) {
       return;
     }
     session.envio_direccion = text.trim();
-    session.state = "CONFIRMANDO_DATOS_ENVIO";
-    
-    const price = session.precio || 0;
-    const shipping = session.shipping_cost || 0;
-    const total = price + shipping;
-    
-    const resumen = `📋 *RESUMEN DE TU PEDIDO*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📦 Producto: ${session.producto || 'Artículo'}\n` +
-      `🏷️ Código: ${session.codigo || '-'}\n` +
-      `👕 Talla/Color: ${session.talla_color || '-'}\n` +
-      `💰 Precio: ₡${price.toLocaleString()}\n` +
-      `🚚 Envío: ₡${shipping.toLocaleString()}\n` +
-      `💵 *TOTAL: ₡${total.toLocaleString()}*\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📍 *DATOS DE ENVÍO*\n` +
-      `👤 Nombre: ${session.envio_nombre}\n` +
-      `📱 Teléfono: ${session.envio_telefono}\n` +
-      `🏠 Dirección: ${session.envio_direccion}\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `¿Los datos están correctos?\n\n` +
-      `1. ✅ Sí, todo está bien\n` +
-      `2. ❌ No, quiero corregir`;
-    
-    await sendTextWithTyping(waId, resumen);
+    session.state = "ESPERANDO_ZONA";
+    await sendTextWithTyping(waId,"¿De qué provincia y cantón sos? 📍\n(Para calcular el costo de envío)");
     saveDataToDisk();return;
   }
-
   if(session.state==="CONFIRMANDO_DATOS_ENVIO"){
     if(lower==="1"||lower==="si"||lower==="sí"||lower.includes("bien")||lower.includes("correcto")){
       profile.purchases = (profile.purchases||0) + 1;
@@ -1409,7 +1373,20 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const price = session.precio || 0;
     const total = price + shipping;
     await sendTextWithTyping(clientWaId,
-      `📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 Producto: ₡${price.toLocaleString()}\n🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n━━━━━━━━━━━━━━\n💵 *Total: ₡${total.toLocaleString()}*\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
+      `📋 *RESUMEN DE TU PEDIDO*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 Producto: ${session.producto || 'Artículo'}\n` +
+      `👕 ${session.talla_color || '-'}\n` +
+      `💰 Producto: ₡${price.toLocaleString()}\n` +
+      `🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n` +
+      `💵 *Total: ₡${total.toLocaleString()}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📍 *DATOS DE ENVÍO*\n` +
+      `👤 ${session.envio_nombre || '-'}\n` +
+      `📱 ${session.envio_telefono || '-'}\n` +
+      `🏠 ${session.envio_direccion || '-'}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
     );
     saveDataToDisk();
     return { success: true, message: `Envío ₡${shipping.toLocaleString()} enviado` };
@@ -1426,15 +1403,24 @@ async function executeAction(clientWaId, actionType, data = {}) {
 
   if (actionType === "PAGADO") {
     account.metrics.sinpe_confirmed += 1;
+    const profile = getProfile(clientWaId);
+    profile.purchases = (profile.purchases || 0) + 1;
     if (session.delivery_method === "envio") {
-      session.state = "PAGO_CONFIRMADO_ENVIO";
-      await sendTextWithTyping(clientWaId, frase("pedir_direccion", clientWaId));
+      session.state = "PAGO_CONFIRMADO";
+      await sendTextWithTyping(clientWaId,
+        `¡Pago confirmado! 🎉\n\n` +
+        `Tu pedido va en camino pronto 🚚\n` +
+        `📍 Envío a: ${session.envio_direccion || '-'}\n` +
+        `⏱️ Tiempo estimado: ${DELIVERY_DAYS}\n\n` +
+        `Te avisamos cuando lo despachemos.\n\n` +
+        `¡Muchas gracias por tu compra! 🙌 ¡Pura vida! 🐄`
+      );
+      io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "envio" });
+      resetSession(session);
       saveDataToDisk();
-      return { success: true, message: "Pago confirmado, pidiendo dirección" };
+      return { success: true, message: "Pago confirmado, envío" };
     } else {
       session.state = "PAGO_CONFIRMADO";
-      const profile = getProfile(clientWaId);
-      profile.purchases = (profile.purchases || 0) + 1;
       let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", STORE_HOURS_TEXT);
       await sendTextWithTyping(clientWaId, msgFin);
       io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "recoger" });
