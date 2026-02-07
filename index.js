@@ -446,8 +446,13 @@ async function sendPushoverAlert(tipo, datos) {
       title = "📦 Nueva consulta - Catálogo";
       message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "-"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "SINPE") {
-      title = "💰 SINPE recibido";
-      message = `📱 Ref: ${datos.reference || "?"}\n👤 ${phoneFormatted}`;
+      title = "💰 CLIENTE PAGÓ - REVISAR";
+      // Buscar sesión para obtener detalles
+      const ses = sessions.get(normalizePhone(datos.waId || phone)) || {};
+      const precio = ses.precio || 0;
+      const envio = ses.shipping_cost || 0;
+      const total = precio + envio;
+      message = `📦 ${ses.producto || "Producto"}\n👕 ${ses.talla_color || "-"}\n💰 ₡${total.toLocaleString()}\n📱 Ref: ${datos.reference || "?"}\n👤 ${phoneFormatted}\n\n🧾 Revisar comprobante en panel`;
     } else if (tipo === "ZONA") {
       title = "📍 Zona recibida - Calcular envío";
       message = `🗺️ ${datos.zone || "?"}\n👤 ${phoneFormatted}`;
@@ -1050,9 +1055,14 @@ async function handleIncomingMessage(msg) {
         console.log(`⚠️ Error guardando comprobante: ${e.message}`);
       }
       
-      await sendTextWithTyping(waId,"¡Recibí tu comprobante! 🙌 Dame un chance, estoy confirmando el pago...");
-      io.emit("sinpe_received",{waId, reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, talla:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl});
+      await sendTextWithTyping(waId,"¡Recibido! 🧾 Déjame verificarlo con el banco, ya te confirmo 🙌");
+      const price = session.precio || 0;
+      const shipping = session.delivery_method === "envio" ? (session.shipping_cost || 0) : 0;
+      const total = price + shipping;
+      session.comprobante_url = comprobanteUrl;
+      io.emit("sinpe_received",{waId, reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, codigo:session.codigo, precio:price, shipping_cost:shipping, total, talla:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl, zone:session.client_zone});
       sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
+      saveDataToDisk();
       return;
     }
     if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
@@ -1408,6 +1418,21 @@ async function executeAction(clientWaId, actionType, data = {}) {
     if (!texto) return { success: false, message: "Vacío" };
     await sendTextDirect(clientWaId, texto);
     return { success: true, message: "Enviado" };
+  }
+
+  if (actionType === "SINPE_ERROR") {
+    session.state = "ESPERANDO_SINPE";
+    session.comprobante_url = null;
+    await sendTextWithTyping(clientWaId,
+      `⚠️ Hay un problema con el comprobante que enviaste.\n\n` +
+      `Por favor mandame de nuevo una foto clara del comprobante de SINPE 🧾📸\n\n` +
+      `Asegurate que se vea:\n` +
+      `• El monto\n` +
+      `• La fecha\n` +
+      `• El número de referencia`
+    );
+    saveDataToDisk();
+    return { success: true, message: "Error SINPE, pidiendo comprobante de nuevo" };
   }
 
   if (actionType === "NO_ENVIO_ZONA") {
