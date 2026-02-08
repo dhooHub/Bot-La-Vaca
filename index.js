@@ -712,12 +712,48 @@ async function handleIncomingMessage(msg) {
   if(pushName&&!profile.name)profile.name=pushName; if(realPhone)profile.phone=realPhone; if(lidId)profile.lid=lidId;
 
   let text="";
-  const hasImage = !!msg.message?.imageMessage;
+  
+  // ✅ Buscar imageMessage recursivamente en toda la estructura del mensaje
+  function findImageMessage(obj, depth = 0) {
+    if (!obj || typeof obj !== 'object' || depth > 5) return null;
+    if (obj.imageMessage) return obj.imageMessage;
+    for (const key of Object.keys(obj)) {
+      if (key === 'imageMessage') return obj[key];
+      const found = findImageMessage(obj[key], depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  
+  // Buscar documentMessage recursivamente también
+  function findDocMessage(obj, depth = 0) {
+    if (!obj || typeof obj !== 'object' || depth > 5) return null;
+    if (obj.documentMessage) return obj.documentMessage;
+    for (const key of Object.keys(obj)) {
+      if (key === 'documentMessage') return obj[key];
+      const found = findDocMessage(obj[key], depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  
+  const imgMsg = findImageMessage(msg.message);
+  const docMsg = findDocMessage(msg.message);
+  const docIsImage = docMsg && (docMsg.mimetype || "").startsWith("image/");
+  const hasImage = !!(imgMsg || docIsImage);
   let imageBase64 = null;
+  
+  // Log para debug de tipos de mensaje
+  if(msg.message){
+    const keys = Object.keys(msg.message);
+    console.log(`📨 Tipo mensaje: [${keys.join(", ")}] hasImage=${hasImage}`);
+  }
   
   if(msg.message?.conversation)text=msg.message.conversation;
   else if(msg.message?.extendedTextMessage?.text)text=msg.message.extendedTextMessage.text;
-  else if(msg.message?.imageMessage?.caption)text=msg.message.imageMessage.caption;
+  else if(imgMsg?.caption)text=imgMsg.caption;
+  else if(docMsg?.caption)text=docMsg.caption;
+  else if(msg.message?.ephemeralMessage?.message?.extendedTextMessage?.text)text=msg.message.ephemeralMessage.message.extendedTextMessage.text;
 
   // Descargar imagen si existe
   if(hasImage){
@@ -923,8 +959,9 @@ async function handleIncomingMessage(msg) {
   const lower=norm(text);
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
-  if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_UBICACION_ENVIO","PRECIO_TOTAL_ENVIADO","ESPERANDO_SINPE","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+  // ⚠️ NO clasificar si estamos esperando SINPE (imagen o texto de pago deben ir directo al handler)
+  if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"&&session.state!=="ESPERANDO_SINPE"){
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_UBICACION_ENVIO","PRECIO_TOTAL_ENVIADO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -1083,13 +1120,18 @@ async function handleIncomingMessage(msg) {
   }
 
   if(session.state==="ESPERANDO_SINPE"){
+    console.log(`🧾 SINPE check: hasImage=${hasImage}, text="${text}", imageBase64=${imageBase64?'YES':'NO'}`);
+    
+    // Escenario 1: Imagen sola O Imagen + texto → aceptar comprobante
     if(hasImage){
-      // Guardar foto del comprobante (ya descargada arriba como imageBase64)
       let comprobanteUrl = null;
       if(imageBase64){
         comprobanteUrl = await guardarImagenFoto(waId + "_sinpe", imageBase64);
         console.log(`🧾 Comprobante SINPE guardado: ${comprobanteUrl}`);
       }
+      
+      // Si mandó imagen + texto, guardar texto también
+      if(text.trim()) session.sinpe_texto = text.trim();
       
       await sendTextWithTyping(waId,"¡Recibido! 🧾 Déjame verificarlo con el banco, ya te confirmo 🙌");
       const price = session.precio || 0;
@@ -1099,18 +1141,30 @@ async function handleIncomingMessage(msg) {
       
       const sinpeData = {waId, tipo:"sinpe", reference:session.sinpe_reference, phone:profile.phone||waId, name:profile.name||"", producto:session.producto, codigo:session.codigo, precio:price, shipping_cost:shipping, total, talla_color:session.talla_color, method:session.delivery_method, foto_url:session.foto_url, comprobante_url:comprobanteUrl, zone:session.client_zone, created_at:new Date().toISOString()};
       
-      // Guardar como pending para que persista si panel no está abierto
       pendingQuotes.set(waId, sinpeData);
       io.emit("sinpe_received", sinpeData);
       sendPushoverAlert("SINPE", {waId, reference:session.sinpe_reference, phone:profile.phone||waId});
       saveDataToDisk();
       return;
     }
-    if(lower.includes("pague")||lower.includes("listo")||lower.includes("ya")||lower.includes("sinpe")||lower.includes("transferi")){
-      await sendTextWithTyping(waId,"Mandame la foto del comprobante 🧾📸");
-    }else{
-      await sendTextWithTyping(waId,"Dame un chance, estoy esperando tu comprobante de SINPE 🧾");
+    
+    // Escenario 2: Texto confirmando pago ("ya pagué", "listo") → esperar 10 seg por si viene foto después
+    if(lower.includes("pague")||lower.includes("pagué")||lower.includes("listo")||lower.includes("ya lo")||lower.includes("ya hice")||lower.includes("transferi")||lower.includes("sinpe")||lower.includes("hecho")||lower.includes("envié")||lower.includes("envie")){
+      session.sinpe_texto = text.trim();
+      session.sinpe_esperando_foto = Date.now();
+      await sendTextWithTyping(waId,"¡Perfecto! Mandame la foto del comprobante 🧾📸");
+      saveDataToDisk();
+      return;
     }
+    
+    // Escenario 3: Si ya mandó texto confirmando y ahora manda otro mensaje sin foto
+    // (el hasImage ya se manejó arriba, esto es solo texto adicional)
+    if(session.sinpe_esperando_foto && (Date.now() - session.sinpe_esperando_foto) < 60000){
+      await sendTextWithTyping(waId,"Estoy esperando la foto del comprobante 🧾📸\nMandame un screenshot del SINPE por favor");
+      return;
+    }
+    
+    await sendTextWithTyping(waId,"Estoy esperando tu comprobante de SINPE 🧾\nMandame la foto o screenshot cuando lo hagas 📸");
     return;
   }
 
