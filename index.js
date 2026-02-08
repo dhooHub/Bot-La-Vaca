@@ -284,7 +284,7 @@ function getSession(waId) {
   const id = normalizePhone(waId);
   if (!sessions.has(id)) {
     sessions.set(id, { 
-      waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, talla_color:null, 
+      waId:id, replyJid:null, state:"NEW", producto:null, precio:null, codigo:null, foto_url:null, producto_url:null, talla_color:null, 
       shipping_cost:null, client_zone:null, delivery_method:null, sinpe_reference:null, 
       // Datos de envío
       envio_nombre:null, envio_telefono:null, envio_direccion:null,
@@ -304,7 +304,7 @@ function saveLidMap() { try{fs.writeFileSync(LID_MAP_FILE,JSON.stringify(Object.
 loadLidMap();
 
 function resetSession(session) {
-  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
+  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.producto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
   session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
   session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
@@ -544,7 +544,7 @@ function searchHistory(filters = {}) {
 
 function addPendingQuote(session) {
   const profile=getProfile(session.waId);
-  const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, created_at:new Date().toISOString() };
+  const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, producto_url:session.producto_url||null, created_at:new Date().toISOString() };
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
   // Enviar notificación
   sendPushoverAlert("PRODUCTO_CATALOGO", quote);
@@ -580,6 +580,10 @@ function parseWebMessage(text) {
   if(result.codigo){
     // ✅ Ruta correcta: /lavaca/img/CODIGO.webp
     result.foto_url=`${CATALOG_URL}/lavaca/img/${result.codigo}.webp`;
+    // Generar link al producto si no vino en el mensaje
+    if(!result.producto_url){
+      result.producto_url=`${CATALOG_URL}/producto.php?id=${result.codigo}`;
+    }
   }
   
   // Extraer talla
@@ -602,13 +606,6 @@ function parseWebMessage(text) {
 function parseMultiWebMessage(text) {
   if(!text.includes("interesado") || !text.includes("productos:")) return null;
   
-  // Extraer todos los links de productos del mensaje
-  const linkMatches = text.match(/https?:\/\/[^\s]+producto[^\s]*/gi) || [];
-  const productLinks = linkMatches.map(link => {
-    const idMatch = link.match(/[?&]id=(\d+)/i);
-    return idMatch ? { url: link, id: idMatch[1] } : null;
-  }).filter(Boolean);
-  
   // Formato: "1. Nombre - ₡Precio - Código: XXX | Talla: M"
   const lines = text.split("\n").filter(l => /^\d+\.\s/.test(l.trim()));
   if(lines.length < 2) return null;
@@ -628,9 +625,8 @@ function parseMultiWebMessage(text) {
     if(codeMatch) { 
       item.codigo = codeMatch[1].trim(); 
       item.foto_url = `${CATALOG_URL}/lavaca/img/${item.codigo}.webp`; 
-      // Buscar el link correspondiente a este código
-      const matchingLink = productLinks.find(pl => pl.id === item.codigo);
-      if(matchingLink) item.producto_url = matchingLink.url;
+      // Generar link al producto basado en el código
+      item.producto_url = `${CATALOG_URL}/producto.php?id=${item.codigo}`;
     }
     
     const tallaMatch = line.match(/Talla:\s*([^\s|]+)/i);
@@ -650,8 +646,8 @@ function parseMultiWebMessage(text) {
   const totalMatch = text.match(/Total:\s*[₡¢]\s*([\d\s,\.]+)/i);
   const total = totalMatch ? parseInt(totalMatch[1].replace(/[\s,\.]/g,'')) || 0 : items.reduce((s,i)=>s+i.precio,0);
   
-  console.log(`📋 parseMultiWebMessage: ${items.length} productos, total ₡${total}, links: ${productLinks.length}`);
-  return { items, total, productLinks };
+  console.log(`📋 parseMultiWebMessage: ${items.length} productos, total ₡${total}`);
+  return { items, total };
 }
 
 // ============ BAILEYS CONEXIÓN ============
@@ -1114,7 +1110,7 @@ async function handleIncomingMessage(msg) {
       console.log(`🔗 Thumbnail guardado como fallback: ${fotoLocal}`);
     }
     
-    session.producto=webData.producto; session.precio=webData.precio; session.codigo=webData.codigo; session.foto_url=fotoLocal || webData.foto_url;
+    session.producto=webData.producto; session.precio=webData.precio; session.codigo=webData.codigo; session.foto_url=fotoLocal || webData.foto_url; session.producto_url=webData.producto_url;
     let detalles=[];
     if(webData.talla)detalles.push(`Talla: ${webData.talla}`);
     if(webData.color)detalles.push(`Color: ${webData.color}`);
