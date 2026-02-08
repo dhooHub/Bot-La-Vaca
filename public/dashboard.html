@@ -657,7 +657,12 @@
         // Process pending
         (data.pending || []).forEach(p => {
           if (!chats[p.waId]) chats[p.waId] = { messages: [], pending: null };
-          chats[p.waId].pending = p;
+          // Detectar si es multi-producto (tiene products array o type='multi')
+          if (p.products || p.type === 'multi') {
+            chats[p.waId].pending = { ...p, tipo: 'multi' };
+          } else {
+            chats[p.waId].pending = p;
+          }
         });
         // Contacts
         (data.contacts || []).forEach(c => contacts[c.waId] = c);
