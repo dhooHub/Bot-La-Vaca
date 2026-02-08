@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐄 Admin - La Vaca CR</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#22263a;--border:#2a2e3d;--text:#e4e6ef;--muted:#8b8fa3;--green:#22c55e;--green-bg:rgba(34,197,94,.12);--red:#ef4444;--red-bg:rgba(239,68,68,.12);--yellow:#f59e0b;--yellow-bg:rgba(245,158,11,.12);--blue:#3b82f6;--blue-bg:rgba(59,130,246,.12);--purple:#a855f7;--purple-bg:rgba(168,85,247,.12)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+.header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+.header h1{font-size:20px;font-weight:700}.header h1 span{color:var(--green)}
+.hdr-right{display:flex;align-items:center;gap:12px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}.dot.off{background:var(--red)}
+.hdr-txt{font-size:13px;color:var(--muted)}
+.btn-sm{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit}
+.btn-sm:hover{background:var(--card2)}
+.role-badge{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600}
+.role-dueno{background:var(--green-bg);color:var(--green)}.role-usuario{background:var(--blue-bg);color:var(--blue)}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;overflow-x:auto}
+.tab{padding:12px 20px;cursor:pointer;font-size:14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;transition:.2s}
+.tab:hover{color:var(--text)}.tab.active{color:var(--green);border-color:var(--green)}.tab.hidden{display:none}
+
+.content{padding:20px;max-width:1200px;margin:0 auto}.section{display:none}.section.active{display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
+.card-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.card-value{font-size:28px;font-weight:700}.card-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.card.green .card-value{color:var(--green)}.card.blue .card-value{color:var(--blue)}.card.yellow .card-value{color:var(--yellow)}.card.red .card-value{color:var(--red)}.card.purple .card-value{color:var(--purple)}
+
+.ptoggle{display:flex;gap:6px;margin-bottom:18px}
+.pbtn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer;font-size:13px;font-family:inherit;transition:.15s}
+.pbtn.active{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+
+.tw{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.tw-h{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{text-align:left;padding:10px 14px;color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;border-bottom:1px solid var(--border)}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--border)}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--card2)}
+.badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;display:inline-block}
+.b-green{background:var(--green-bg);color:var(--green)}.b-blue{background:var(--blue-bg);color:var(--blue)}.b-purple{background:var(--purple-bg);color:var(--purple)}
+.b-yellow{background:var(--yellow-bg);color:var(--yellow)}.b-red{background:var(--red-bg);color:var(--red)}
+
+.alert-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.alert-card .info{flex:1}.alert-card .nm{font-weight:600;font-size:14px}.alert-card .dt{font-size:12px;color:var(--muted);margin-top:3px}
+.alert-card .tm{font-size:12px;font-weight:500;white-space:nowrap;margin-left:12px}
+.alert-card.urgent{border-left:3px solid var(--red)}.alert-card.urgent .tm{color:var(--red)}
+.alert-card.warning{border-left:3px solid var(--yellow)}.alert-card.warning .tm{color:var(--yellow)}
+
+.chat-list{display:flex;flex-direction:column;gap:8px}
+.ch-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:.15s}
+.ch-item:hover{background:var(--card2)}
+.ch-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.ch-nm{font-weight:600;font-size:14px}.ch-tm{font-size:11px;color:var(--muted)}
+.ch-prev{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-msgs{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;max-height:60vh;overflow-y:auto;margin-top:14px}
+.ch-m{margin-bottom:10px}.ch-m .bub{display:inline-block;padding:8px 14px;border-radius:12px;max-width:85%;font-size:13px;line-height:1.5;word-break:break-word}
+.ch-m.in .bub{background:#2a2e3d;border-bottom-left-radius:4px}.ch-m.out .bub{background:#1a4d2e;border-bottom-right-radius:4px}
+.ch-m.out{text-align:right}.ch-m .ts{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* Ventas WA */
+.order-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px}
+.order-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.order-prod{font-weight:600;font-size:15px}.order-meta{font-size:12px;color:var(--muted);margin-top:4px}
+.order-total{font-size:20px;font-weight:700;color:var(--green)}
+.order-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.field input,.field select{padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--green)}
+.status-pills{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.pill{padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:default;border:1px solid var(--border)}
+.pill.done{opacity:1}.pill.pending{opacity:.35}
+.pill-pendiente{background:var(--yellow-bg);color:var(--yellow);border-color:var(--yellow)}
+.pill-facturado{background:var(--blue-bg);color:var(--blue);border-color:var(--blue)}
+.pill-enviado{background:var(--purple-bg);color:var(--purple);border-color:var(--purple)}
+.pill-recibido{background:var(--green-bg);color:var(--green);border-color:var(--green)}
+
+.save-ok{color:var(--green);font-size:12px;margin-left:8px;opacity:0;transition:opacity .3s}
+.save-ok.show{opacity:1}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}.empty-icon{font-size:40px;margin-bottom:10px}
+.filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-row input,.filter-row select{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;font-size:13px}
+
+@media(max-width:600px){.cards{grid-template-columns:repeat(2,1fr)}.card-value{font-size:22px}.content{padding:14px}.order-fields{grid-template-columns:1fr}.header h1{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🐄 <span>La Vaca</span> Admin</h1>
+  <div class="hdr-right">
+    <span class="role-badge" id="roleBadge"></span>
+    <span class="dot" id="sDot"></span>
+    <span class="hdr-txt" id="sTxt">Cargando...</span>
+    <button class="btn-sm" onclick="loadAll()">↻</button>
+  </div>
+</div>
+
+<div class="tabs" id="tabsBar">
+  <div class="tab" data-tab="resumen" data-role="dueno">📊 Resumen</div>
+  <div class="tab active" data-tab="ventaswa" data-role="all">📦 Ventas WA</div>
+  <div class="tab" data-tab="alertas" data-role="dueno">🚨 Alertas</div>
+  <div class="tab" data-tab="chats" data-role="dueno">💬 Chats</div>
+</div>
+
+<div class="content">
+  <!-- RESUMEN -->
+  <div class="section" id="sec-resumen">
+    <div class="ptoggle" id="pToggle"></div>
+    <div class="cards" id="sumCards"></div>
+    <div class="cards" id="actCards"></div>
+    <div class="tw" style="margin-top:10px"><div class="tw-h"><span>Últimas ventas</span></div><div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Total</th></tr></thead><tbody id="recentBody"></tbody></table></div></div>
+  </div>
+
+  <!-- VENTAS WA -->
+  <div class="section active" id="sec-ventaswa">
+    <div class="filter-row">
+      <select id="vFilter" onchange="renderOrders()">
+        <option value="all">Todos los estados</option>
+        <option value="pendiente">🟡 Pendiente</option>
+        <option value="facturado">🔵 Facturado</option>
+        <option value="enviado">🟣 Enviado</option>
+        <option value="recibido">🟢 Recibido</option>
+      </select>
+      <select id="vMethod" onchange="renderOrders()">
+        <option value="all">Todos los métodos</option>
+        <option value="envio">📦 Envío</option>
+        <option value="recoger">🏪 Retiro</option>
+      </select>
+      <input type="text" id="vSearch" placeholder="Buscar cliente/producto..." oninput="renderOrders()">
+      <span id="vCount" style="color:var(--muted);font-size:13px;"></span>
+    </div>
+    <div id="ordersList"></div>
+  </div>
+
+  <!-- ALERTAS -->
+  <div class="section" id="sec-alertas">
+    <h3 style="margin-bottom:14px;font-size:16px;">🔴 Sin seguimiento del operador</h3>
+    <div id="noFollow"></div>
+    <h3 style="margin:24px 0 14px;font-size:16px;">🟡 Abandonados por el cliente</h3>
+    <div id="abandoned"></div>
+  </div>
+
+  <!-- CHATS -->
+  <div class="section" id="sec-chats">
+    <div id="chListV">
+      <input type="text" id="chSearch" placeholder="Buscar..." style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;font-size:14px;margin-bottom:14px;outline:none" oninput="filterCh()">
+      <div class="chat-list" id="chList"></div>
+    </div>
+    <div id="chDetailV" style="display:none">
+      <button class="btn-sm" onclick="backCh()">← Volver</button>
+      <div id="chDetailH" style="margin:8px 0;font-weight:600;font-size:16px"></div>
+      <div class="ch-msgs" id="chMsgs"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let D=null, role='usuario', period='today', allCh=[], allSales=[];
+
+function ck(n){const v=document.cookie.match('(^|;) ?'+n+'=([^;]*)(;|$)');return v?v[2]:'';}
+async function api(u){
+  const p=ck('admin_pwd')||new URLSearchParams(location.search).get('pwd')||'';
+  const r=await fetch(u+(u.includes('?')?'&':'?')+'pwd='+p);
+  if(r.status===401){location.reload();return null;}
+  return r.json();
+}
+async function apiPost(u,body){
+  const p=ck('admin_pwd')||new URLSearchParams(location.search).get('pwd')||'';
+  const r=await fetch(u+'?pwd='+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  return r.json();
+}
+
+// Init
+async function init(){
+  const r=await api('/api/admin/role');
+  if(!r)return;
+  role=r.role;
+  document.getElementById('roleBadge').textContent=role==='dueno'?'👑 Dueño':'👤 Usuario';
+  document.getElementById('roleBadge').className='role-badge '+(role==='dueno'?'role-dueno':'role-usuario');
+  
+  // Show/hide tabs by role
+  document.querySelectorAll('.tab').forEach(t=>{
+    const tr=t.dataset.role;
+    if(tr==='dueno'&&role!=='dueno')t.classList.add('hidden');
+    else t.classList.remove('hidden');
+  });
+  
+  // Tab click
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    if(t.classList.contains('hidden'))return;
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('sec-'+t.dataset.tab).classList.add('active');
+  }));
+  
+  loadAll();
+}
+
+async function loadAll(){
+  D=await api('/api/admin/dashboard');
+  if(!D)return;
+  
+  document.getElementById('sDot').className='dot '+(D.connection==='connected'?'on':'off');
+  document.getElementById('sTxt').textContent=D.connection==='connected'?'📱 '+(D.phone||'')+(D.storeOpen?' • Abierta':' • Cerrada'):'Desconectado';
+  
+  allSales=(D.sales.recent||[]).slice();
+  
+  if(role==='dueno'){
+    setupPeriod();
+    renderSum();
+    renderAlerts();
+    loadChats();
+  }
+  renderOrders();
+}
+
+// === RESUMEN ===
+function setupPeriod(){
+  const c=document.getElementById('pToggle');
+  c.innerHTML=[{id:'today',l:'Hoy'},{id:'week',l:'Semana'},{id:'month',l:'Mes'},{id:'all',l:'Total'}].map(p=>`<button class="pbtn ${p.id===period?'active':''}" data-p="${p.id}">${p.l}</button>`).join('');
+  c.querySelectorAll('.pbtn').forEach(b=>b.addEventListener('click',()=>{period=b.dataset.p;c.querySelectorAll('.pbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderSum();}));
+}
+
+function renderSum(){
+  const s=D.sales[period]||{},m=D.metrics||{},pl={today:'hoy',week:'semana',month:'mes',all:'total'}[period];
+  document.getElementById('sumCards').innerHTML=`
+    <div class="card green"><div class="card-label">Ventas ${pl}</div><div class="card-value">${s.count||0}</div><div class="card-sub">₡${(s.revenue||0).toLocaleString()}</div></div>
+    <div class="card green"><div class="card-label">Neto</div><div class="card-value">₡${(s.net||0).toLocaleString()}</div><div class="card-sub">Envíos: ₡${(s.shipping||0).toLocaleString()}</div></div>
+    <div class="card blue"><div class="card-label">Chats</div><div class="card-value">${period==='today'?D.chats.today:period==='week'?D.chats.week:D.contacts_total}</div><div class="card-sub">${D.chats.active} activos</div></div>
+    <div class="card purple"><div class="card-label">Ticket promedio</div><div class="card-value">₡${s.count>0?Math.round((s.net||0)/s.count).toLocaleString():'0'}</div></div>`;
+  document.getElementById('actCards').innerHTML=`
+    <div class="card yellow"><div class="card-label">Abandonados</div><div class="card-value">${(D.alerts.abandoned||[]).length}</div></div>
+    <div class="card red"><div class="card-label">Sin seguimiento</div><div class="card-value">${(D.alerts.no_followup||[]).length}</div></div>
+    <div class="card"><div class="card-label">Msgs bot</div><div class="card-value">${m.mensajes_enviados||0}</div></div>
+    <div class="card"><div class="card-label">Contactos</div><div class="card-value">${D.contacts_total||0}</div></div>`;
+  const rec=allSales.slice(0,5);
+  document.getElementById('recentBody').innerHTML=rec.length===0?'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Sin ventas</td></tr>'
+    :rec.map(s=>`<tr><td>${fD(s.date)}</td><td>${s.name||fP(s.phone)}</td><td>${s.producto||'-'}</td><td style="font-weight:600;color:var(--green)">₡${(s.total||0).toLocaleString()}</td></tr>`).join('');
+}
+
+// === VENTAS WA ===
+function renderOrders(){
+  const filt=document.getElementById('vFilter').value;
+  const meth=document.getElementById('vMethod').value;
+  const q=(document.getElementById('vSearch').value||'').toLowerCase();
+  
+  let list=allSales.filter(s=>{
+    if(filt!=='all'&&(s.status||'pendiente')!==filt)return false;
+    if(meth!=='all'&&s.method!==meth)return false;
+    if(q&&!(s.name||'').toLowerCase().includes(q)&&!(s.producto||'').toLowerCase().includes(q)&&!(s.phone||'').includes(q))return false;
+    return true;
+  });
+  
+  document.getElementById('vCount').textContent=`${list.length} pedido${list.length!==1?'s':''}`;
+  
+  if(list.length===0){
+    document.getElementById('ordersList').innerHTML='<div class="empty"><div class="empty-icon">📦</div>Sin pedidos</div>';
+    return;
+  }
+  
+  document.getElementById('ordersList').innerHTML=list.map(s=>{
+    const st=s.status||'pendiente';
+    const steps=['pendiente','facturado','enviado','recibido'];
+    const stIdx=steps.indexOf(st);
+    const mBadge=s.method==='envio'?'<span class="badge b-blue">📦 Envío</span>':'<span class="badge b-purple">🏪 Retiro</span>';
+    const stBadge=`<span class="badge b-${st==='pendiente'?'yellow':st==='facturado'?'blue':st==='enviado'?'purple':'green'}">${st.charAt(0).toUpperCase()+st.slice(1)}</span>`;
+    
+    const pills=steps.map((p,i)=>`<span class="pill pill-${p} ${i<=stIdx?'done':'pending'}">${p.charAt(0).toUpperCase()+p.slice(1)}</span>`).join('');
+    
+    let fields='';
+    if(s.method==='envio'){
+      fields=`
+        <div class="order-fields">
+          <div class="field"><label>Guía Correos</label><input type="text" value="${esc(s.guia_correos||'')}" onchange="upd('${s.id}','guia_correos',this.value,this)"></div>
+          <div class="field"><label>Fecha Factura</label><input type="date" value="${s.fecha_factura||''}" onchange="upd('${s.id}','fecha_factura',this.value,this)"></div>
+          <div class="field"><label>Fecha Envío</label><input type="date" value="${s.fecha_envio||''}" onchange="upd('${s.id}','fecha_envio',this.value,this)"></div>
+          <div class="field"><label>Fecha Recibido</label><input type="date" value="${s.fecha_recibido||''}" onchange="upd('${s.id}','fecha_recibido',this.value,this)"></div>
+        </div>`;
+    } else {
+      fields=`
+        <div class="order-fields">
+          <div class="field"><label>Estado</label>
+            <select onchange="upd('${s.id}','status',this.value,this)">
+              ${steps.map(p=>`<option value="${p}" ${st===p?'selected':''}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`).join('')}
+            </select>
+          </div>
+        </div>`;
+    }
+    
+    return `<div class="order-card">
+      <div class="order-top">
+        <div>
+          <div class="order-prod">${s.producto||'Artículo'} ${mBadge} ${stBadge}</div>
+          <div class="order-meta">
+            ${s.name||fP(s.phone)} • ${s.talla_color||'-'} • ${fD(s.date)}<br>
+            ${s.method==='envio'?'📍 '+(s.zone||s.envio_datos||'-'):'🏪 Retiro en tienda'}
+            ${s.sinpe_reference?' • Ref: '+s.sinpe_reference:''}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="order-total">₡${(s.total||0).toLocaleString()}</div>
+          <div style="font-size:11px;color:var(--muted)">${s.method==='envio'?'Envío: ₡'+(s.shipping||0).toLocaleString():''}</div>
+        </div>
+      </div>
+      <div class="status-pills">${pills}</div>
+      ${fields}
+      <span class="save-ok" id="ok-${s.id}">✓ Guardado</span>
+    </div>`;
+  }).join('');
+}
+
+async function upd(id,field,value,el){
+  const r=await apiPost('/api/admin/sales/update',{saleId:id,field,value});
+  if(r&&r.success){
+    // Update local
+    const s=allSales.find(x=>x.id===id);
+    if(s&&r.sale){Object.assign(s,r.sale);}
+    renderOrders();
+    // Flash saved
+    const ok=document.getElementById('ok-'+id);
+    if(ok){ok.classList.add('show');setTimeout(()=>ok.classList.remove('show'),2000);}
+  }
+}
+
+// === ALERTAS ===
+function renderAlerts(){
+  const nf=D.alerts.no_followup||[];
+  document.getElementById('noFollow').innerHTML=nf.length===0?'<div class="empty"><div class="empty-icon">✅</div>Todo atendido</div>'
+    :nf.map(a=>`<div class="alert-card urgent"><div class="info"><div class="nm">${a.name||fP(a.phone)}</div><div class="dt">${a.producto||'-'} • ${sL(a.state)}</div></div><div class="tm">${a.age_minutes} min</div></div>`).join('');
+  const ab=D.alerts.abandoned||[];
+  document.getElementById('abandoned').innerHTML=ab.length===0?'<div class="empty"><div class="empty-icon">✅</div>Ninguno</div>'
+    :ab.map(a=>`<div class="alert-card warning"><div class="info"><div class="nm">${a.name||fP(a.phone)}</div><div class="dt">${a.producto||'-'} • ${sL(a.state)}</div></div><div class="tm">${Math.round(a.age_minutes/60)}h</div></div>`).join('');
+}
+
+// === CHATS ===
+async function loadChats(){const r=await api('/api/admin/chats?limit=100');if(!r)return;allCh=r.conversations||[];renderChList(allCh);}
+function renderChList(l){document.getElementById('chList').innerHTML=l.length===0?'<div class="empty"><div class="empty-icon">💬</div>Sin chats</div>'
+  :l.map(c=>{const m=c.messages[c.messages.length-1];return`<div class="ch-item" onclick="openCh('${c.waId}')"><div class="ch-hdr"><span class="ch-nm">${c.name||fP(c.phone||c.waId)}</span><span class="ch-tm">${fD(c.last)} (${c.messages.length})</span></div><div class="ch-prev">${esc((m?m.text:'')?.slice(0,50)||'(foto)')}</div></div>`;}).join('');}
+function filterCh(){const q=document.getElementById('chSearch').value.toLowerCase();renderChList(q?allCh.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.phone||'').includes(q)):allCh);}
+function openCh(w){const c=allCh.find(x=>x.waId===w);if(!c)return;document.getElementById('chListV').style.display='none';document.getElementById('chDetailV').style.display='block';document.getElementById('chDetailH').textContent=(c.name||fP(c.phone||w))+' — '+c.messages.length+' msgs';const el=document.getElementById('chMsgs');el.innerHTML=c.messages.map(m=>{const d=m.direction==='out'?'out':'in';const t=new Date(m.timestamp).toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});return`<div class="ch-m ${d}"><div class="bub">${esc(m.text||'(foto)')}</div><div class="ts">${t}</div></div>`;}).join('');el.scrollTop=el.scrollHeight;}
+function backCh(){document.getElementById('chListV').style.display='block';document.getElementById('chDetailV').style.display='none';}
+
+// Helpers
+function fP(p){if(!p)return'?';p=p.replace(/\D/g,'');if(p.length>8)p=p.slice(-8);return p.slice(0,4)+'-'+p.slice(4);}
+function fD(d){if(!d)return'-';return new Date(d).toLocaleDateString('es-CR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
+function esc(t){return(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function sL(s){return{'ESPERANDO_CONFIRMACION_VENDEDOR':'⏳ Confirmación','ZONA_RECIBIDA':'📍 Calcular envío','PREGUNTANDO_INTERES':'❓ Interés','ESPERANDO_SINPE':'🧾 SINPE','ESPERANDO_DATOS_ENVIO':'📋 Datos'}[s]||s;}
+
+init();
+setInterval(loadAll,30000);
+</script>
+</body>
+</html>
