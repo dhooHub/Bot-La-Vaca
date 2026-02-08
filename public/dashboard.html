@@ -336,6 +336,12 @@
     function escapeHtml(t) {
       return String(t || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     }
+    function linkify(text) {
+      // Primero escapar HTML, luego convertir URLs en links clickeables
+      const escaped = escapeHtml(text);
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      return escaped.replace(urlRegex, '<a href="$1" target="_blank" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+    }
     function toast(msg, type = '') {
       const t = $('toast');
       t.textContent = msg;
@@ -915,7 +921,7 @@
         html += `
           <div class="message ${m.direction}">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
-            ${m.text ? `<div class="message-text">${escapeHtml(m.text)}</div>` : ''}
+            ${m.text ? `<div class="message-text">${linkify(m.text)}</div>` : ''}
             <div class="message-time">${time}</div>
           </div>
         `;
