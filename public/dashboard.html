@@ -975,7 +975,7 @@
             </div>
             ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : '<!-- No foto_url -->'}
             <div class="action-card-details">
-              <div class="action-card-detail">📦 <strong>${escapeHtml(p.producto || 'Producto')}</strong></div>
+              <div class="action-card-detail">📦 <strong>${p.producto_url ? `<a href="${p.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(p.producto || 'Producto')} 🔗</a>` : escapeHtml(p.producto || 'Producto')}</strong></div>
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
               ${p.talla_color ? `<div class="action-card-detail">👕 ${escapeHtml(p.talla_color)}</div>` : ''}
               ${!isSinpe && !isTienda && !isFotoExterna && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
