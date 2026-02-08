@@ -592,13 +592,22 @@ function parseWebMessage(text) {
 // Parser para mensaje multi-producto desde la web
 function parseMultiWebMessage(text) {
   if(!text.includes("interesado") || !text.includes("productos:")) return null;
+  
+  // Extraer todos los links de productos del mensaje
+  const linkMatches = text.match(/https?:\/\/[^\s]+producto[^\s]*/gi) || [];
+  const productLinks = linkMatches.map(link => {
+    const idMatch = link.match(/[?&]id=(\d+)/i);
+    return idMatch ? { url: link, id: idMatch[1] } : null;
+  }).filter(Boolean);
+  
   // Formato: "1. Nombre - ₡Precio - Código: XXX | Talla: M"
   const lines = text.split("\n").filter(l => /^\d+\.\s/.test(l.trim()));
   if(lines.length < 2) return null;
   
   const items = [];
-  for(const line of lines) {
-    const item = { producto:null, precio:0, codigo:null, talla:null, color:null, tamano:null, foto_url:null };
+  for(let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const item = { producto:null, precio:0, codigo:null, talla:null, color:null, tamano:null, foto_url:null, producto_url:null };
     // "1. Blusa Floral - ₡8,500 - Código: LV001 | Talla: M | Color: Rojo"
     const nameMatch = line.match(/^\d+\.\s+(.+?)\s*-\s*[₡¢]/);
     if(nameMatch) item.producto = nameMatch[1].trim();
@@ -607,7 +616,13 @@ function parseMultiWebMessage(text) {
     if(priceMatch) item.precio = parseInt(priceMatch[1].replace(/[\s,\.]/g,'')) || 0;
     
     const codeMatch = line.match(/Código:\s*(\w+)/i);
-    if(codeMatch) { item.codigo = codeMatch[1].trim(); item.foto_url = `${CATALOG_URL}/lavaca/img/${item.codigo}.webp`; }
+    if(codeMatch) { 
+      item.codigo = codeMatch[1].trim(); 
+      item.foto_url = `${CATALOG_URL}/lavaca/img/${item.codigo}.webp`; 
+      // Buscar el link correspondiente a este código
+      const matchingLink = productLinks.find(pl => pl.id === item.codigo);
+      if(matchingLink) item.producto_url = matchingLink.url;
+    }
     
     const tallaMatch = line.match(/Talla:\s*([^\s|]+)/i);
     if(tallaMatch) item.talla = tallaMatch[1].trim();
@@ -626,8 +641,8 @@ function parseMultiWebMessage(text) {
   const totalMatch = text.match(/Total:\s*[₡¢]\s*([\d\s,\.]+)/i);
   const total = totalMatch ? parseInt(totalMatch[1].replace(/[\s,\.]/g,'')) || 0 : items.reduce((s,i)=>s+i.precio,0);
   
-  console.log(`📋 parseMultiWebMessage: ${items.length} productos, total ₡${total}`);
-  return { items, total };
+  console.log(`📋 parseMultiWebMessage: ${items.length} productos, total ₡${total}, links: ${productLinks.length}`);
+  return { items, total, productLinks };
 }
 
 // ============ BAILEYS CONEXIÓN ============
@@ -964,7 +979,8 @@ async function handleIncomingMessage(msg) {
     session.saludo_enviado = true;
     session.multi_products = multiData.items.map((it,i) => ({
       ...it, index: i, disponible: null, // null=pendiente, true=hay, false=agotado
-      foto_url_local: null
+      foto_url_local: null,
+      producto_url: it.producto_url || null
     }));
     session.multi_total = multiData.total;
     session.state = "MULTI_ESPERANDO_DISPONIBILIDAD";
