@@ -925,9 +925,9 @@
       if (chat.pending) {
         const p = chat.pending;
         console.log('🎴 Rendering action card:', p.waId, 'foto_url:', p.foto_url ? 'YES (' + p.foto_url.substring(0, 30) + '...)' : 'NO');
-        const isSinpe = p.tipo === 'sinpe';
-        const isTienda = p.tipo === 'tienda';
-        const isMulti = p.tipo === 'multi';
+        const isSinpe = p.tipo === 'sinpe' || p.type === 'sinpe';
+        const isTienda = p.tipo === 'tienda' || p.type === 'tienda';
+        const isMulti = p.tipo === 'multi' || p.type === 'multi';
         const isFotoExterna = p.foto_externa;
         
         if (isMulti) {
