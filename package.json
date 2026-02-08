@@ -1,29 +1,15 @@
 {
-  "name": "ticobot-lite",
+  "name": "tico-bot",
   "version": "1.0.0",
-  "description": "TICObot con Baileys - WhatsApp para emprendedores ticos",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node index.js"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "baileys",
-    "costa-rica",
-    "emprendedor"
-  ],
-  "author": "TICObot",
-  "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",
     "express": "^4.21.2",
+    "openai": "^4.78.1",
+    "pino": "^9.6.0",
     "qrcode": "^1.5.4",
-    "socket.io": "^4.8.1",
-    "pino": "^9.6.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "socket.io": "^4.8.1"
   }
 }
