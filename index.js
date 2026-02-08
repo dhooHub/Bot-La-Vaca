@@ -31,6 +31,11 @@ const io = new Server(server);
 const logger = pino({ level: "silent" });
 
 app.use(express.static(path.join(__dirname, "public")));
+
+// Panel operador en raíz
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
@@ -72,9 +77,10 @@ let isProcessingQueue = false;
 const sessions = new Map();
 const profiles = new Map();
 const pendingQuotes = new Map();
+let salesLog = []; // Registro de ventas completadas
 let chatHistory = [];
 const MAX_CHAT_HISTORY = 500;
-const account = { metrics: { chats_total:0, quotes_sent:0, intent_yes:0, intent_no:0, delivery_envio:0, delivery_recoger:0, sinpe_confirmed:0, estados_sent:0, mensajes_enviados:0, ia_calls:0 } };
+const account = { metrics: { chats_total:0, quotes_sent:0, intent_yes:0, intent_no:0, delivery_envio:0, delivery_recoger:0, sinpe_confirmed:0, sales_completed:0, total_revenue:0, estados_sent:0, mensajes_enviados:0, ia_calls:0 } };
 
 function hasPhysicalLocation() { return STORE_TYPE === "fisica_con_envios" || STORE_TYPE === "fisica_solo_recoger"; }
 function offersShipping() { return STORE_TYPE === "virtual" || STORE_TYPE === "fisica_con_envios"; }
@@ -187,6 +193,8 @@ function getStateDescription(state) {
     ESPERANDO_DETALLES_FOTO: "Se le pidió qué talla, color o tamaño quiere del producto de la foto",
     ESPERANDO_TALLA: "Se le preguntó qué talla y color quiere",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Se le dijo que estamos verificando disponibilidad",
+    MULTI_ESPERANDO_DISPONIBILIDAD: "Tiene una lista de productos, esperamos a que el dueño confirme disponibilidad",
+    MULTI_SELECCION_CLIENTE: "Se le mostraron los productos disponibles y debe elegir cuáles comprar",
     PREGUNTANDO_INTERES: "Se le preguntó si quiere comprar el producto (sí o no)",
     PREGUNTANDO_METODO: "Se le preguntó si quiere envío o retiro en tienda",
     ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia - Cantón - Distrito",
@@ -208,11 +216,11 @@ function saveDataToDisk() {
       delete copy.foto_base64; // No guardar imágenes en disco
       return copy;
     });
-    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave},null,2)); 
+    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave,salesLog},null,2)); 
     saveHistory(); 
   } catch(e){console.log("⚠️ Error guardando:",e.message);} 
 }
-function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; console.log("📂 Datos cargados"); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
+function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; console.log(`📂 Datos cargados (${salesLog.length} ventas)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
 // ============ FRASES ============
@@ -456,6 +464,9 @@ async function sendPushoverAlert(tipo, datos) {
     } else if (tipo === "ZONA") {
       title = "📍 Zona recibida - Calcular envío";
       message = `🗺️ ${datos.zone || "?"}\n👤 ${phoneFormatted}`;
+    } else if (tipo === "MULTI_PRODUCTO") {
+      title = "📋 Lista de productos - Revisar";
+      message = `📦 ${datos.producto || "?"}\n👤 ${phoneFormatted}`;
     }
     
     if (!title) return;
@@ -576,6 +587,47 @@ function parseWebMessage(text) {
   
   console.log("📋 parseWebMessage:", JSON.stringify(result));
   return result;
+}
+
+// Parser para mensaje multi-producto desde la web
+function parseMultiWebMessage(text) {
+  if(!text.includes("interesado") || !text.includes("productos:")) return null;
+  // Formato: "1. Nombre - ₡Precio - Código: XXX | Talla: M"
+  const lines = text.split("\n").filter(l => /^\d+\.\s/.test(l.trim()));
+  if(lines.length < 2) return null;
+  
+  const items = [];
+  for(const line of lines) {
+    const item = { producto:null, precio:0, codigo:null, talla:null, color:null, tamano:null, foto_url:null };
+    // "1. Blusa Floral - ₡8,500 - Código: LV001 | Talla: M | Color: Rojo"
+    const nameMatch = line.match(/^\d+\.\s+(.+?)\s*-\s*[₡¢]/);
+    if(nameMatch) item.producto = nameMatch[1].trim();
+    
+    const priceMatch = line.match(/[₡¢]\s*([\d\s,\.]+)/);
+    if(priceMatch) item.precio = parseInt(priceMatch[1].replace(/[\s,\.]/g,'')) || 0;
+    
+    const codeMatch = line.match(/Código:\s*(\w+)/i);
+    if(codeMatch) { item.codigo = codeMatch[1].trim(); item.foto_url = `${CATALOG_URL}/lavaca/img/${item.codigo}.webp`; }
+    
+    const tallaMatch = line.match(/Talla:\s*([^\s|]+)/i);
+    if(tallaMatch) item.talla = tallaMatch[1].trim();
+    
+    const colorMatch = line.match(/Color:\s*([^\s|]+)/i);
+    if(colorMatch) item.color = colorMatch[1].trim();
+    
+    const tamanoMatch = line.match(/Tamaño:\s*([^\s|]+)/i);
+    if(tamanoMatch) item.tamano = tamanoMatch[1].trim();
+    
+    if(item.producto || item.codigo) items.push(item);
+  }
+  
+  if(items.length < 2) return null;
+  
+  const totalMatch = text.match(/Total:\s*[₡¢]\s*([\d\s,\.]+)/i);
+  const total = totalMatch ? parseInt(totalMatch[1].replace(/[\s,\.]/g,'')) || 0 : items.reduce((s,i)=>s+i.precio,0);
+  
+  console.log(`📋 parseMultiWebMessage: ${items.length} productos, total ₡${total}`);
+  return { items, total };
 }
 
 // ============ BAILEYS CONEXIÓN ============
@@ -906,7 +958,62 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // Detectar mensaje web ("Me interesa")
+  // ====== MULTI-PRODUCTO desde la web ======
+  const multiData = parseMultiWebMessage(text);
+  if(multiData && multiData.items.length >= 2) {
+    session.saludo_enviado = true;
+    session.multi_products = multiData.items.map((it,i) => ({
+      ...it, index: i, disponible: null, // null=pendiente, true=hay, false=agotado
+      foto_url_local: null
+    }));
+    session.multi_total = multiData.total;
+    session.state = "MULTI_ESPERANDO_DISPONIBILIDAD";
+    
+    // Descargar imágenes
+    for(const mp of session.multi_products) {
+      if(mp.codigo) {
+        mp.foto_url_local = await descargarImagenCatalogo(mp.codigo, waId);
+      }
+    }
+    
+    // Resumen al cliente
+    const lista = session.multi_products.map((p,i) => 
+      `${i+1}. ${p.producto||'Producto'} ${p.talla?'('+p.talla+')':''} - ₡${(p.precio||0).toLocaleString()}`
+    ).join("\n");
+    
+    await sendTextWithTyping(waId,
+      `¡Hola! Pura vida 🙌\n\n` +
+      `Vi que te interesan ${session.multi_products.length} productos:\n\n${lista}\n\n` +
+      `Déjame revisar cuáles tenemos disponibles. Un momento... 🔍`
+    );
+    
+    // Notificar al dueño con la lista
+    const profile = getProfile(waId);
+    const multiQuote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      type: "multi",
+      products: session.multi_products,
+      total: session.multi_total,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, multiQuote);
+    io.emit("new_pending_multi", multiQuote);
+    
+    // Pushover
+    const phoneF = formatPhone(profile.phone || waId);
+    sendPushoverAlert("MULTI_PRODUCTO", {
+      phone: profile.phone || waId,
+      producto: `${session.multi_products.length} productos`,
+      talla_color: session.multi_products.map(p => p.producto).join(", ")
+    });
+    
+    saveDataToDisk();
+    return;
+  }
+
+  // Detectar mensaje web ("Me interesa") - producto individual
   const webData=parseWebMessage(text);
   if(webData&&webData.codigo){
     // ✅ Detectar si pregunta por otro color/talla diferente al del catálogo
@@ -1028,6 +1135,74 @@ async function handleIncomingMessage(msg) {
   }
 
   if(session.state==="ESPERANDO_CONFIRMACION_VENDEDOR"){await sendTextWithTyping(waId,frase("espera_vendedor",waId));return;}
+
+  // ====== MULTI: Esperando a que dueño confirme disponibilidad ======
+  if(session.state==="MULTI_ESPERANDO_DISPONIBILIDAD"){
+    await sendTextWithTyping(waId, "Estoy revisando tu lista, un momento 🙌");
+    return;
+  }
+
+  // ====== MULTI: Cliente elige cuáles comprar ======
+  if(session.state==="MULTI_SELECCION_CLIENTE"){
+    const disp = session.multi_disponibles || [];
+    if(disp.length === 0) { session.state = "PREGUNTANDO_ALGO_MAS"; return; }
+    
+    let seleccionados = [];
+    
+    if(lower === "todos" || lower === "todo" || lower === "todas" || lower.includes("todos")) {
+      seleccionados = disp;
+    } else {
+      // Parsear números: "1,3" o "1 y 3" o "1 3"
+      const nums = text.match(/\d+/g);
+      if(nums) {
+        for(const n of nums) {
+          const idx = parseInt(n) - 1;
+          if(idx >= 0 && idx < disp.length) seleccionados.push(disp[idx]);
+        }
+      }
+    }
+    
+    if(seleccionados.length === 0) {
+      await sendTextWithTyping(waId, `Escribí *"todos"* o los números de los productos que querés (ej: *1,3*)`);
+      return;
+    }
+    
+    // Consolidar productos seleccionados en la sesión
+    const totalProductos = seleccionados.reduce((s, p) => s + p.precio, 0);
+    
+    // Guardar lista final
+    session.multi_seleccion = seleccionados;
+    session.precio = totalProductos;
+    
+    // Si es un solo producto, usar datos individuales
+    if(seleccionados.length === 1) {
+      const p = seleccionados[0];
+      session.producto = p.producto;
+      session.codigo = p.codigo;
+      session.talla_color = [p.talla, p.color, p.tamano].filter(Boolean).join(", ");
+      session.foto_url = p.foto_url_local || p.foto_url;
+    } else {
+      session.producto = seleccionados.map(p => p.producto).join(" + ");
+      session.codigo = seleccionados.map(p => p.codigo).filter(Boolean).join(",");
+      session.talla_color = seleccionados.map(p => `${p.producto}${p.talla?' ('+p.talla+')':''}`).join(", ");
+      session.foto_url = seleccionados[0]?.foto_url_local || seleccionados[0]?.foto_url;
+    }
+    
+    // Resumen y preguntar método
+    const resumen = seleccionados.map(p => 
+      `📦 ${p.producto} ${p.talla?'('+p.talla+')':''} - ₡${p.precio.toLocaleString()}`
+    ).join("\n");
+    
+    session.state = "PREGUNTANDO_METODO";
+    
+    await sendTextWithTyping(waId,
+      `¡Perfecto! 🎉 Estos son tus productos:\n\n${resumen}\n\n` +
+      `💰 *Total: ₡${totalProductos.toLocaleString()}*\n\n` +
+      `${frase("pedir_metodo", waId)}`
+    );
+    saveDataToDisk();
+    return;
+  }
 
   if(session.state==="PREGUNTANDO_INTERES"){
     if(lower==="si"||lower==="sí"||lower.includes("quiero")||lower.includes("interesa")){
@@ -1216,6 +1391,39 @@ async function handleIncomingMessage(msg) {
   if(session.state==="CONFIRMANDO_DATOS_ENVIO"){
     if(lower==="1"||lower==="si"||lower==="sí"||lower.includes("bien")||lower.includes("correcto")){
       profile.purchases = (profile.purchases||0) + 1;
+      const precio = session.precio||0;
+      const shipping = session.shipping_cost||0;
+      const total = precio + shipping;
+      
+      // Registrar venta
+      const sale = {
+        id: `V-${Date.now().toString(36).toUpperCase()}`,
+        date: new Date().toISOString(),
+        waId,
+        phone: profile.phone||waId,
+        name: profile.name||"",
+        producto: session.producto,
+        codigo: session.codigo,
+        talla_color: session.talla_color,
+        method: "envio",
+        precio,
+        shipping,
+        total,
+        zone: session.client_zone,
+        envio_datos: session.envio_datos_raw,
+        sinpe_reference: session.sinpe_reference,
+        comprobante_url: session.comprobante_url,
+        foto_url: session.foto_url,
+        status: "pendiente",
+        guia_correos: "",
+        fecha_factura: "",
+        fecha_envio: "",
+        fecha_recibido: ""
+      };
+      salesLog.push(sale);
+      account.metrics.sales_completed = (account.metrics.sales_completed||0) + 1;
+      account.metrics.total_revenue = (account.metrics.total_revenue||0) + total;
+      console.log(`💰 VENTA #${sale.id}: ₡${total.toLocaleString()} - ${session.producto} (envío)`);
       
       await sendTextWithTyping(waId,
         `¡Perfecto! 🎉 Tu pedido está confirmado.\n\n` +
@@ -1224,18 +1432,7 @@ async function handleIncomingMessage(msg) {
         `¡Muchas gracias por tu compra! 🙌\n¡Pura vida! 🐄`
       );
       
-      io.emit("sale_completed",{
-        waId,
-        phone: profile.phone||waId,
-        name: profile.name || "",
-        producto: session.producto,
-        codigo: session.codigo,
-        talla: session.talla_color,
-        method: "envio",
-        envio_datos: session.envio_datos_raw,
-        envio_direccion: session.envio_direccion,
-        total: (session.precio||0) + (session.shipping_cost||0)
-      });
+      io.emit("sale_completed", sale);
       
       resetSession(session);
       saveDataToDisk();
@@ -1479,6 +1676,117 @@ async function executeAction(clientWaId, actionType, data = {}) {
     return { success: true, message: "No hay enviado" };
   }
 
+  // ====== MULTI-PRODUCTO: Dueño marca cuáles hay ======
+  if (actionType === "MULTI_DISPONIBILIDAD") {
+    // data.disponibles = [0, 2, 3] — índices de productos disponibles
+    const disponibles = data.disponibles || [];
+    const precios = data.precios || {}; // { "0": 8500, "2": 12000 } — precios confirmados
+    
+    if(!session.multi_products) return { success: false, message: "No hay lista multi" };
+    
+    // Marcar disponibilidad y actualizar precios
+    for(const mp of session.multi_products) {
+      mp.disponible = disponibles.includes(mp.index);
+      if(precios[String(mp.index)] !== undefined) mp.precio = Number(precios[String(mp.index)]);
+    }
+    
+    const hayDisponibles = session.multi_products.filter(p => p.disponible);
+    const noHay = session.multi_products.filter(p => !p.disponible);
+    
+    pendingQuotes.delete(clientWaId);
+    io.emit("pending_resolved", { waId: clientWaId });
+    
+    if(hayDisponibles.length === 0) {
+      // Ninguno disponible
+      session.state = "PREGUNTANDO_ALGO_MAS";
+      await sendTextWithTyping(clientWaId,
+        `Uy, revisé y por el momento no tenemos disponible ninguno de los que pediste 😔\n\n` +
+        `Te invito a revisar el catálogo por si te gusta algo más:\n${CATALOG_URL}`
+      );
+      saveDataToDisk();
+      return { success: true, message: "Ninguno disponible" };
+    }
+    
+    // Informar los que no hay (si los hubiera)
+    if(noHay.length > 0) {
+      await sendTextWithTyping(clientWaId,
+        `De tu lista, estos no los tenemos disponibles: ${noHay.map(p => p.producto).join(", ")} 😔`
+      );
+    }
+    
+    // Enviar foto individual de CADA producto disponible
+    for(let i = 0; i < hayDisponibles.length; i++) {
+      const p = hayDisponibles[i];
+      const caption = `${i+1}. ${p.producto || 'Producto'}${p.talla ? ' · Talla: ' + p.talla : ''}${p.color ? ' · Color: ' + p.color : ''}\n💰 ₡${(p.precio||0).toLocaleString()}`;
+      
+      let fotoEnviada = false;
+      // Intentar enviar foto local
+      if(p.foto_url_local && !p.foto_url_local.startsWith('data:')) {
+        try {
+          const imgPath = path.join(PERSISTENT_DIR, p.foto_url_local);
+          if(fs.existsSync(imgPath)) {
+            const imgBuffer = fs.readFileSync(imgPath);
+            await sock.sendMessage(clientWaId, { image: imgBuffer, caption });
+            fotoEnviada = true;
+          }
+        } catch(e) { console.log(`⚠️ Error foto multi ${i}: ${e.message}`); }
+      }
+      // Fallback: intentar descargar del catálogo
+      if(!fotoEnviada && p.codigo) {
+        try {
+          const localPath = await descargarImagenCatalogo(p.codigo, clientWaId);
+          if(localPath) {
+            const imgPath = path.join(PERSISTENT_DIR, localPath);
+            if(fs.existsSync(imgPath)) {
+              const imgBuffer = fs.readFileSync(imgPath);
+              await sock.sendMessage(clientWaId, { image: imgBuffer, caption });
+              fotoEnviada = true;
+            }
+          }
+        } catch(e) { console.log(`⚠️ Error descarga foto multi ${i}: ${e.message}`); }
+      }
+      // Último fallback: solo texto
+      if(!fotoEnviada) {
+        await sendTextWithTyping(clientWaId, caption);
+      }
+      
+      // Pequeña pausa entre fotos para no saturar
+      if(i < hayDisponibles.length - 1) await new Promise(r => setTimeout(r, 1500));
+    }
+    
+    if(hayDisponibles.length === 1) {
+      // Solo uno disponible — flujo normal
+      const p = hayDisponibles[0];
+      session.producto = p.producto;
+      session.precio = p.precio;
+      session.codigo = p.codigo;
+      session.talla_color = [p.talla, p.color, p.tamano].filter(Boolean).join(", ");
+      session.foto_url = p.foto_url_local || p.foto_url;
+      session.state = "PREGUNTANDO_INTERES";
+      
+      await sendTextWithTyping(clientWaId,
+        `¡Ese sí lo tenemos! 🎉\n\n¿Te interesa?\n\n1. ✅ Sí, me interesa\n2. ❌ No, gracias\n\nResponde con el número 👆`
+      );
+    } else {
+      // Varios disponibles — cliente elige cuáles comprar
+      session.state = "MULTI_SELECCION_CLIENTE";
+      session.multi_disponibles = hayDisponibles;
+      
+      const totalDisp = hayDisponibles.reduce((s,p) => s + p.precio, 0);
+      
+      await sendTextWithTyping(clientWaId,
+        `¡Buenas noticias! Esos ${hayDisponibles.length} productos sí los tenemos 🎉\n\n` +
+        `💰 Total: ₡${totalDisp.toLocaleString()}\n\n` +
+        `¿Cuáles querés llevar?\n\n` +
+        `• Escribí *"todos"* para llevarlos todos\n` +
+        `• O escribí los números separados por coma (ej: *1,3*)`
+      );
+    }
+    
+    saveDataToDisk();
+    return { success: true, message: `${hayDisponibles.length} disponibles enviados al cliente` };
+  }
+
   if (actionType === "PAGADO") {
     account.metrics.sinpe_confirmed += 1;
     pendingQuotes.delete(clientWaId);
@@ -1498,9 +1806,40 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.state = "PAGO_CONFIRMADO";
       const profile = getProfile(clientWaId);
       profile.purchases = (profile.purchases || 0) + 1;
+      const precio = session.precio||0;
+      const total = precio;
+      
+      // Registrar venta
+      const sale = {
+        id: `V-${Date.now().toString(36).toUpperCase()}`,
+        date: new Date().toISOString(),
+        waId: clientWaId,
+        phone: profile.phone||clientWaId,
+        name: profile.name||"",
+        producto: session.producto,
+        codigo: session.codigo,
+        talla_color: session.talla_color,
+        method: "recoger",
+        precio,
+        shipping: 0,
+        total,
+        sinpe_reference: session.sinpe_reference,
+        comprobante_url: session.comprobante_url,
+        foto_url: session.foto_url,
+        status: "pendiente",
+        guia_correos: "",
+        fecha_factura: "",
+        fecha_envio: "",
+        fecha_recibido: ""
+      };
+      salesLog.push(sale);
+      account.metrics.sales_completed = (account.metrics.sales_completed||0) + 1;
+      account.metrics.total_revenue = (account.metrics.total_revenue||0) + total;
+      console.log(`💰 VENTA #${sale.id}: ₡${total.toLocaleString()} - ${session.producto} (recoger)`);
+      
       let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", HOURS_DAY);
       await sendTextWithTyping(clientWaId, msgFin);
-      io.emit("sale_completed", { waId: clientWaId, phone: profile.phone || clientWaId, name: profile.name || "", producto: session.producto, method: "recoger" });
+      io.emit("sale_completed", sale);
       resetSession(session);
       saveDataToDisk();
       return { success: true, message: "Pago confirmado, retiro en tienda" };
@@ -1568,7 +1907,7 @@ io.on("connection", (socket) => {
           pendingZones.push({waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
         }
       }
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50) });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
@@ -1593,6 +1932,212 @@ app.get("/status", (req, res) => res.json({ connection: connectionStatus, phone:
 app.get("/api/history", (req, res) => {
   const results = searchHistory({ phone: req.query.phone, from: req.query.from, to: req.query.to, text: req.query.text });
   res.json({ count: results.length, messages: results });
+});
+
+app.get("/api/sales", (req, res) => {
+  const { from, to } = req.query;
+  let filtered = salesLog;
+  if(from) filtered = filtered.filter(s => s.date >= from);
+  if(to) filtered = filtered.filter(s => s.date <= to);
+  const totalRevenue = filtered.reduce((sum, s) => sum + (s.total||0), 0);
+  const totalShipping = filtered.reduce((sum, s) => sum + (s.shipping||0), 0);
+  res.json({ 
+    count: filtered.length, 
+    total_revenue: totalRevenue,
+    total_shipping: totalShipping,
+    net_revenue: totalRevenue - totalShipping,
+    sales: filtered.reverse() 
+  });
+});
+
+// ============ ADMIN PANEL ============
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "lavaca2026";
+const USER_PASSWORD = process.env.USER_PASSWORD || "usuario2026";
+
+// Middleware de auth con roles (dueno/usuario)
+function adminAuth(req, res, next) {
+  const pwd = req.query.pwd || req.headers['x-admin-pwd'];
+  // Check password
+  if(pwd === ADMIN_PASSWORD) { req.role = "dueno"; return next(); }
+  if(pwd === USER_PASSWORD) { req.role = "usuario"; return next(); }
+  // Check cookies
+  if(req.headers.cookie) {
+    if(req.headers.cookie.includes(`admin_pwd=${ADMIN_PASSWORD}`)) { req.role = "dueno"; return next(); }
+    if(req.headers.cookie.includes(`admin_pwd=${USER_PASSWORD}`)) { req.role = "usuario"; return next(); }
+  }
+  res.status(401).send(`
+    <html><head><title>Admin - TICObot</title><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0f1117}
+    .login{background:#1a1d27;padding:30px;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,.3);text-align:center;max-width:350px;width:90%;border:1px solid #2a2e3d}
+    h2{margin:0 0 20px;color:#e4e6ef}input{width:100%;padding:12px;border:1px solid #2a2e3d;border-radius:8px;font-size:16px;box-sizing:border-box;margin-bottom:15px;background:#0f1117;color:#e4e6ef}
+    button{width:100%;padding:12px;background:#22c55e;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-weight:bold}
+    button:hover{background:#1da851}.hint{color:#8b8fa3;font-size:12px;margin-top:10px}</style></head>
+    <body><div class="login"><h2>🐄 La Vaca Admin</h2><form method="GET"><input name="pwd" type="password" placeholder="Contraseña" autofocus>
+    <button type="submit">Entrar</button></form></div></body></html>
+  `);
+}
+
+app.get("/admin", adminAuth, (req, res) => {
+  const pwd = req.query.pwd || '';
+  res.setHeader('Set-Cookie', `admin_pwd=${pwd}; Path=/; Max-Age=86400`);
+  res.sendFile(path.join(__dirname, "public", "control.html"));
+});
+
+// API: Obtener rol actual
+app.get("/api/admin/role", adminAuth, (req, res) => {
+  res.json({ role: req.role });
+});
+
+// API: Actualizar venta (guia, fechas, status)
+app.post("/api/admin/sales/update", adminAuth, express.json(), (req, res) => {
+  const { saleId, field, value } = req.body;
+  if(!saleId || !field) return res.status(400).json({ error: "Faltan datos" });
+  
+  const sale = salesLog.find(s => s.id === saleId);
+  if(!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  
+  const allowedFields = ["status", "guia_correos", "fecha_factura", "fecha_envio", "fecha_recibido"];
+  if(!allowedFields.includes(field)) return res.status(400).json({ error: "Campo no permitido" });
+  
+  sale[field] = value;
+  
+  // Auto-actualizar status según fechas
+  if(field === "fecha_recibido" && value) sale.status = "recibido";
+  else if(field === "fecha_envio" && value) sale.status = sale.status !== "recibido" ? "enviado" : sale.status;
+  else if(field === "fecha_factura" && value) sale.status = (!sale.status || sale.status === "pendiente") ? "facturado" : sale.status;
+  
+  saveDataToDisk();
+  console.log(`📝 Venta ${saleId}: ${field} = ${value} (status: ${sale.status})`);
+  res.json({ success: true, sale });
+});
+
+app.get("/api/admin/dashboard", adminAuth, (req, res) => {
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  const weekAgo = new Date(now - 7*24*60*60*1000).toISOString();
+  const monthAgo = new Date(now - 30*24*60*60*1000).toISOString();
+  
+  // Ventas
+  const salesToday = salesLog.filter(s => s.date && s.date.startsWith(today));
+  const salesWeek = salesLog.filter(s => s.date >= weekAgo);
+  const salesMonth = salesLog.filter(s => s.date >= monthAgo);
+  
+  const sumTotal = arr => arr.reduce((s,v) => s + (v.total||0), 0);
+  const sumShipping = arr => arr.reduce((s,v) => s + (v.shipping||0), 0);
+  
+  // Sesiones activas y su estado
+  const activeSessions = [];
+  const abandoned = [];
+  const noFollowUp = [];
+  const noStock = [];
+  
+  const TWO_HOURS = 2*60*60*1000;
+  
+  for(const [wId, s] of sessions.entries()){
+    const profile = profiles.get(wId) || {};
+    const lastActivity = s.last_activity || 0;
+    const age = Date.now() - lastActivity;
+    const info = {
+      waId: wId,
+      phone: profile.phone || wId,
+      name: profile.name || "",
+      state: s.state,
+      producto: s.producto,
+      precio: s.precio,
+      talla: s.talla_color,
+      method: s.delivery_method,
+      last_activity: new Date(lastActivity).toISOString(),
+      age_minutes: Math.round(age/60000)
+    };
+    
+    if(s.state !== "NEW"){
+      activeSessions.push(info);
+      
+      // Abandonados: cliente no respondió en >2h mientras bot esperaba respuesta
+      const clientWaiting = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO","ESPERANDO_SINPE","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+      if(clientWaiting.includes(s.state) && age > TWO_HOURS){
+        abandoned.push(info);
+      }
+      
+      // Sin seguimiento del operador: dueño no respondió
+      const ownerWaiting = ["ESPERANDO_CONFIRMACION_VENDEDOR","ZONA_RECIBIDA","MULTI_ESPERANDO_DISPONIBILIDAD"];
+      if(ownerWaiting.includes(s.state) && age > 30*60*1000){ // >30 min
+        noFollowUp.push(info);
+      }
+    }
+  }
+  
+  // Chats agotados (de pendingQuotes con acción AGOTADO)
+  // Contamos desde métricas
+  
+  // Historial de conversaciones únicas del día
+  const todayMessages = fullHistory.filter(m => m.timestamp && m.timestamp.startsWith(today));
+  const uniqueChatsToday = [...new Set(todayMessages.map(m => m.waId))].length;
+  const weekMessages = fullHistory.filter(m => m.timestamp >= weekAgo);
+  const uniqueChatsWeek = [...new Set(weekMessages.map(m => m.waId))].length;
+  
+  res.json({
+    timestamp: now.toISOString(),
+    connection: connectionStatus,
+    phone: connectedPhone,
+    botPaused,
+    storeOpen: isStoreOpen(),
+    
+    metrics: account.metrics,
+    
+    sales: {
+      today: { count: salesToday.length, revenue: sumTotal(salesToday), shipping: sumShipping(salesToday), net: sumTotal(salesToday) - sumShipping(salesToday) },
+      week: { count: salesWeek.length, revenue: sumTotal(salesWeek), shipping: sumShipping(salesWeek), net: sumTotal(salesWeek) - sumShipping(salesWeek) },
+      month: { count: salesMonth.length, revenue: sumTotal(salesMonth), shipping: sumShipping(salesMonth), net: sumTotal(salesMonth) - sumShipping(salesMonth) },
+      all: { count: salesLog.length, revenue: sumTotal(salesLog), shipping: sumShipping(salesLog), net: sumTotal(salesLog) - sumShipping(salesLog) },
+      recent: salesLog.slice(-20).reverse()
+    },
+    
+    chats: {
+      today: uniqueChatsToday,
+      week: uniqueChatsWeek,
+      active: activeSessions.length,
+      active_list: activeSessions
+    },
+    
+    alerts: {
+      abandoned: abandoned,
+      no_followup: noFollowUp
+    },
+    
+    contacts_total: profiles.size
+  });
+});
+
+app.get("/api/admin/sales", adminAuth, (req, res) => {
+  const { from, to, limit } = req.query;
+  let filtered = [...salesLog];
+  if(from) filtered = filtered.filter(s => s.date >= from);
+  if(to) filtered = filtered.filter(s => s.date <= to);
+  filtered.reverse();
+  if(limit) filtered = filtered.slice(0, parseInt(limit));
+  const totalRevenue = filtered.reduce((s,v) => s + (v.total||0), 0);
+  res.json({ count: filtered.length, revenue: totalRevenue, sales: filtered });
+});
+
+app.get("/api/admin/chats", adminAuth, (req, res) => {
+  const { waId, from, to, limit } = req.query;
+  let filtered = [...fullHistory];
+  if(waId) filtered = filtered.filter(m => m.waId === waId);
+  if(from) filtered = filtered.filter(m => m.timestamp >= from);
+  if(to) filtered = filtered.filter(m => m.timestamp <= to);
+  if(limit) filtered = filtered.slice(-parseInt(limit));
+  
+  // Agrupar por conversación
+  const convos = {};
+  filtered.forEach(m => {
+    if(!convos[m.waId]) convos[m.waId] = { waId: m.waId, phone: m.phone, name: m.name, messages: [], first: m.timestamp, last: m.timestamp };
+    convos[m.waId].messages.push(m);
+    if(m.timestamp > convos[m.waId].last) convos[m.waId].last = m.timestamp;
+  });
+  
+  const convoList = Object.values(convos).sort((a,b) => b.last.localeCompare(a.last));
+  res.json({ count: convoList.length, conversations: convoList.slice(0, parseInt(limit)||50) });
 });
 
 // ============ INICIAR ============
