@@ -951,9 +951,15 @@
           });
           multiHtml += `
               </div>
-              <div class="action-card-buttons">
-                <button class="action-btn primary" onclick="confirmMulti('${p.waId}')">✅ Confirmar disponibilidad</button>
-                <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No hay ninguno</button>
+              <div class="action-card-buttons" style="flex-direction:column;gap:8px;">
+                <div style="display:flex;gap:8px;">
+                  <button class="action-btn primary" onclick="confirmMulti('${p.waId}')">✅ Sí Hay Todos</button>
+                  <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button class="action-btn" style="background:#f59e0b;flex:1;" onclick="confirmMultiParcial('${p.waId}')">⚠️ Solo Hay</button>
+                  <input type="text" id="multiParcial_${p.waId}" placeholder="Ej: 1,3" style="width:80px;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;">
+                </div>
               </div>
             </div>
           `;
@@ -1038,6 +1044,17 @@
 
     function confirmAction(type) {
       if (!currentChat) return;
+      
+      // Mensaje de confirmación según tipo
+      const mensajes = {
+        'SI_HAY': '¿Presionaste SÍ HAY, estás seguro?',
+        'NO_HAY': '¿Presionaste NO HAY, estás seguro?',
+        'PAGADO': '¿Presionaste PAGO CONFIRMADO, estás seguro?',
+        'SINPE_ERROR': '¿Presionaste ERROR COMPROBANTE, estás seguro?'
+      };
+      const msg = mensajes[type] || '¿Estás seguro de esta acción?';
+      if (!confirm(msg)) return;
+      
       stopAlert();
       
       // Deshabilitar TODOS los botones de acción
@@ -1062,6 +1079,8 @@
     }
 
     function confirmMulti(waId) {
+      if (!confirm('¿Presionaste SÍ HAY TODOS, estás seguro?')) return;
+      
       stopAlert();
       // Recoger checkboxes marcados y precios
       const disponibles = [];
@@ -1085,6 +1104,56 @@
         clientWaId: waId, 
         actionType: 'MULTI_DISPONIBILIDAD', 
         payload: { disponibles, precios } 
+      });
+      
+      setTimeout(() => {
+        if (chats[waId]) {
+          chats[waId].pending = null;
+          renderChat();
+          renderChatList();
+        }
+      }, 1000);
+    }
+
+    function confirmMultiParcial(waId) {
+      const input = document.getElementById('multiParcial_' + waId);
+      const nums = input ? input.value.trim() : '';
+      
+      if (!nums) {
+        alert('Escribí los números de productos disponibles (ej: 1,3)');
+        return;
+      }
+      
+      // Parsear números: "1,3" o "1 3" o "1, 3"
+      const indices = nums.split(/[\s,]+/).map(n => parseInt(n.trim()) - 1).filter(n => !isNaN(n) && n >= 0);
+      
+      if (indices.length === 0) {
+        alert('Números inválidos. Usá formato: 1,3 o 1 3');
+        return;
+      }
+      
+      // Mostrar los números originales (1-indexed) en la confirmación
+      const numerosOriginales = indices.map(i => i + 1).join(', ');
+      if (!confirm(`¿Presionaste SOLO HAY #${numerosOriginales}, estás seguro?`)) return;
+      
+      stopAlert();
+      
+      // Recoger precios de los disponibles
+      const precios = {};
+      indices.forEach(idx => {
+        const precioEl = document.getElementById('mpPrecio_' + idx);
+        if (precioEl) precios[String(idx)] = parseInt(precioEl.value) || 0;
+      });
+      
+      // Deshabilitar botones
+      const allBtns = document.querySelectorAll('.action-btn');
+      allBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      event.target.textContent = '⏳ Enviando...';
+      
+      socket.emit('action', { 
+        clientWaId: waId, 
+        actionType: 'MULTI_DISPONIBILIDAD', 
+        payload: { disponibles: indices, precios } 
       });
       
       setTimeout(() => {
