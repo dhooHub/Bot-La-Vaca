@@ -942,7 +942,7 @@
                 <input type="checkbox" id="mp_${i}" data-idx="${i}" checked style="width:20px;height:20px;cursor:pointer;">
                 ${prod.foto_url ? `<img src="${prod.foto_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="viewImage(this.src)" onerror="this.style.display='none'">` : ''}
                 <div style="flex:1;">
-                  <div style="font-weight:600;">${escapeHtml(prod.producto || 'Producto')}</div>
+                  <div style="font-weight:600;">${prod.producto_url ? `<a href="${prod.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(prod.producto || 'Producto')} 🔗</a>` : escapeHtml(prod.producto || 'Producto')}</div>
                   <div style="font-size:0.8rem;color:#666;">${prod.codigo || ''} ${prod.talla ? '· ' + prod.talla : ''} ${prod.color ? '· ' + prod.color : ''}</div>
                 </div>
                 <input type="number" id="mpPrecio_${i}" value="${prod.precio || 0}" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:right;" placeholder="Precio">
