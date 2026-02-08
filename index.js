@@ -848,7 +848,7 @@ async function handleIncomingMessage(msg) {
   // ====== SISTEMA ANTI-RÁFAGA ======
   // Si el cliente envía muchos mensajes seguidos, agrupar y responder una vez
   const now = Date.now();
-  const RAFAGA_WINDOW = 30000; // 30 segundos
+  const RAFAGA_WINDOW = 5000; // 5 segundos
   const RAFAGA_MAX = 3; // máximo 3 mensajes antes de activar
   
   if (!session.rafaga_msgs) session.rafaga_msgs = [];
@@ -873,7 +873,7 @@ async function handleIncomingMessage(msg) {
       });
       
       await sendTextWithTyping(waId, 
-        `¡Un momento! 😊 Estoy leyendo todos tus mensajes para atenderte mejor. Ya te respondo...`
+        `¡Dame un momento! Ya te sigo atendiendo 😊`
       );
       
       // Esperar 5 segundos para acumular más mensajes
