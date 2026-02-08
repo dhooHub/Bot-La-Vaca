@@ -166,9 +166,20 @@ let D=null, role='usuario', period='today', allCh=[], allSales=[];
 function ck(n){const v=document.cookie.match('(^|;) ?'+n+'=([^;]*)(;|$)');return v?v[2]:'';}
 async function api(u){
   const p=ck('admin_pwd')||new URLSearchParams(location.search).get('pwd')||'';
-  const r=await fetch(u+(u.includes('?')?'&':'?')+'pwd='+p);
-  if(r.status===401){location.reload();return null;}
-  return r.json();
+  try {
+    const r=await fetch(u+(u.includes('?')?'&':'?')+'pwd='+p);
+    if(r.status===401){
+      // Redirigir a /admin para pedir contraseña, no reload infinito
+      window.location.href='/admin';
+      return null;
+    }
+    return r.json();
+  } catch(e) {
+    console.error('API error:', e);
+    document.getElementById('sTxt').textContent='Error de conexión';
+    document.getElementById('sDot').className='dot off';
+    return null;
+  }
 }
 async function apiPost(u,body){
   const p=ck('admin_pwd')||new URLSearchParams(location.search).get('pwd')||'';
