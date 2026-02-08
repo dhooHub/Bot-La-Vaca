@@ -578,8 +578,8 @@ function parseWebMessage(text) {
   
   // Construir URL de imagen basada en el código
   if(result.codigo){
-    // ✅ Ruta correcta: /lavaca/img/CODIGO.webp
-    result.foto_url=`${CATALOG_URL}/lavaca/img/${result.codigo}.webp`;
+    // ✅ Ruta correcta: /img/CODIGO.webp
+    result.foto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
     // Generar link al producto si no vino en el mensaje
     if(!result.producto_url){
       result.producto_url=`${CATALOG_URL}/producto.php?id=${result.codigo}`;
@@ -624,7 +624,7 @@ function parseMultiWebMessage(text) {
     const codeMatch = line.match(/Código:\s*(\w+)/i);
     if(codeMatch) { 
       item.codigo = codeMatch[1].trim(); 
-      item.foto_url = `${CATALOG_URL}/lavaca/img/${item.codigo}.webp`; 
+      item.foto_url = `${CATALOG_URL}/img/${item.codigo}.webp`; 
       // Generar link al producto basado en el código
       item.producto_url = `${CATALOG_URL}/producto.php?id=${item.codigo}`;
     }
@@ -1775,10 +1775,17 @@ async function executeAction(clientWaId, actionType, data = {}) {
       return { success: true, message: "Ninguno disponible" };
     }
     
-    // Informar los que no hay (si los hubiera)
-    if(noHay.length > 0) {
+    // Informar los que no hay (si los hubiera) CON LINKS de los que SÍ hay
+    if(noHay.length > 0 && hayDisponibles.length > 0) {
+      // Construir lista de links de productos disponibles
+      const linksDisponibles = hayDisponibles.map((p, i) => 
+        `${i+1}. ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}\n${CATALOG_URL}/producto.php?id=${p.codigo}`
+      ).join("\n\n");
+      
       await sendTextWithTyping(clientWaId,
-        `De tu lista, estos no los tenemos disponibles: ${noHay.map(p => p.producto).join(", ")} 😔`
+        `De tu lista, no tenemos: ${noHay.map(p => p.producto).join(", ")} 😔\n\n` +
+        `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
+        `¿Te interesan? 🙌`
       );
     }
     
