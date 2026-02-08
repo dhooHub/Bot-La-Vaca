@@ -1069,6 +1069,7 @@ async function handleIncomingMessage(msg) {
       created_at: new Date().toISOString()
     };
     pendingQuotes.set(waId, multiQuote);
+    console.log("📤 Emitiendo new_pending_multi:", waId, multiQuote.products?.length, "productos");
     io.emit("new_pending_multi", multiQuote);
     
     // Pushover
