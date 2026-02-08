@@ -604,9 +604,11 @@ function parseWebMessage(text) {
 
 // Parser para mensaje multi-producto desde la web
 function parseMultiWebMessage(text) {
-  if(!text.includes("interesado") || !text.includes("productos:")) return null;
+  // Detectar mensaje multi-producto: buscar "productos:" o "productos:\n"
+  if(!text.includes("interesado") || !text.toLowerCase().includes("productos")) return null;
   
-  // Formato: "1. Nombre - ₡Precio - Código: XXX | Talla: M"
+  // Formato: "1. Nombre - ₡Precio... - Código: XXX | Talla: M"
+  // Las líneas de productos empiezan con número y punto
   const lines = text.split("\n").filter(l => /^\d+\.\s/.test(l.trim()));
   if(lines.length < 2) return null;
   
@@ -629,13 +631,13 @@ function parseMultiWebMessage(text) {
       item.producto_url = `${CATALOG_URL}/producto.php?id=${item.codigo}`;
     }
     
-    const tallaMatch = line.match(/Talla:\s*([^\s|]+)/i);
+    const tallaMatch = line.match(/Talla:\s*([^\s|─]+)/i);
     if(tallaMatch) item.talla = tallaMatch[1].trim();
     
-    const colorMatch = line.match(/Color:\s*([^\s|]+)/i);
+    const colorMatch = line.match(/Color:\s*([^\s|─]+)/i);
     if(colorMatch) item.color = colorMatch[1].trim();
     
-    const tamanoMatch = line.match(/Tamaño:\s*([^\s|]+)/i);
+    const tamanoMatch = line.match(/Tamaño:\s*([^\s|─]+)/i);
     if(tamanoMatch) item.tamano = tamanoMatch[1].trim();
     
     if(item.producto || item.codigo) items.push(item);
