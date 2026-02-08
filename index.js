@@ -89,7 +89,8 @@ function normalizePhone(input) { const d = String(input||"").replace(/[^\d]/g,""
 function toJid(phone) { return normalizePhone(phone)+"@s.whatsapp.net"; }
 function fromJid(jid) { return jid?jid.replace(/@.*/,""):""; }
 function formatPhone(waId) { const d=normalizePhone(waId); if(d.length===11&&d.startsWith("506"))return`${d.slice(0,3)} ${d.slice(3,7)}-${d.slice(7)}`; return waId; }
-function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes()}; }
+function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes(),day:cr.getDay(),date:cr}; }
+function getCostaRicaDayName() { const dias = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"]; return dias[getCostaRicaTime().day]; }
 function isStoreOpen() { const{hour,minute}=getCostaRicaTime(); if(hour<HOURS_START)return false; if(hour>HOURS_END_HOUR)return false; if(hour===HOURS_END_HOUR&&minute>=HOURS_END_MIN)return false; return true; }
 function norm(s="") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
 function getHumanDelay() { return(Math.floor(Math.random()*(DELAY_MAX-DELAY_MIN+1))+DELAY_MIN)*1000; }
@@ -174,7 +175,12 @@ Respondé SOLO con una palabra: RESPUESTA_FLUJO, FAQ, NUEVO_PRODUCTO, o OTRO.`;
 async function askAI(userMessage, conversationHistory = []) {
   if (!OPENAI_API_KEY) return null;
   try {
-    const messages = [{ role: "system", content: STORE_CONTEXT }, ...conversationHistory.slice(-4), { role: "user", content: userMessage }];
+    const diaActual = getCostaRicaDayName();
+    const {hour, minute} = getCostaRicaTime();
+    const horaActual = `${hour}:${minute < 10 ? '0' : ''}${minute}`;
+    const contextoDia = `\n\n📅 INFORMACIÓN ACTUAL:\n- Hoy es ${diaActual}\n- Hora actual: ${horaActual}\n- Si preguntan horario de hoy: ${diaActual === 'domingo' ? 'Domingo abrimos de 10am a 6pm' : 'Lunes a Sábado abrimos de 9am a 7pm'}`;
+    
+    const messages = [{ role: "system", content: STORE_CONTEXT + contextoDia }, ...conversationHistory.slice(-4), { role: "user", content: userMessage }];
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
@@ -467,6 +473,9 @@ async function sendPushoverAlert(tipo, datos) {
     } else if (tipo === "MULTI_PRODUCTO") {
       title = "📋 Lista de productos - Revisar";
       message = `📦 ${datos.producto || "?"}\n👤 ${phoneFormatted}`;
+    } else if (tipo === "RAFAGA") {
+      title = "⚡ Ráfaga de mensajes";
+      message = `👤 ${phoneFormatted}\n📝 ${datos.producto || "Cliente enviando múltiples mensajes"}\n💬 ${datos.talla_color || ""}`;
     }
     
     if (!title) return;
@@ -839,6 +848,53 @@ async function handleIncomingMessage(msg) {
 
   if(profile.blocked)return;
   if(botPaused){console.log("⏸️ Bot pausado");return;}
+
+  // ====== SISTEMA ANTI-RÁFAGA ======
+  // Si el cliente envía muchos mensajes seguidos, agrupar y responder una vez
+  const now = Date.now();
+  const RAFAGA_WINDOW = 30000; // 30 segundos
+  const RAFAGA_MAX = 3; // máximo 3 mensajes antes de activar
+  
+  if (!session.rafaga_msgs) session.rafaga_msgs = [];
+  if (!session.rafaga_notified) session.rafaga_notified = false;
+  
+  // Limpiar mensajes viejos fuera de la ventana
+  session.rafaga_msgs = session.rafaga_msgs.filter(t => (now - t) < RAFAGA_WINDOW);
+  session.rafaga_msgs.push(now);
+  
+  // Si hay ráfaga activa
+  if (session.rafaga_msgs.length >= RAFAGA_MAX) {
+    if (!session.rafaga_notified) {
+      session.rafaga_notified = true;
+      session.rafaga_started = now;
+      
+      // Notificar al dueño
+      const profile = getProfile(waId);
+      sendPushoverAlert("RAFAGA", {
+        phone: profile.phone || waId,
+        producto: `Cliente enviando múltiples mensajes`,
+        talla_color: text.slice(0, 50)
+      });
+      
+      await sendTextWithTyping(waId, 
+        `¡Un momento! 😊 Estoy leyendo todos tus mensajes para atenderte mejor. Ya te respondo...`
+      );
+      
+      // Esperar 5 segundos para acumular más mensajes
+      console.log(`⚡ Ráfaga detectada de ${displayPhone}, esperando...`);
+      return;
+    }
+    
+    // Si ya notificamos y siguen llegando mensajes dentro de 10 segundos, ignorar
+    if (session.rafaga_started && (now - session.rafaga_started) < 10000) {
+      console.log(`⚡ Ráfaga activa, acumulando mensaje de ${displayPhone}`);
+      return;
+    }
+    
+    // Después de 10 segundos, resetear y procesar
+    session.rafaga_notified = false;
+    session.rafaga_msgs = [];
+  }
 
   // FIX 1: Expirar sesiones (2 horas)
   if(session.state!=="NEW"&&(Date.now()-session.last_activity)>SESSION_TIMEOUT){
