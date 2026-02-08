@@ -582,7 +582,7 @@ function parseWebMessage(text) {
     result.foto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
     // Generar link al producto si no vino en el mensaje
     if(!result.producto_url){
-      result.producto_url=`${CATALOG_URL}/producto.php?id=${result.codigo}`;
+      result.producto_url=`${CATALOG_URL}/img/${result.codigo}.webp`;
     }
   }
   
@@ -628,7 +628,7 @@ function parseMultiWebMessage(text) {
       item.codigo = codeMatch[1].trim(); 
       item.foto_url = `${CATALOG_URL}/img/${item.codigo}.webp`; 
       // Generar link al producto basado en el código
-      item.producto_url = `${CATALOG_URL}/producto.php?id=${item.codigo}`;
+      item.producto_url = `${CATALOG_URL}/img/${item.codigo}.webp`;
     }
     
     const tallaMatch = line.match(/Talla:\s*([^\s|─]+)/i);
@@ -1781,7 +1781,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
     if(noHay.length > 0 && hayDisponibles.length > 0) {
       // Construir lista de links de productos disponibles
       const linksDisponibles = hayDisponibles.map((p, i) => 
-        `${i+1}. ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}\n${CATALOG_URL}/producto.php?id=${p.codigo}`
+        `${i+1}. ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}\n${CATALOG_URL}/img/${p.codigo}.webp`
       ).join("\n\n");
       
       await sendTextWithTyping(clientWaId,
