@@ -30,11 +30,31 @@ const server = http.createServer(app);
 const io = new Server(server);
 const logger = pino({ level: "silent" });
 
-app.use(express.static(path.join(__dirname, "public")));
+// Servir archivos estáticos con headers anti-caché para HTML
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      });
+    }
+  }
+}));
 
 // Panel operador en raíz - redirigir con cache buster
 app.get("/", (req, res) => {
   const version = Date.now();
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  });
   res.redirect(`/panel.html?v=${version}`);
 });
 app.use(express.json());
