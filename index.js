@@ -32,9 +32,10 @@ const logger = pino({ level: "silent" });
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// Panel operador en raíz
+// Panel operador en raíz - redirigir con cache buster
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "panel.html"));
+  const version = Date.now();
+  res.redirect(`/panel.html?v=${version}`);
 });
 app.use(express.json());
 
