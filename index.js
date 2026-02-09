@@ -46,8 +46,13 @@ app.use(express.static(path.join(__dirname, "public"), {
   }
 }));
 
-// Panel operador en raíz - servir directo sin redirect
+// Panel operador en raíz - redirigir a /p
 app.get("/", (req, res) => {
+  res.redirect("/p");
+});
+
+// Panel en ruta nueva (sin caché de Render)
+app.get("/p", (req, res) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     'Pragma': 'no-cache',
