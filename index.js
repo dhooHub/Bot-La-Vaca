@@ -46,16 +46,15 @@ app.use(express.static(path.join(__dirname, "public"), {
   }
 }));
 
-// Panel operador en raíz - redirigir con cache buster
+// Panel operador en raíz - servir directo sin redirect
 app.get("/", (req, res) => {
-  const version = Date.now();
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
     'Surrogate-Control': 'no-store'
   });
-  res.redirect(`/panel.html?v=${version}`);
+  res.sendFile(path.join(__dirname, "public", "panel.html"));
 });
 app.use(express.json());
 
