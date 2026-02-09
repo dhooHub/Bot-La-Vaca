@@ -1879,7 +1879,10 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ Si pregunta por productos específicos o catálogo → enviar catálogo
-  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower)){
+  // PERO si pregunta por ofertas, tipos (dama, caballero, niño), o categorías específicas → dejar que IA responda
+  const preguntaEspecifica = /oferta|descuento|rebaja|promo|dama|caballero|hombre|mujer|niñ|nin|blusa|vestido|jean|pantalon/i.test(lower);
+  
+  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower) && !preguntaEspecifica){
     if(!session.saludo_enviado){session.saludo_enviado=true;}
     session.catalogo_enviado=true;saveDataToDisk();
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
