@@ -237,6 +237,9 @@ INFORMACIÓN DE LA TIENDA:
 EN TIENDA FÍSICA vendemos: ropa para damas, caballeros y niños, uniformes escolares, fajas, bolsos para dama, y más.
 EN CATÁLOGO ONLINE (www.lavacacr.com) solo vendemos: ROPA PARA DAMAS.
 
+Si preguntan "¿solo eso tienen?", "¿eso es todo?", "¿no hay más?", "¿solo esas opciones?" o similar:
+- Respondé: "De momento para venta en línea sí, pero podés visitar la tienda en Heredia centro (200m sur de Correos de CR) donde tenemos mucha más variedad 🙌"
+
 Si preguntan por productos que NO son ropa de damas (uniformes, ropa de niños, ropa de hombre, fajas, etc.):
 - Decí que esos productos los manejamos EN TIENDA
 - Invitá a visitar la tienda física donde pueden ver toda la variedad
