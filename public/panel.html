@@ -298,7 +298,11 @@
   </audio>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script>
+<script>
+// Anti-caché: recargar si es versión vieja
+if (!location.search.includes('v=')) {
+  location.replace(location.pathname + '?v=' + Date.now());
+}
     // ===== GLOBALS =====
     let socket, currentChat = null, shipClient = null;
     let allSales = [];
