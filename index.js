@@ -254,12 +254,12 @@ INFORMACIÓN DE LA TIENDA:
 - Ubicación: Heredia centro, 200m sur de Correos de CR
 - Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
 - Teléfono: 2237-3335
-- WhatsApp: +506 6483-6565
+- WhatsApp: +506 6326 2291
 - Catálogo online: www.lavacacr.com
 
 ⚠️ MUY IMPORTANTE - DIFERENCIA TIENDA vs CATÁLOGO:
-EN TIENDA FÍSICA vendemos: ropa para damas, caballeros y niños, uniformes escolares, fajas, bolsos para dama, y más.
-EN CATÁLOGO ONLINE (www.lavacacr.com) solo vendemos: ROPA PARA DAMAS.
+EN TIENDA FÍSICA vendemos: ropa para damas(mujer-mujeres), caballeros (hombres-hombre)  y niños, uniformes escolares, fajas, bolsos para dama, y más.
+EN CATÁLOGO ONLINE (www.lavacacr.com) solo vendemos: ROPA PARA DAMAS O MUJER O MUJERES.
 
 Si preguntan "¿solo eso tienen?", "¿eso es todo?", "¿no hay más?", "¿solo esas opciones?" o similar:
 - Respondé: "De momento para venta en línea sí, pero podés visitar la tienda en Heredia centro (200m sur de Correos de CR) donde tenemos mucha más variedad 🙌"
