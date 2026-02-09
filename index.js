@@ -100,6 +100,129 @@ function extractPrice(text) { const match=String(text).match(/₡?\s*([\d\s,\.]+
 
 // ============ INTELIGENCIA ARTIFICIAL ============
 
+// ============ CATÁLOGO DINÁMICO ============
+let catalogProducts = [];
+let lastCatalogLoad = 0;
+
+async function loadCatalog() {
+  // Recargar máximo cada 5 minutos
+  if (Date.now() - lastCatalogLoad < 5 * 60 * 1000 && catalogProducts.length > 0) {
+    return catalogProducts;
+  }
+  
+  try {
+    const response = await fetch(`${CATALOG_URL}/products.js?v=${Date.now()}`);
+    if (!response.ok) throw new Error("No se pudo cargar");
+    const text = await response.text();
+    
+    // Extraer el array PRODUCTOS del archivo JS
+    const match = text.match(/const\s+PRODUCTOS\s*=\s*\[([\s\S]*?)\];/);
+    if (!match) throw new Error("Formato inválido");
+    
+    // Parsear el array
+    const arrayContent = `[${match[1]}]`;
+    const productos = eval(arrayContent);
+    
+    catalogProducts = productos.map(p => ({
+      codigo: p[0],
+      nombre: p[1],
+      precio: p[2],
+      descuento: p[3] || 0,
+      categoria: p[5] || "",
+      tallas: p[6] || "",
+      agotado: p[9] || 0
+    }));
+    
+    lastCatalogLoad = Date.now();
+    console.log(`📦 Catálogo cargado: ${catalogProducts.length} productos`);
+    return catalogProducts;
+  } catch (error) {
+    console.log("⚠️ Error cargando catálogo:", error.message);
+    return catalogProducts; // Devolver caché si falla
+  }
+}
+
+function searchCatalog(query) {
+  const lower = query.toLowerCase();
+  const keywords = {
+    dama: ["dama", "damas", "mujer", "mujeres", "femenino", "femenina"],
+    caballero: ["caballero", "caballeros", "hombre", "hombres", "masculino"],
+    nino: ["niño", "niños", "nino", "ninos", "infantil", "chiquito"],
+    nina: ["niña", "niñas", "nina", "ninas"]
+  };
+  
+  // Detectar qué tipo busca
+  let tipoBuscado = null;
+  for (const [tipo, words] of Object.entries(keywords)) {
+    if (words.some(w => lower.includes(w))) {
+      tipoBuscado = tipo;
+      break;
+    }
+  }
+  
+  // Detectar si busca ofertas/descuentos
+  const buscaOfertas = /oferta|descuento|rebaja|promocion|promo|barato/i.test(lower);
+  
+  // Detectar categoría específica
+  const categorias = ["blusa", "vestido", "jean", "pantalon", "falda", "short", "top", "camisa"];
+  let categoriaBuscada = categorias.find(c => lower.includes(c));
+  
+  let resultados = catalogProducts.filter(p => !p.agotado);
+  
+  // Filtrar por tipo (dama, caballero, etc.) buscando en el nombre
+  if (tipoBuscado) {
+    const palabrasTipo = keywords[tipoBuscado];
+    resultados = resultados.filter(p => 
+      palabrasTipo.some(w => p.nombre.toLowerCase().includes(w))
+    );
+  }
+  
+  // Filtrar por categoría
+  if (categoriaBuscada) {
+    resultados = resultados.filter(p => 
+      p.nombre.toLowerCase().includes(categoriaBuscada) || 
+      p.categoria.toLowerCase().includes(categoriaBuscada)
+    );
+  }
+  
+  // Filtrar por ofertas
+  if (buscaOfertas) {
+    resultados = resultados.filter(p => p.descuento > 0);
+  }
+  
+  return {
+    encontrados: resultados,
+    tipoBuscado,
+    categoriaBuscada,
+    buscaOfertas,
+    totalCatalogo: catalogProducts.length
+  };
+}
+
+function getCatalogSummary() {
+  if (catalogProducts.length === 0) return "";
+  
+  const conDescuento = catalogProducts.filter(p => p.descuento > 0 && !p.agotado);
+  const disponibles = catalogProducts.filter(p => !p.agotado);
+  
+  // Agrupar por categoría
+  const categorias = {};
+  disponibles.forEach(p => {
+    const cat = p.categoria || "otros";
+    if (!categorias[cat]) categorias[cat] = 0;
+    categorias[cat]++;
+  });
+  
+  let summary = `\n\n📦 CATÁLOGO ACTUAL (${disponibles.length} productos disponibles):\n`;
+  summary += `- Categorías: ${Object.keys(categorias).join(", ")}\n`;
+  if (conDescuento.length > 0) {
+    const maxDesc = Math.max(...conDescuento.map(p => p.descuento));
+    summary += `- ¡Hay ${conDescuento.length} productos con descuento! (hasta ${maxDesc}% OFF)\n`;
+  }
+  
+  return summary;
+}
+
 const STORE_CONTEXT = `Sos el asistente virtual de La Vaca CR, una tienda de ropa y accesorios ubicada en Heredia, Costa Rica.
 
 INFORMACIÓN DE LA TIENDA:
@@ -181,7 +304,50 @@ async function askAI(userMessage, conversationHistory = []) {
     const horaActual = `${hour}:${minute < 10 ? '0' : ''}${minute}`;
     const contextoDia = `\n\n📅 INFORMACIÓN ACTUAL:\n- Hoy es ${diaActual}\n- Hora actual: ${horaActual}\n- Si preguntan horario de hoy: ${diaActual === 'domingo' ? 'Domingo abrimos de 10am a 6pm' : 'Lunes a Sábado abrimos de 9am a 7pm'}`;
     
-    const messages = [{ role: "system", content: STORE_CONTEXT + contextoDia }, ...conversationHistory.slice(-4), { role: "user", content: userMessage }];
+    // Cargar catálogo y buscar si es relevante
+    await loadCatalog();
+    let contextoCatalogo = "";
+    
+    // Detectar si pregunta por productos, ofertas o categorías
+    const preguntaCatalogo = /tienen|hay|ofrec|venden|busco|quiero|necesito|oferta|descuento|rebaja|promo|dama|caballero|hombre|mujer|niñ|nin|blusa|vestido|jean|pantalon|falda|ropa/i.test(userMessage);
+    
+    if (preguntaCatalogo && catalogProducts.length > 0) {
+      const busqueda = searchCatalog(userMessage);
+      
+      if (busqueda.encontrados.length > 0) {
+        // Hay productos que coinciden
+        const ejemplos = busqueda.encontrados.slice(0, 3).map(p => 
+          `${p.nombre}${p.descuento > 0 ? ` (${p.descuento}% OFF)` : ''}`
+        ).join(", ");
+        
+        contextoCatalogo = `\n\n🔍 BÚSQUEDA EN CATÁLOGO:\n`;
+        contextoCatalogo += `- Se encontraron ${busqueda.encontrados.length} productos que coinciden\n`;
+        contextoCatalogo += `- Ejemplos: ${ejemplos}\n`;
+        contextoCatalogo += `- Decile que revise el catálogo en www.lavacacr.com donde puede ver esos productos\n`;
+        
+        if (busqueda.buscaOfertas) {
+          const maxDesc = Math.max(...busqueda.encontrados.map(p => p.descuento));
+          contextoCatalogo += `- ¡Hay ofertas! Hasta ${maxDesc}% de descuento\n`;
+        }
+      } else if (busqueda.tipoBuscado && busqueda.tipoBuscado !== 'dama') {
+        // Busca algo que no es para dama (niños, caballeros, etc.)
+        contextoCatalogo = `\n\n🔍 BÚSQUEDA EN CATÁLOGO:\n`;
+        contextoCatalogo += `- El cliente busca productos para ${busqueda.tipoBuscado}\n`;
+        contextoCatalogo += `- En el catálogo online NO hay productos para ${busqueda.tipoBuscado}\n`;
+        contextoCatalogo += `- Decile que eso lo manejamos EN LA TIENDA FÍSICA en Heredia centro, 200m sur de Correos de CR\n`;
+        contextoCatalogo += `- Invitalo a visitarnos donde puede ver toda la variedad\n`;
+      } else if (busqueda.buscaOfertas) {
+        const conDescuento = catalogProducts.filter(p => p.descuento > 0 && !p.agotado);
+        if (conDescuento.length > 0) {
+          const maxDesc = Math.max(...conDescuento.map(p => p.descuento));
+          contextoCatalogo = `\n\n🔍 OFERTAS EN CATÁLOGO:\n`;
+          contextoCatalogo += `- ¡Sí hay ofertas! ${conDescuento.length} productos con descuento (hasta ${maxDesc}% OFF)\n`;
+          contextoCatalogo += `- Decile que revise el catálogo en www.lavacacr.com para ver las ofertas\n`;
+        }
+      }
+    }
+    
+    const messages = [{ role: "system", content: STORE_CONTEXT + contextoDia + contextoCatalogo }, ...conversationHistory.slice(-4), { role: "user", content: userMessage }];
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
@@ -2273,11 +2439,15 @@ app.get("/api/admin/chats", adminAuth, (req, res) => {
 });
 
 // ============ INICIAR ============
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   // Asegurar que /data existe
   if (!fs.existsSync(PERSISTENT_DIR)) { try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) { console.log("⚠️ No se pudo crear /data:", e.message); } }
   loadDataFromDisk();
   loadHistory();
+  
+  // Cargar catálogo inicial
+  await loadCatalog();
+  
   console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║  🐄 TICO-bot - La Vaca CR                         ║
@@ -2285,6 +2455,7 @@ server.listen(PORT, () => {
 ║  🕒 Horario: ${HOURS_DAY.padEnd(36)}║
 ║  ⏱️ Delay: ${(DELAY_MIN + "-" + DELAY_MAX + " seg").padEnd(37)}║
 ║  🌐 Catálogo: ${CATALOG_URL.slice(0,33).padEnd(34)}║
+║  📦 Productos: ${String(catalogProducts.length).padEnd(33)}║
 ║  📱 Panel: http://localhost:${PORT}/                  ║
 ║  🧠 IA: Clasificador + FAQ + Conversacional       ║
 ╚═══════════════════════════════════════════════════╝
