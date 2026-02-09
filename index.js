@@ -43,8 +43,8 @@ const PANEL_PIN = process.env.PANEL_PIN || "1234";
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const HOURS_START = 9;
-const HOURS_END_HOUR = 18;
-const HOURS_END_MIN = 50;
+const HOURS_END_HOUR = 23;
+const HOURS_END_MIN = 59;
 const HOURS_DAY = "9am - 6:50pm";
 const DELAY_MIN = 5;
 const DELAY_MAX = 20;
@@ -1167,8 +1167,8 @@ async function handleIncomingMessage(msg) {
     }
   }
 
-  // ✅ Detectar preguntas sobre envío en cualquier estado de venta activa
-  const ESTADOS_VENTA_ACTIVA = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+  // ✅ Detectar preguntas sobre envío en cualquier estado de venta activa (excepto cuando ya están dando datos)
+  const ESTADOS_VENTA_ACTIVA = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO"];
   const regexPreguntaEnvio = /(?:hac[eé]n?\s*env[ií]o|costo\s*(?:de[l]?\s*)?env[ií]o|cu[áa]nto\s*(?:cuesta|sale|cobra|es)\s*(?:el\s*)?env[ií]o|env[ií]an?\s*a\s+\w|mandan?\s*a\s+\w|llega\s*a\s+\w|env[ií]os?\s*a\s+\w)/i;
   
   if(ESTADOS_VENTA_ACTIVA.includes(session.state) && regexPreguntaEnvio.test(text)){
@@ -1210,6 +1210,38 @@ async function handleIncomingMessage(msg) {
   // ====== MULTI: Esperando a que dueño confirme disponibilidad ======
   if(session.state==="MULTI_ESPERANDO_DISPONIBILIDAD"){
     await sendTextWithTyping(waId, "Estoy revisando tu lista, un momento 🙌");
+    return;
+  }
+
+  // ====== PARCIAL: Cliente decide si quiere los productos disponibles ======
+  if(session.state==="PREGUNTANDO_INTERES_PARCIAL"){
+    const tieneSi = lower.includes("1") || lower.includes("si") || lower.includes("sí") || lower.includes("interesa") || lower.includes("quiero");
+    const tieneNo = lower.includes("2") || lower.includes("no");
+    
+    if(tieneSi){
+      const disp = session.multi_disponibles || [];
+      if(disp.length === 1){
+        // Un solo producto disponible - flujo normal
+        session.state = "PREGUNTANDO_METODO";
+        await sendTextWithTyping(waId, `¡Perfecto! 🎉\n\n${frase("pedir_metodo", waId)}`);
+      } else {
+        // Varios productos - preguntar cuáles
+        session.state = "MULTI_SELECCION_CLIENTE";
+        const lista = disp.map((p,i) => `${i+1}. ${p.producto} - ₡${(p.precio||0).toLocaleString()}`).join("\n");
+        const total = disp.reduce((s,p) => s + (p.precio||0), 0);
+        await sendTextWithTyping(waId,
+          `¡Perfecto! 🎉\n\n¿Cuáles querés llevar?\n\n${lista}\n\n💰 Total: ₡${total.toLocaleString()}\n\n` +
+          `• Escribí *"todos"* para llevarlos todos\n` +
+          `• O escribí los números separados por coma (ej: *1,2*)`
+        );
+      }
+    } else if(tieneNo){
+      session.state = "PREGUNTANDO_ALGO_MAS";
+      await sendTextWithTyping(waId, `No hay problema 😊 ¿Te puedo ayudar con algo más?\n\n${CATALOG_URL}`);
+    } else {
+      await sendTextWithTyping(waId, `¿Te interesa?\n\n1. ✅ Sí, me interesa\n2. ❌ No, gracias\n\nRespondé con el número 👆`);
+    }
+    saveDataToDisk();
     return;
   }
 
@@ -1416,6 +1448,7 @@ async function handleIncomingMessage(msg) {
 
   // POST-PAGO: Datos de envío - aceptar lo que sea, el dueño revisa
   if(session.state==="ESPERANDO_DATOS_ENVIO"){
+    console.log(`📦 ESPERANDO_DATOS_ENVIO detectado, texto: "${text.substring(0,50)}..."`);
     if(text.trim().length < 3){
       await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*");
       return;
@@ -1782,14 +1815,34 @@ async function executeAction(clientWaId, actionType, data = {}) {
     if(noHay.length > 0 && hayDisponibles.length > 0) {
       // Construir lista de links de productos disponibles
       const linksDisponibles = hayDisponibles.map((p, i) => 
-        `${i+1}. ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}\n${CATALOG_URL}/img/${p.codigo}.webp`
+        `✅ ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}\n${CATALOG_URL}/img/${p.codigo}.webp`
       ).join("\n\n");
       
+      const noHayNombres = noHay.map(p => p.producto).join(", ");
+      
+      // Guardar producto disponible para el flujo
+      if(hayDisponibles.length === 1) {
+        const p = hayDisponibles[0];
+        session.producto = p.producto;
+        session.precio = p.precio;
+        session.codigo = p.codigo;
+        session.talla_color = [p.talla, p.color, p.tamano].filter(Boolean).join(", ");
+        session.foto_url = p.foto_url_local || p.foto_url;
+      }
+      session.multi_disponibles = hayDisponibles;
+      session.state = "PREGUNTANDO_INTERES_PARCIAL";
+      
       await sendTextWithTyping(clientWaId,
-        `De tu lista, no tenemos: ${noHay.map(p => p.producto).join(", ")} 😔\n\n` +
+        `No tenemos ${noHayNombres} 😔\n\n` +
         `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
-        `¿Te interesan? 🙌`
+        `¿Te interesa?\n\n` +
+        `1. ✅ Sí, me interesa\n` +
+        `2. ❌ No, gracias\n\n` +
+        `Respondé con el número 👆`
       );
+      
+      saveDataToDisk();
+      return { success: true, message: "Parcial con opciones" };
     }
     
     // Enviar foto individual de CADA producto disponible
