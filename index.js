@@ -1555,6 +1555,24 @@ async function handleIncomingMessage(msg) {
   if(numResp==="1")text="si"; if(numResp==="2")text="no";
   const lower=norm(text);
 
+  
+  // ✅ Detectar solicitud de APARTAR/SEPARAR producto (sin pagar)
+  const ESTADOS_POST_EXISTENCIA = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "PRECIO_TOTAL_ENVIADO"];
+  const pideApartar = /\b(apart|separ|guard|reserv).*\b(mientras|llego|voy|rato|ratito|momento)|\b(me lo|lo)\s*(apartan?|separan?|guardan?|reservan?)|apartame|separame|guardame|reservame|mientras llego|ya voy para alla|ya voy para allá/i;
+  
+  if (ESTADOS_POST_EXISTENCIA.includes(session.state) && pideApartar.test(lower)) {
+    await sendTextWithTyping(waId,
+      `Lamentablemente no te lo puedo separar 😔\n\n` +
+      `Pero si gustás te ofrezco estas opciones:\n` +
+      `1. 💳 Pagás por SINPE y lo retirás en tienda\n` +
+      `2. 📦 Pagás por SINPE y te lo enviamos\n\n` +
+      `¿Cuál preferís?`
+    );
+    session.state = "PREGUNTANDO_METODO";
+    saveDataToDisk();
+    return;
+  }
+
   // ✅ Detectar CANCELACIÓN de compra durante el flujo (ANTES de la IA)
   const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
   const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
