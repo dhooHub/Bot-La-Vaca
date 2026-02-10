@@ -884,6 +884,9 @@ async function sendPushoverAlert(tipo, datos) {
     } else if (tipo === "RAFAGA") {
       title = "⚡ Ráfaga de mensajes";
       message = `👤 ${phoneFormatted}\n📝 ${datos.producto || "Cliente enviando múltiples mensajes"}\n💬 ${datos.talla_color || ""}`;
+    } else if (tipo === "FUERA_LOGICA") {
+      title = "⚠️ NECESITA ATENCIÓN";
+      message = `👤 ${datos.name || phoneFormatted}\n💬 "${datos.mensaje || "?"}"\n📍 Estado: ${datos.estado || "?"}\n\n🤖 El bot no supo qué responder`;
     }
     
     if (!title) return;
@@ -1746,8 +1749,47 @@ async function handleIncomingMessage(msg) {
       if(classification==="OTRO"){
         const aiResp=await askAI(text);
         const recordatorio=FRASES.recordatorio_flujo[session.state]||"";
-        if(aiResp){await sendTextWithTyping(waId,`${aiResp}${recordatorio?`\n\n${recordatorio}`:""}`);}
-        else{await sendTextWithTyping(waId,recordatorio||frase("espera_vendedor",waId));}
+        
+        // Validar que la respuesta de la IA sea coherente y no invente tonterías
+        const respuestaInvalida = !aiResp || 
+          aiResp.length < 10 || 
+          /no tengo información|no puedo ayudar|no sé|no estoy seguro|como modelo de lenguaje|como asistente|como IA/i.test(aiResp) ||
+          !/tienda|producto|catálogo|ropa|vaca|envío|sinpe|precio|dama|visita|whatsapp|horario|heredia/i.test(aiResp.toLowerCase());
+        
+        // Si la IA no pudo responder o respondió algo incoherente → ESCALAR AL DUEÑO
+        if(respuestaInvalida){
+          await sendTextWithTyping(waId,
+            "Disculpá, eso no te lo puedo responder en este momento 😅\n\n" +
+            "Dame un momento que voy a consultar y te respondo pronto 🙌"
+          );
+          
+          // Notificar al dueño via Pushover
+          const profile = profiles.get(waId) || {};
+          sendPushoverAlert("FUERA_LOGICA", {
+            waId,
+            phone: profile.phone || waId,
+            name: profile.name || "",
+            mensaje: text,
+            estado: session.state
+          });
+          
+          // También crear pending quote para que aparezca en panel
+          pendingQuotes.set(waId, {
+            waId,
+            phone: profile.phone || waId,
+            name: profile.name || "",
+            producto: `❓ Consulta: ${text.slice(0,50)}...`,
+            timestamp: Date.now()
+          });
+          emitPendingQuotes();
+          
+          session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+          saveDataToDisk();
+          return;
+        }
+        
+        // Si la IA respondió algo coherente, enviar su respuesta
+        await sendTextWithTyping(waId,`${aiResp}${recordatorio?`\n\n${recordatorio}`:""}`);
         return;
       }
       // RESPUESTA_FLUJO → continuar normalmente
