@@ -450,7 +450,7 @@ const FRASES = {
   no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo. ¿Querés ver algo más? 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 ¿Te interesa ver algo similar en el catálogo? 🙌"],
   pedir_zona: ["¿Me podés decir de qué provincia y cantón nos escribís? 📍","Para calcular el envío, ¿de qué provincia y cantón sos? 📍","¿Me decís tu provincia y cantón? 📍","¿De qué provincia y cantón te lo enviaríamos? 📍"],
   pedir_metodo: ["¿Querés que te lo enviemos o preferís recogerlo en tienda? 📦🏪\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆","¿Cómo lo preferís? 🙌\n\n1. 📦 Envío a tu casa\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆"],
-  nocturno: ["¡Hola! 🌙 Ya cerramos por hoy. Mañana a las 9am te atiendo con gusto 😊","Pura vida 🌙 Estamos fuera de horario. Te respondo mañana temprano 🙌","¡Buenas noches! 🌙 Nuestro horario es de 9am a 6:50pm. Mañana te ayudo 😊","Hola 🌙 Ya cerramos. Dejame tu consulta y mañana te confirmo 🙌"],
+  nocturno: ["¡Hola! De momento estamos fuera de servicio.\n\nNuestro horario de atención es de 9am a 7pm de lunes a sábado y de 10am a 6pm domingos."],
   gracias: ["¡Gracias a vos! 🙌","¡Con mucho gusto! 😊","¡Pura vida! 🙌","¡Gracias por la confianza! 💪","¡Tuanis! 🙌","¡Para servirte! 😊"],
   espera_zona: ["¡Anotado! 📝 Dame un momento para calcular el envío 🙌","Perfecto 📝 Ya reviso cuánto sale a tu zona 😊","Listo 📝 Dejame calcular el envío 🙌"],
   espera_vendedor: ["Ya estoy revisando, un momento 🙌","Dame chance, estoy verificando 😊","Un momento, ya te confirmo 🙌"],
@@ -1417,6 +1417,22 @@ async function handleIncomingMessage(msg) {
   if(numResp==="1")text="si"; if(numResp==="2")text="no";
   const lower=norm(text);
 
+  // ✅ Detectar CANCELACIÓN de compra durante el flujo (ANTES de la IA)
+  const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
+  const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
+  
+  if(ESTADOS_VENTA_CANCEL.includes(session.state) && pideCancelar.test(lower)){
+    await sendTextWithTyping(waId,
+      `Lamentamos que canceles tu compra 😔\n\n` +
+      `Igualmente estamos para servirte cuando gustés. ¡Pura vida! 🙌`
+    );
+    pendingQuotes.delete(waId);
+    io.emit("pending_resolved", { waId });
+    resetSession(session);
+    saveDataToDisk();
+    return;
+  }
+
   // ============ IA: Detectar interrupciones en medio del flujo ============
   // ⚠️ NO clasificar si estamos esperando SINPE (imagen o texto de pago deben ir directo al handler)
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"&&session.state!=="ESPERANDO_SINPE"){
@@ -1475,22 +1491,6 @@ async function handleIncomingMessage(msg) {
     }
     
     await sendTextWithTyping(waId, respEnvio);
-    saveDataToDisk();
-    return;
-  }
-
-  // ✅ Detectar CANCELACIÓN de compra durante el flujo
-  const ESTADOS_VENTA = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
-  const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
-  
-  if(ESTADOS_VENTA.includes(session.state) && pideCancelar.test(lower)){
-    await sendTextWithTyping(waId,
-      `Lamentamos que canceles tu compra 😔\n\n` +
-      `Igualmente estamos para servirte cuando gustés. ¡Pura vida! 🙌`
-    );
-    pendingQuotes.delete(waId);
-    io.emit("pending_resolved", { waId });
-    resetSession(session);
     saveDataToDisk();
     return;
   }
@@ -2649,6 +2649,7 @@ server.listen(PORT, async () => {
   // Asegurar que /data existe
   if (!fs.existsSync(PERSISTENT_DIR)) { try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) { console.log("⚠️ No se pudo crear /data:", e.message); } }
   loadDataFromDisk();
+  loadCrmData();
   loadHistory();
   
   // Cargar catálogo inicial
