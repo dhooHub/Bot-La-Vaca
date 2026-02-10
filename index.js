@@ -254,7 +254,7 @@ INFORMACIÓN DE LA TIENDA:
 - Ubicación: Heredia centro, 200m sur de Correos de CR
 - Horario: Lunes a Sábado 9am-7pm, Domingo 10am-6pm
 - Teléfono: 2237-3335
-- WhatsApp: +506 6326 2291
+- WhatsApp: Este mismo chat (no dar otro número, ya están escribiendo aquí)
 - Catálogo online: www.lavacacr.com
 
 ⚠️ MUY IMPORTANTE - CÓMO RESPONDER CONSULTAS DE PRODUCTOS:
@@ -287,6 +287,7 @@ LO QUE SÍ PODÉS RESPONDER:
 - Cambios: 8 días con factura y sin usar. No se hacen devoluciones de dinero.
 - Garantía: 30 días contra defectos de fábrica
 - Métodos de pago: SINPE Móvil y efectivo en tienda (NO tarjetas)
+- IMPORTANTE: Cuando el cliente necesite contacto humano (objetos perdidos, reclamos, consultas especiales), SOLO recomendar llamar al teléfono 2237-3335. NUNCA decir "escríbenos por WhatsApp" porque YA están escribiendo por WhatsApp.
 - Si preguntan por SINPE o formas de pago SIN tener pedido activo, responder: "¡Claro! Para ventas en línea aceptamos SINPE Móvil al ${SINPE_NUMBER} a nombre de ${SINPE_NAME}. En la tienda podés pagar efectivo, tarjeta y también SINPE. ¡Te esperamos con gusto! 😊"
 - Si preguntan por MAYOREO, VENTAS AL POR MAYOR, o si somos MAYORISTAS: "No vendemos al por mayor, solo al detalle 🙌 Te invitamos a visitarnos en nuestra tienda en Heredia centro, 200m sur de Correos de CR" o visitar nuestro catalogo en linea www.lavacacr.com
 - ENVÍOS: Sí hacemos envíos a todo el país con Correos de Costa Rica:
@@ -441,7 +442,7 @@ const FRASES = {
   catalogo: ["Te paso el catálogo con los productos disponibles para venta en línea. Si te gusta algo, le das click al botón 'Me interesa' 🙌","Aquí te dejo los productos disponibles para venta en línea. Si ves algo que te guste, dale al botón 'Me interesa' 😊","Te comparto el catálogo de venta en línea. Si algo te llama la atención, tocá 'Me interesa' 🙌"],
   pedir_talla: ["¿Qué talla, tamaño o color lo necesitás? 👕","¿En qué talla y color lo ocupás? 😊","¿Qué talla/color te gustaría? 👗","¿Me decís la talla y el color que buscás? 🙌"],
   si_hay: ["¡Sí lo tenemos disponible! 🎉","¡Qué dicha, sí hay! 🙌","¡Perfecto, lo tenemos! 😊","¡Sí está disponible! 🎉","¡Claro que sí, hay en stock! 🙌"],
-  te_interesa: ["¿Te interesa adquirir la prenda? 😊","¿Querés llevártelo? 🙌","¿Lo querés? 😊","¿Te gustaría comprarlo? 🙌"],
+  te_interesa: ["¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo"],
   confirmacion: ["¡Buenísimo! 🙌","¡Perfecto! 🎉","¡Excelente! 👍","¡Genial! 🙌","¡Dale! 😊","¡Qué bien! 🎉","¡Tuanis! 🙌","¡Listo! 👍"],
   no_quiere: ["¡Con gusto! 🙌 ¿Te puedo ayudar con algo más?","¡Está bien! 🙌 ¿Hay algo más en que te pueda ayudar?","No hay problema 👍 ¿Ocupás algo más?","Dale 🙌 ¿Te ayudo con alguna otra cosa?"],
   despedida: ["¡Pura vida! 🙌 Cualquier cosa aquí estamos. ¡Que te vaya bien!","¡Con gusto! 😊 Cuando ocupés, nos escribís. ¡Pura vida!","¡Dale! 🙌 Aquí estamos para cuando gustés. ¡Buena vibra!","¡Perfecto! 😊 Si necesitás algo en el futuro, con gusto te ayudamos. ¡Pura vida!"],
@@ -461,7 +462,7 @@ const FRASES = {
     ESPERANDO_DETALLES_FOTO: "Y sobre la foto que me mandaste, ¿qué talla, color o tamaño te interesa? 👕",
     ESPERANDO_TALLA: "Y sobre tu producto, ¿me decís la talla y color? 👕",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
-    PREGUNTANDO_INTERES: "Y sobre el producto, ¿te interesa adquirirlo? 😊\n\n1. ✅ Sí\n2. ❌ No",
+    PREGUNTANDO_INTERES: "¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo",
     ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
     ESPERANDO_UBICACION_ENVIO: "Y sobre tu envío, escribí tu *Provincia - Cantón - Distrito* 📍",
@@ -1590,7 +1591,7 @@ async function handleIncomingMessage(msg) {
     if(lower==="si"||lower==="sí"||lower.includes("acuerdo")||lower.includes("dale")){
       const price=session.precio||0; const shipping=session.delivery_method==="envio"?(session.shipping_cost||0):0; const total=price+shipping;
       session.sinpe_reference=waId.slice(-4)+Date.now().toString(36).slice(-4).toUpperCase();
-      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n💰 Total: ₡${total.toLocaleString()}\n\nPara completar tu compra, hacé el SINPE:\n\n📱 SINPE: ${SINPE_NUMBER}\n👤 A nombre de: ${SINPE_NAME}\n📝 En referencia escribí tu nombre\n\nCuando pagues, mandame el comprobante 🧾📸`);
+      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n💰 Total: ₡${total.toLocaleString()}\n\nPara completar tu compra, hacé el SINPE:\n\n📱 SINPE: ${SINPE_NUMBER}\n👤 A nombre de: ${SINPE_NAME}\n📝 En referencia escribí tu nombre\n\nEn cuanto me mandés el comprobante te confirmo y dejamos tu paquete listo 📦✨`);
       session.state="ESPERANDO_SINPE";
       io.emit("sale_pending",{waId,phone:profile.phone||waId,name:profile.name||"",total,reference:session.sinpe_reference,method:session.delivery_method,producto:session.producto,talla:session.talla_color});
       saveDataToDisk();return;
@@ -1824,17 +1825,44 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // ✅ Productos que definitivamente NO vendemos (zapatos) → Respuesta directa
-  const productosNoVendemos = /zapato|zapatos|tenis|zapatilla|zapatillas|calzado|sandalia|sandalias|tacones|botas/i;
-  if(productosNoVendemos.test(lower)){
+  // ✅ Detectar solicitud de CAMBIO de prenda
+  const pideCambio = /(?:necesito|quiero|puedo|como|cómo).*(?:hacer|realizar).*cambio|cambiar.*prenda|cambio.*producto|devolver|devolución|devolucion/i;
+  if(pideCambio.test(lower)){
     session.saludo_enviado = true;
     saveDataToDisk();
     const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
-      `${saludo}No vendemos zapatos, solamente ropa para damas, caballeros y niños 👕\n\n` +
-      `Nos podés visitar en:\n📍 ${STORE_ADDRESS}\n\n` +
-      `Por ahora vendemos en línea por WhatsApp ropa para damas que podés revisar acá:\n🛍️ ${CATALOG_URL}`
+      `${saludo}¡Claro! Para cambios debés presentarte a nuestra tienda 🏪\n\n` +
+      `📍 ${STORE_ADDRESS}\n\n` +
+      `📋 Requisitos:\n` +
+      `• Llevar la prenda que querés cambiar\n` +
+      `• Presentar la factura de compra (indispensable)\n` +
+      `• Tenés 30 días a partir de la fecha de factura\n\n` +
+      `¡Te esperamos! 😊`
     );
+    return;
+  }
+
+  // ✅ Productos que definitivamente NO vendemos (zapatos) → Respuesta directa
+  const productosNoVendemos = /zapato|zapatos|tenis|zapatilla|zapatillas|calzado|sandalia|sandalias|tacones|botas|cortina|cortinas|sabana|sabanas|sábana|sábanas|cobija|cobijas|edredon|edredón|almohada|almohadas|ropa de cama|adorno|adornos|cristal|cristalería|cristaleria|mueble|muebles|hogar|decoracion|decoración/i;
+  if(productosNoVendemos.test(lower)){
+    session.saludo_enviado = true;
+    saveDataToDisk();
+    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+    // Detectar si es producto de hogar
+    const esHogar = /cortina|sabana|sábana|cobija|edredon|edredón|almohada|ropa de cama|adorno|cristal|mueble|hogar|decoracion|decoración/i.test(lower);
+    if(esHogar){
+      await sendTextWithTyping(waId,
+        `${saludo}No vendemos productos para el hogar, solamente ropa 👕\n\n` +
+        `Te invito a revisar nuestro catálogo:\n🛍️ ${CATALOG_URL}`
+      );
+    } else {
+      await sendTextWithTyping(waId,
+        `${saludo}No vendemos zapatos, solamente ropa para damas, caballeros y niños 👕\n\n` +
+        `Nos podés visitar en:\n📍 ${STORE_ADDRESS}\n\n` +
+        `Por ahora vendemos en línea por WhatsApp ropa para damas que podés revisar acá:\n🛍️ ${CATALOG_URL}`
+      );
+    }
     return;
   }
 
@@ -1959,7 +1987,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
     account.metrics.quotes_sent += 1;
     const price = session.precio || 0;
     await sendTextWithTyping(clientWaId,
-      `${frase("si_hay", clientWaId)}\n\n📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 ₡${price.toLocaleString()}\n\n${frase("te_interesa", clientWaId)}\n\n1. ✅ Sí, me interesa\n2. ❌ No, gracias\n\nResponde con el número 👆`
+      `${frase("si_hay", clientWaId)}\n\n📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 ₡${price.toLocaleString()}\n\n¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
     );
     saveDataToDisk();
     io.emit("pending_resolved", { waId: clientWaId });
@@ -1973,7 +2001,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const price = session.precio || 0;
     const total = price + shipping;
     await sendTextWithTyping(clientWaId,
-      `📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 Producto: ₡${price.toLocaleString()}\n🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n━━━━━━━━━━━━━━\n💵 *Total: ₡${total.toLocaleString()}*\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`
+      `📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 Producto: ₡${price.toLocaleString()}\n🚚 Envío (${session.client_zone || 'tu zona'}): ₡${shipping.toLocaleString()}\n━━━━━━━━━━━━━━\n💵 *Total: ₡${total.toLocaleString()}* 🚚\n\n¿Te lo dejamos listo para envío hoy mismo?\n\n1. ✅ ¡Sí, lo quiero!\n2. ❌ No, gracias\n\nResponde con el número 👆`
     );
     saveDataToDisk();
     return { success: true, message: `Envío ₡${shipping.toLocaleString()} enviado` };
@@ -2104,7 +2132,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.state = "PREGUNTANDO_INTERES";
       
       await sendTextWithTyping(clientWaId,
-        `¡Ese sí lo tenemos! 🎉\n\n¿Te interesa?\n\n1. ✅ Sí, me interesa\n2. ❌ No, gracias\n\nResponde con el número 👆`
+        `¡Ese sí lo tenemos! 🎉\n\n¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
       );
     } else {
       // Varios disponibles — cliente elige cuáles comprar
@@ -2133,7 +2161,7 @@ async function executeAction(clientWaId, actionType, data = {}) {
     if (session.delivery_method === "envio") {
       session.state = "ESPERANDO_DATOS_ENVIO";
       await sendTextWithTyping(clientWaId,
-        `¡Pago confirmado! 🎉 ¡Muchas gracias!\n\n` +
+        `¡Pago confirmado! 🙌 Ahora dejamos todo listo para enviarlo mañana.\n\n` +
         `Ahora necesito tus datos para enviarte el paquete 📦\n\n` +
         `Ocupo:\n` +
         `*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*\n\n` +
