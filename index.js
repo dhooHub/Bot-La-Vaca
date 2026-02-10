@@ -26,6 +26,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// CORS para permitir peticiones desde lavacacr.com
+app.use((req, res, next) => {
+  const allowedOrigins = ['https://lavacacr.com', 'https://www.lavacacr.com', 'http://localhost:3000'];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Pwd');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 const server = http.createServer(app);
 const io = new Server(server);
 const logger = pino({ level: "silent" });
@@ -75,7 +91,7 @@ const DELAY_MIN = 5;
 const DELAY_MAX = 20;
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
-const STORE_ADDRESS = process.env.STORE_ADDRESS || "";
+const STORE_ADDRESS = process.env.STORE_ADDRESS || "Heredia centro, 100 mts sur de la esquina del Testy";
 const MAPS_URL = process.env.MAPS_URL || "";
 const SINPE_NUMBER = process.env.SINPE_NUMBER || "";
 const SINPE_NAME = process.env.SINPE_NAME || "";
@@ -104,6 +120,54 @@ const profiles = new Map();
 const pendingQuotes = new Map();
 let salesLog = []; // Registro de ventas completadas
 let crmClients = new Map(); // Mini CRM - Clientes con historial de compras
+let categoriasActivas = new Set(); // Categorías con showIndex: 1 (tienen productos)
+
+// Cargar categorías activas desde lavacacr.com
+async function loadCategoriasActivas() {
+  try {
+    const response = await fetch('https://lavacacr.com/categories.json');
+    const categories = await response.json();
+    categoriasActivas.clear();
+    categories.forEach(cat => {
+      if (cat.showIndex === 1) {
+        categoriasActivas.add(cat.id.toLowerCase());
+      }
+    });
+    console.log("📂 Categorías activas:", Array.from(categoriasActivas).join(", ") || "ninguna");
+  } catch(e) {
+    console.log("⚠️ Error cargando categorías:", e.message);
+    // Por defecto asumir solo damas
+    categoriasActivas.add("damas");
+  }
+}
+
+// Verificar si una categoría está activa
+function categoriaActiva(tipo) {
+  const mapeo = {
+    caballero: "caballeros",
+    caballeros: "caballeros",
+    hombre: "caballeros",
+    hombres: "caballeros",
+    masculino: "caballeros",
+    nino: "ninos",
+    ninos: "ninos",
+    niño: "ninos",
+    niños: "ninos",
+    nina: "ninos",
+    niña: "ninos",
+    infantil: "ninos",
+    escolar: "escolar",
+    accesorio: "accesorios",
+    accesorios: "accesorios",
+    dama: "damas",
+    damas: "damas",
+    mujer: "damas",
+    mujeres: "damas",
+    femenino: "damas"
+  };
+  const catId = mapeo[tipo.toLowerCase()] || tipo.toLowerCase();
+  return categoriasActivas.has(catId);
+}
 let chatHistory = [];
 const MAX_CHAT_HISTORY = 500;
 const account = { metrics: { chats_total:0, quotes_sent:0, intent_yes:0, intent_no:0, delivery_envio:0, delivery_recoger:0, sinpe_confirmed:0, sales_completed:0, total_revenue:0, estados_sent:0, mensajes_enviados:0, ia_calls:0 } };
@@ -127,6 +191,7 @@ function extractPrice(text) { const match=String(text).match(/₡?\s*([\d\s,\.]+
 
 // ============ CATÁLOGO DINÁMICO ============
 let catalogProducts = [];
+
 let lastCatalogLoad = 0;
 
 async function loadCatalog() {
@@ -166,6 +231,8 @@ async function loadCatalog() {
     return catalogProducts; // Devolver caché si falla
   }
 }
+
+
 
 function searchCatalog(query) {
   const lower = query.toLowerCase();
@@ -1027,7 +1094,7 @@ async function connectWhatsApp() {
   });
 }
 
-async function processQueue(){if(isProcessingQueue||messageQueue.length===0)return;isProcessingQueue=true;while(messageQueue.length>0){const msg=messageQueue.shift();try{await handleIncomingMessage(msg);}catch(e){console.log("❌ Error:",e.message);}}isProcessingQueue=false;}
+async function processQueue(){if(isProcessingQueue||messageQueue.length===0)return;isProcessingQueue=true;while(messageQueue.length>0){const msg=messageQueue.shift();try{await handleIncomingMessageWithDebounce(msg);}catch(e){console.log("❌ Error:",e.message);}}isProcessingQueue=false;}
 
 async function sendTextWithTyping(waId, text) {
   if(!sock||connectionStatus!=="connected")return false;
@@ -1052,6 +1119,77 @@ async function postStatus(imageBuffer,caption=""){if(!sock||connectionStatus!=="
 async function postStatusText(text){if(!sock||connectionStatus!=="connected")return{success:false,message:"No conectado"};try{await sock.sendMessage("status@broadcast",{text});account.metrics.estados_sent+=1;saveDataToDisk();return{success:true,message:"Estado publicado"};}catch(e){return{success:false,message:e.message};}}
 
 // ============ HANDLER MENSAJES (CON IA CLASIFICADORA) ============
+// ============ DEBOUNCE PARA RÁFAGAS ============
+const messageBuffer = new Map(); // waId -> {messages: [], timer: null, processing: false}
+const DEBOUNCE_MS = 2000; // Esperar 2 segundos después del último mensaje
+
+async function handleIncomingMessageWithDebounce(msg) {
+  // Extraer waId del mensaje para el buffer
+  const remoteJid = msg.key.remoteJid;
+  const isLid = remoteJid?.endsWith("@lid");
+  const lidId = isLid ? fromJid(remoteJid) : null;
+  const senderPn = msg.key.senderPn || msg.key.senderPnAlt || null;
+  let waId;
+  
+  if (senderPn) {
+    waId = fromJid(senderPn);
+  } else if (isLid && lidPhoneMap.has(lidId)) {
+    waId = lidPhoneMap.get(lidId);
+  } else if (isLid) {
+    waId = lidId;
+  } else {
+    waId = fromJid(remoteJid);
+  }
+  
+  // Inicializar buffer si no existe
+  if (!messageBuffer.has(waId)) {
+    messageBuffer.set(waId, { messages: [], timer: null, processing: false });
+  }
+  const buffer = messageBuffer.get(waId);
+  
+  // Si ya estamos procesando, agregar a cola
+  if (buffer.processing) {
+    buffer.messages.push(msg);
+    return;
+  }
+  
+  // Agregar mensaje al buffer
+  buffer.messages.push(msg);
+  
+  // Cancelar timer anterior
+  if (buffer.timer) {
+    clearTimeout(buffer.timer);
+  }
+  
+  // Nuevo timer
+  buffer.timer = setTimeout(async () => {
+    buffer.processing = true;
+    
+    // Procesar solo el ÚLTIMO mensaje (el más reciente/completo)
+    const msgs = buffer.messages;
+    const lastMsg = msgs[msgs.length - 1];
+    
+    // Limpiar buffer
+    buffer.messages = [];
+    buffer.timer = null;
+    
+    try {
+      await handleIncomingMessage(lastMsg);
+    } catch(e) {
+      console.error("❌ Error procesando mensaje:", e.message);
+    }
+    
+    buffer.processing = false;
+    
+    // Si llegaron más mensajes mientras procesábamos, procesar el último
+    if (buffer.messages.length > 0) {
+      const nextMsg = buffer.messages.pop();
+      buffer.messages = [];
+      setTimeout(() => handleIncomingMessageWithDebounce(nextMsg), 100);
+    }
+  }, DEBOUNCE_MS);
+}
+
 async function handleIncomingMessage(msg) {
   const remoteJid=msg.key.remoteJid; const isLid=remoteJid?.endsWith("@lid"); const lidId=isLid?fromJid(remoteJid):null;
   const senderPn=msg.key.senderPn||msg.key.senderPnAlt||null; const pushName=msg.pushName||"";
@@ -1991,16 +2129,28 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  // ✅ Productos que manejamos en tienda física (ropa caballeros/niños - NO uniformes)
-  const productosEnTiendaFisica = /niño|niña|niños|niñas|hombre|caballero|masculino|ropa de hombre|ropa masculina|pantalon de hombre|camisa de hombre/i;
-  if(productosEnTiendaFisica.test(lower)){
+  // ✅ Detectar si preguntan por categoría INACTIVA (verificar dinámicamente)
+  const detectaCaballero = /\b(hombre|hombres|caballero|caballeros|masculino)\b/i;
+  const detectaNino = /niño|niña|niños|niñas|infantil|ropa de niño|ropa infantil/i;
+  const detectaEscolar = /escolar|uniforme escolar/i;
+  
+  let categoriaInactiva = null;
+  if (detectaCaballero.test(lower) && !categoriaActiva("caballeros")) {
+    categoriaInactiva = "caballeros";
+  } else if (detectaNino.test(lower) && !categoriaActiva("ninos")) {
+    categoriaInactiva = "niños";
+  } else if (detectaEscolar.test(lower) && !categoriaActiva("escolar")) {
+    categoriaInactiva = "escolar";
+  }
+  
+  if (categoriaInactiva) {
     session.saludo_enviado = true;
+    resetSession(session);
     saveDataToDisk();
     
-    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
     await sendTextWithTyping(waId,
-      `${saludo}Esos productos los manejamos en nuestra tienda física 🏪\n\n` +
-      `Te invitamos a visitarnos:\n📍 ${STORE_ADDRESS}\n\n` +
+      `Por este medio de momento no te ofrezco ropa de ${categoriaInactiva}, sin embargo en tienda sí tenemos toda la variedad.\n\n` +
+      `¡Podés visitarnos! 📍 ${STORE_ADDRESS}\n\n` +
       `¡Con gusto te atendemos! 😊`
     );
     return;
@@ -2650,11 +2800,12 @@ server.listen(PORT, async () => {
   if (!fs.existsSync(PERSISTENT_DIR)) { try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) { console.log("⚠️ No se pudo crear /data:", e.message); } }
   loadDataFromDisk();
   loadCrmData();
+  loadCategoriasActivas();
   loadHistory();
   
-  // Cargar catálogo inicial
+  // Cargar catálogo y categorías activas
   await loadCatalog();
-  
+    
   console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║  🐄 TICO-bot - La Vaca CR                         ║
