@@ -858,15 +858,18 @@ if (!location.search.includes('v=')) {
     $('searchInput').oninput = renderChatList;
 
     // ===== OPEN/RENDER CHAT =====
-    function openChat(waId) {
-      currentChat = waId;
-      renderChatList();
-      renderChat();
-      
-      // Mobile: show chat area
-      $('sidebar').classList.add('hidden');
-      $('chatArea').classList.add('active');
-      $('chatArea').classList.remove('empty');
+   function openChat(waId) {
+  currentChat = waId;
+  renderChatList();
+  renderChat();
+  
+  // Mobile: show chat area
+  $('sidebar').classList.add('hidden');
+  $('chatArea').classList.add('active');
+  $('chatArea').classList.remove('empty');
+
+  // Agregar al historial para que el botón atrás funcione
+  history.pushState({ chat: waId }, '', '');
       
       // Scroll al fondo después del layout change
       setTimeout(() => {
@@ -1332,9 +1335,15 @@ if (!location.search.includes('v=')) {
           setTimeout(() => socket.emit('auth', pin), 500);
         }
       }
-      
-      // Forzar actualización
+    // Forzar actualización
       forceUpdate();
+    });
+
+    // ===== MANEJAR BOTÓN ATRÁS DEL NAVEGADOR =====
+    window.addEventListener('popstate', (e) => {
+      if (currentChat) {
+        closeChat();
+      }
     });
   </script>
 </body>
