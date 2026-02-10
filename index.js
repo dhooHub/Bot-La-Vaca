@@ -234,6 +234,66 @@ async function loadCatalog() {
 
 
 
+
+// ============ BUSCAR PRECIOS EN CATÁLOGO POR TIPO DE PRODUCTO ============
+function buscarPreciosPorTipo(query) {
+  const lower = query.toLowerCase();
+  
+  // Mapeo de palabras a categorías del catálogo
+  const mapeoCategoria = {
+    'jean': 'jeans', 'jeans': 'jeans',
+    'blusa': 'blusas', 'blusas': 'blusas',
+    'vestido': 'vestidos', 'vestidos': 'vestidos',
+    'falda': 'faldas', 'faldas': 'faldas',
+    'pantalon': 'pantalones', 'pantalones': 'pantalones',
+    'short': 'shorts', 'shorts': 'shorts',
+    'chaqueta': 'chaquetas', 'chaquetas': 'chaquetas',
+    'sueter': 'chaquetas', 'sweater': 'chaquetas', 'saco': 'chaquetas',
+    'accesorio': 'accesorios', 'accesorios': 'accesorios'
+  };
+  
+  // Buscar qué categoría menciona
+  let categoriaId = null;
+  let categoriaDisplay = null;
+  for (const [palabra, catId] of Object.entries(mapeoCategoria)) {
+    if (lower.includes(palabra)) {
+      categoriaId = catId;
+      categoriaDisplay = palabra.endsWith('s') ? palabra : palabra + 's';
+      break;
+    }
+  }
+  
+  if (!categoriaId) return null;
+  
+  // Buscar productos de esa categoría en el catálogo
+  const productos = catalogProducts.filter(p => 
+    p.categoria && p.categoria.toLowerCase().includes(categoriaId) && !p.agotado
+  );
+  
+  if (productos.length === 0) return { categoria: categoriaId, display: categoriaDisplay, encontrados: 0 };
+  
+  // Calcular precios (con descuento aplicado)
+  const precios = productos.map(p => {
+    if (p.descuento > 0) {
+      return Math.round(p.precio * (1 - p.descuento / 100));
+    }
+    return p.precio;
+  });
+  
+  const minPrecio = Math.min(...precios);
+  const maxPrecio = Math.max(...precios);
+  
+  return {
+    categoria: categoriaId,
+    display: categoriaDisplay,
+    encontrados: productos.length,
+    minPrecio,
+    maxPrecio,
+    productos
+  };
+}
+
+
 function searchCatalog(query) {
   const lower = query.toLowerCase();
   const keywords = {
@@ -1572,6 +1632,79 @@ async function handleIncomingMessage(msg) {
     saveDataToDisk();
     return;
   }
+
+  
+  // ✅ Detectar preguntas por PRECIO de tipo de producto (sin foto)
+  const preguntaPrecio = /(?:qu[ée]|cu[aá]l|cu[aá]nto|precio|valen?|cuestan?|cuesta).*(?:jean|blusa|vestido|falda|pantalon|short|chaqueta|sueter|sweater|saco|accesorio)/i;
+  const preguntaPrecio2 = /(?:jean|blusa|vestido|falda|pantalon|short|chaqueta|sueter|sweater|saco|accesorio).*(?:qu[ée]|precio|valen?|cuestan?)/i;
+  
+  if ((preguntaPrecio.test(lower) || preguntaPrecio2.test(lower)) && session.state === "NEW") {
+    const resultado = buscarPreciosPorTipo(text);
+    
+    if (resultado) {
+      session.ultimaCategoriaBuscada = resultado.categoria;
+      session.saludo_enviado = true;
+      saveDataToDisk();
+      
+      if (resultado.encontrados === 0) {
+        // No hay productos de esa categoría - verificar si es categoría inactiva
+        if (!categoriaActiva("damas")) {
+          await sendTextWithTyping(waId,
+            `Por este medio de momento no te ofrezco ${resultado.display}, sin embargo en tienda sí tenemos toda la variedad.\n\n` +
+            `¡Podés visitarnos! 📍 ${STORE_ADDRESS}\n` +
+            `¡Con gusto te atendemos! 😊`
+          );
+        } else {
+          await sendTextWithTyping(waId,
+            `De momento no tenemos ${resultado.display} disponibles en el catálogo online 😔\n\n` +
+            `Pero en tienda tenemos más variedad. ¡Visitanos!\n📍 ${STORE_ADDRESS}`
+          );
+        }
+        return;
+      }
+      
+      if (resultado.encontrados === 1) {
+        // Solo 1 producto - dar precio exacto
+        const p = resultado.productos[0];
+        const precioFinal = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
+        const descuentoText = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
+        await sendTextWithTyping(waId,
+          `Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕\n\n` +
+          `¿Te interesa?\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
+        );
+        session.state = "PREGUNTANDO_INTERES";
+        session.producto = p.nombre;
+        session.precio = precioFinal;
+        session.productoFoto = p.codigo;
+      } else {
+        // Múltiples productos - dar rango de precios
+        await sendTextWithTyping(waId,
+          `Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 👕\n\n` +
+          `Para que tengas una mejor idea, revisá la sección:\n🛍️ ${CATALOG_URL}/catalogo.html?cat=${resultado.categoria}`
+        );
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+      }
+      saveDataToDisk();
+      return;
+    }
+  }
+  
+  // ✅ Detectar "esos son todos" después de mostrar catálogo
+  const preguntaSonTodos = /(?:esos|esas|estos|estas)\s*(?:son|nomas|nomás|nada mas|nada más)?\s*(?:todos|todas|todo|lo que hay|lo que tienen|tienen)/i;
+  const preguntaHayMas = /(?:hay|tienen|no hay)\s*(?:mas|más|otros?|otras?)/i;
+  
+  if ((preguntaSonTodos.test(lower) || preguntaHayMas.test(lower)) && (session.state === "ESPERANDO_RESPUESTA_CATALOGO" || session.ultimaCategoriaBuscada)) {
+    await sendTextWithTyping(waId,
+      `En el catálogo online tenemos esos, pero en tienda hay más variedad 😊\n\n` +
+      `¡Podés visitarnos!\n📍 ${STORE_ADDRESS}\n` +
+      `¡Con gusto te atendemos! 🙌`
+    );
+    session.ultimaCategoriaBuscada = null;
+    session.state = "NEW";
+    saveDataToDisk();
+    return;
+  }
+
 
   // ✅ Detectar CANCELACIÓN de compra durante el flujo (ANTES de la IA)
   const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
