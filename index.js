@@ -103,6 +103,7 @@ const sessions = new Map();
 const profiles = new Map();
 const pendingQuotes = new Map();
 let salesLog = []; // Registro de ventas completadas
+let crmClients = new Map(); // Mini CRM - Clientes con historial de compras
 let chatHistory = [];
 const MAX_CHAT_HISTORY = 500;
 const account = { metrics: { chats_total:0, quotes_sent:0, intent_yes:0, intent_no:0, delivery_envio:0, delivery_recoger:0, sinpe_confirmed:0, sales_completed:0, total_revenue:0, estados_sent:0, mensajes_enviados:0, ia_calls:0 } };
@@ -517,6 +518,80 @@ function resetSession(session) {
 }
 
 function getProfile(waId) { const id=normalizePhone(waId); if(!profiles.has(id))profiles.set(id,{waId:id,name:"",blocked:false,purchases:0,created_at:new Date().toISOString()}); return profiles.get(id); }
+
+// ============ MINI CRM ============
+function getCrmClient(waId) {
+  const id = normalizePhone(waId);
+  if (!crmClients.has(id)) {
+    crmClients.set(id, {
+      waId: id,
+      phone: "",
+      name: "",
+      firstPurchase: null,
+      lastPurchase: null,
+      purchaseCount: 0,
+      totalSpent: 0,
+      purchases: [], // {date, producto, monto}
+      type: "nuevo" // nuevo, primera, repetido, frecuente
+    });
+  }
+  return crmClients.get(id);
+}
+
+function updateCrmClient(waId, saleData) {
+  const client = getCrmClient(waId);
+  const profile = getProfile(waId);
+  
+  // Actualizar datos básicos
+  client.phone = profile.phone || waId;
+  client.name = profile.name || "";
+  
+  // Registrar compra
+  const purchase = {
+    date: new Date().toISOString(),
+    producto: saleData.producto || "Producto",
+    monto: saleData.total || 0
+  };
+  client.purchases.push(purchase);
+  
+  // Actualizar estadísticas
+  if (!client.firstPurchase) client.firstPurchase = purchase.date;
+  client.lastPurchase = purchase.date;
+  client.purchaseCount += 1;
+  client.totalSpent += purchase.monto;
+  
+  // Clasificar cliente
+  if (client.purchaseCount === 1) {
+    client.type = "primera";
+  } else if (client.purchaseCount === 2) {
+    client.type = "repetido";
+  } else {
+    client.type = "frecuente";
+  }
+  
+  console.log(`📊 CRM: ${client.name || client.phone} → ${client.type} (${client.purchaseCount} compras, ₡${client.totalSpent.toLocaleString()})`);
+  saveCrmData();
+  return client;
+}
+
+function saveCrmData() {
+  try {
+    const crmFile = path.join(DATA_FOLDER, "crm_clients.json");
+    fs.writeFileSync(crmFile, JSON.stringify(Array.from(crmClients.values()), null, 2));
+  } catch(e) { console.log("⚠️ Error guardando CRM:", e.message); }
+}
+
+function loadCrmData() {
+  try {
+    const crmFile = path.join(DATA_FOLDER, "crm_clients.json");
+    if (fs.existsSync(crmFile)) {
+      const data = JSON.parse(fs.readFileSync(crmFile, "utf-8"));
+      data.forEach(c => crmClients.set(c.waId, c));
+      console.log(`📊 CRM cargado: ${crmClients.size} clientes`);
+    }
+  } catch(e) { console.log("⚠️ Error cargando CRM:", e.message); }
+}
+
 
 function addToChatHistory(waId, direction, text, imageBase64=null) {
   const profile=getProfile(waId);
@@ -1735,6 +1810,9 @@ async function handleIncomingMessage(msg) {
       account.metrics.total_revenue = (account.metrics.total_revenue||0) + total;
       console.log(`💰 VENTA #${sale.id}: ₡${total.toLocaleString()} - ${session.producto} (envío)`);
       
+      // Mini CRM: Registrar cliente
+      updateCrmClient(waId, sale);
+      
       await sendTextWithTyping(waId,
         `¡Perfecto! 🎉 Tu pedido está confirmado.\n\n` +
         `🚚 Te llega en aproximadamente 8 días hábiles.\n\n` +
@@ -2204,6 +2282,9 @@ async function executeAction(clientWaId, actionType, data = {}) {
       account.metrics.total_revenue = (account.metrics.total_revenue||0) + total;
       console.log(`💰 VENTA #${sale.id}: ₡${total.toLocaleString()} - ${session.producto} (recoger)`);
       
+      // Mini CRM: Registrar cliente
+      updateCrmClient(clientWaId, sale);
+      
       let msgFin = frase("fin_retiro", clientWaId).replace("{address}", STORE_ADDRESS).replace("{hours}", HOURS_DAY);
       await sendTextWithTyping(clientWaId, msgFin);
       io.emit("sale_completed", sale);
@@ -2274,7 +2355,7 @@ io.on("connection", (socket) => {
           pendingZones.push({waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
         }
       }
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50) });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()) });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
@@ -2315,6 +2396,46 @@ app.get("/api/sales", (req, res) => {
     net_revenue: totalRevenue - totalShipping,
     sales: filtered.reverse() 
   });
+});
+
+
+
+// ============ API CRM ============
+app.get("/api/crm/clients", adminAuth, (req, res) => {
+  const { type, days } = req.query;
+  let clients = Array.from(crmClients.values());
+  
+  // Filtrar por tipo
+  if (type && type !== "todos") {
+    clients = clients.filter(c => c.type === type);
+  }
+  
+  // Filtrar por días sin comprar
+  if (days) {
+    const cutoff = Date.now() - (parseInt(days) * 24 * 60 * 60 * 1000);
+    clients = clients.filter(c => new Date(c.lastPurchase).getTime() < cutoff);
+  }
+  
+  // Ordenar por última compra (más reciente primero)
+  clients.sort((a, b) => new Date(b.lastPurchase) - new Date(a.lastPurchase));
+  
+  res.json({
+    total: clients.length,
+    clients: clients
+  });
+});
+
+app.get("/api/crm/stats", adminAuth, (req, res) => {
+  const clients = Array.from(crmClients.values());
+  const stats = {
+    total: clients.length,
+    primera: clients.filter(c => c.type === "primera").length,
+    repetido: clients.filter(c => c.type === "repetido").length,
+    frecuente: clients.filter(c => c.type === "frecuente").length,
+    totalRevenue: clients.reduce((sum, c) => sum + c.totalSpent, 0),
+    avgPurchases: clients.length > 0 ? (clients.reduce((sum, c) => sum + c.purchaseCount, 0) / clients.length).toFixed(1) : 0
+  };
+  res.json(stats);
 });
 
 // ============ ADMIN PANEL ============
