@@ -1653,8 +1653,15 @@ async function handleIncomingMessage(msg) {
   const preguntaPrecio2 = /(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:qu[ée]|precio|valen?|cuestan?)/i;
   const preguntaDisponibilidad = /(?:tienen|hay|venden|manejan|ofrecen).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)|(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:para\s*(?:mujer|dama|mujeres|damas))/i;
   
-  if ((preguntaPrecio.test(lower) || preguntaPrecio2.test(lower) || preguntaDisponibilidad.test(lower)) && session.state === "NEW") {
+  // 🔍 DEBUG: Ver si los regex matchean
+  const _matchPrecio = preguntaPrecio.test(lower);
+  const _matchPrecio2 = preguntaPrecio2.test(lower);
+  const _matchDisp = preguntaDisponibilidad.test(lower);
+  console.log(`🔍 CATEGORIA-CHECK: lower="${lower}" state="${session.state}" matchPrecio=${_matchPrecio} matchPrecio2=${_matchPrecio2} matchDisp=${_matchDisp}`);
+  
+  if ((_matchPrecio || _matchPrecio2 || _matchDisp) && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || session.state === "ESPERANDO_RESPUESTA_CATALOGO")) {
     const resultado = buscarPreciosPorTipo(text);
+    console.log(`🔍 CATEGORIA-RESULTADO: ${JSON.stringify(resultado ? {cat: resultado.categoria, encontrados: resultado.encontrados, catalogSize: catalogProducts.length} : 'null')}`);
     
     if (resultado) {
       session.ultimaCategoriaBuscada = resultado.categoria;
@@ -2394,18 +2401,86 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ Si pregunta por productos específicos o catálogo → enviar catálogo
-  // PERO si pregunta por ofertas, tipos (dama, caballero, niño), o categorías específicas → dejar que IA responda
   const preguntaEspecifica = /oferta|descuento|rebaja|promo|dama|caballero|hombre|mujer|niñ|nin|blusa|vestido|jean|pantalon/i.test(lower);
   
-  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower) && !preguntaEspecifica){
-    if(!session.saludo_enviado){session.saludo_enviado=true;}
-    session.catalogo_enviado=true;saveDataToDisk();
-    const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
-    await sendTextWithTyping(waId,`${saludo}${frase("catalogo",waId)}\n\n${CATALOG_URL}`);
-    return;
+  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower)){
+    if(preguntaEspecifica){
+      // ✅ FALLBACK: Si tiene categoría específica, buscar precios ANTES de caer a IA
+      console.log(`🔍 FALLBACK-CATEGORIA: "${lower}" → intentando buscarPreciosPorTipo`);
+      const resultadoFB = buscarPreciosPorTipo(text);
+      
+      if(resultadoFB && resultadoFB.encontrados > 0){
+        session.ultimaCategoriaBuscada = resultadoFB.categoria;
+        session.saludo_enviado = true;
+        if(resultadoFB.encontrados === 1){
+          const p = resultadoFB.productos[0];
+          const precioFinal = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
+          const descuentoText = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
+          await sendTextWithTyping(waId,
+            `Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕\n\n` +
+            `¿Te interesa?\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
+          );
+          session.state = "PREGUNTANDO_INTERES";
+          session.producto = p.nombre;
+          session.precio = precioFinal;
+          session.productoFoto = p.codigo;
+        } else {
+          await sendTextWithTyping(waId,
+            `Tenemos ${resultadoFB.display} desde ₡${resultadoFB.minPrecio.toLocaleString()} hasta ₡${resultadoFB.maxPrecio.toLocaleString()} 👕\n\n` +
+            `Para que tengas una mejor idea, revisá la sección:\n🛍️ ${CATALOG_URL}/catalogo.html?cat=${resultadoFB.categoria}`
+          );
+          session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+        }
+        saveDataToDisk();
+        return;
+      }
+      
+      // Si no hay productos de esa categoría → responder según tipo
+      if(resultadoFB && resultadoFB.encontrados === 0){
+        session.saludo_enviado = true;
+        saveDataToDisk();
+        await sendTextWithTyping(waId,
+          `De momento no tenemos ${resultadoFB.display} disponibles en el catálogo online 😔\n\n` +
+          `Pero en tienda tenemos más variedad. ¡Visitanos!\n📍 ${STORE_ADDRESS}`
+        );
+        return;
+      }
+      
+      // Detectar si pregunta por hombre/caballero/niño → tienda física
+      if(/caballero|hombre|niñ|nin/i.test(lower) && !/blusa|vestido|jean|pantalon|oferta|descuento/i.test(lower)){
+        session.saludo_enviado = true;
+        saveDataToDisk();
+        await sendTextWithTyping(waId,
+          `Esos productos los manejamos en tienda física 🏪\n\n` +
+          `Te invitamos a visitarnos en ${STORE_ADDRESS}. ¡Con gusto te atendemos! 😊`
+        );
+        return;
+      }
+      
+      // Para dama/mujer sin categoría específica → catálogo general
+      if(/dama|mujer/i.test(lower)){
+        session.saludo_enviado = true;
+        session.catalogo_enviado = true;
+        saveDataToDisk();
+        await sendTextWithTyping(waId,
+          `¡Te invito a revisar nuestro catálogo! 🛍️\n\n${CATALOG_URL}\n\n` +
+          `Si te gusta algo, dale al botón 'Me interesa' y te confirmamos disponibilidad 😊`
+        );
+        return;
+      }
+      // Si nada matcheó, dejar que caiga a la IA abajo
+    } else {
+      // Pregunta genérica sin categoría específica → catálogo general
+      if(!session.saludo_enviado){session.saludo_enviado=true;}
+      session.catalogo_enviado=true;saveDataToDisk();
+      const saludo = /hola|buenas|buenos|hey|pura vida/i.test(lower) ? "¡Hola! Pura vida 🙌\n\n" : "";
+      await sendTextWithTyping(waId,`${saludo}${frase("catalogo",waId)}\n\n${CATALOG_URL}`);
+      return;
+    }
   }
 
   // ✅ Para todo lo demás → IA analiza y responde
+  console.log(`🤖 CAYÓ A IA GENÉRICA: text="${text}" state="${session.state}" lower="${lower}"`);
   const aiResponse = await askAI(text);
   
   if(aiResponse){
