@@ -1634,11 +1634,12 @@ async function handleIncomingMessage(msg) {
   }
 
   
-  // ✅ Detectar preguntas por PRECIO de tipo de producto (sin foto)
-  const preguntaPrecio = /(?:qu[ée]|cu[aá]l|cu[aá]nto|precio|valen?|cuestan?|cuesta).*(?:jean|blusa|vestido|falda|pantalon|short|chaqueta|sueter|sweater|saco|accesorio)/i;
-  const preguntaPrecio2 = /(?:jean|blusa|vestido|falda|pantalon|short|chaqueta|sueter|sweater|saco|accesorio).*(?:qu[ée]|precio|valen?|cuestan?)/i;
+  // ✅ Detectar preguntas por PRECIO o DISPONIBILIDAD de tipo de producto (sin foto)
+  const preguntaPrecio = /(?:qu[ée]|cu[aá]l|cu[aá]nto|precio|valen?|cuestan?|cuesta).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)/i;
+  const preguntaPrecio2 = /(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:qu[ée]|precio|valen?|cuestan?)/i;
+  const preguntaDisponibilidad = /(?:tienen|hay|venden|manejan|ofrecen).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)|(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:para\s*(?:mujer|dama|mujeres|damas))/i;
   
-  if ((preguntaPrecio.test(lower) || preguntaPrecio2.test(lower)) && session.state === "NEW") {
+  if ((preguntaPrecio.test(lower) || preguntaPrecio2.test(lower) || preguntaDisponibilidad.test(lower)) && session.state === "NEW") {
     const resultado = buscarPreciosPorTipo(text);
     
     if (resultado) {
