@@ -1303,6 +1303,17 @@ async function handleIncomingMessage(msg) {
   if(msg.message){
     const keys = Object.keys(msg.message);
     console.log(`📨 Tipo mensaje: [${keys.join(", ")}] hasImage=${hasImage}`);
+    
+    // ✅ Detectar mensaje de VOZ/AUDIO y responder que no se procesan
+    const esAudio = keys.some(k => k === 'audioMessage' || k === 'pttMessage');
+    if(esAudio){
+      console.log("🎤 Mensaje de voz detectado - no procesamos audio");
+      await sendTextWithTyping(waId,
+        "¡Hola! Disculpá, por este medio solo podemos atender mensajes de texto 📝\n\n" +
+        "Si preferís, podés llamarnos al 2237-3335 y con gusto te atendemos 😊"
+      );
+      return;
+    }
   }
   
   if(msg.message?.conversation)text=msg.message.conversation;
