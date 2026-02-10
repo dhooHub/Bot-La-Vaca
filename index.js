@@ -2713,7 +2713,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
 io.on("connection", (socket) => {
   let authenticated = false;
   socket.on("auth", (pin) => {
-    if (pin === PANEL_PIN) {
+    // Aceptar PIN normal o 'auto' para entrada directa
+    if (pin === PANEL_PIN || pin === "auto") {
       authenticated = true;
       socket.emit("auth_success", { storeName: STORE_NAME });
       socket.emit("connection_status", { status: connectionStatus, phone: connectedPhone });
