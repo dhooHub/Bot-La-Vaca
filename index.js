@@ -1479,6 +1479,22 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
+  // ✅ Detectar CANCELACIÓN de compra durante el flujo
+  const ESTADOS_VENTA = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
+  const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
+  
+  if(ESTADOS_VENTA.includes(session.state) && pideCancelar.test(lower)){
+    await sendTextWithTyping(waId,
+      `Lamentamos que canceles tu compra 😔\n\n` +
+      `Igualmente estamos para servirte cuando gustés. ¡Pura vida! 🙌`
+    );
+    pendingQuotes.delete(waId);
+    io.emit("pending_resolved", { waId });
+    resetSession(session);
+    saveDataToDisk();
+    return;
+  }
+
   // ============ MÁQUINA DE ESTADOS ============
 
   if(session.state==="ESPERANDO_TALLA"){
