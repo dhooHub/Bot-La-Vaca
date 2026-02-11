@@ -77,6 +77,12 @@ app.get("/p", (req, res) => {
   });
   res.sendFile(path.join(__dirname, "public", "panel.html"));
 });
+
+// Manifest vacío para desactivar PWA (los links no funcionan en modo standalone)
+app.get("/manifest.json", (req, res) => {
+  res.set({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.json({ name: "TICObot", short_name: "TICObot", display: "browser", start_url: "/p" });
+});
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
