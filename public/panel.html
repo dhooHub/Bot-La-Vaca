@@ -97,46 +97,46 @@
     .empty-chat-text { font-size: 1.1rem; }
 
     /* Chat header */
-    .chat-header { background: #fff; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #e0e0e0; }
-    .chat-header-back { display: none; background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 0.3rem; }
-    .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .chat-header { background: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #e0e0e0; }
+    .chat-header-back { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.3rem; }
+    .chat-header-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; }
     .chat-header-info { flex: 1; }
-    .chat-header-name { font-weight: 600; }
-    .chat-header-status { font-size: 0.75rem; color: var(--text-muted); }
+    .chat-header-name { font-weight: 600; font-size: 1.15rem; }
+    .chat-header-status { font-size: 0.9rem; color: var(--text-muted); }
     .chat-header-actions { display: flex; gap: 0.5rem; }
-    .chat-header-btn { background: var(--bg); border: none; padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; }
+    .chat-header-btn { background: var(--bg); border: none; padding: 0.5rem 0.7rem; border-radius: 8px; cursor: pointer; font-size: 1rem; }
 
     /* Messages */
-    .messages-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.3rem; }
-    .message { max-width: 70%; padding: 0.5rem 0.8rem; border-radius: 10px; font-size: 0.9rem; position: relative; }
+    .messages-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .message { max-width: 80%; padding: 0.6rem 0.9rem; border-radius: 10px; font-size: 1.05rem; position: relative; line-height: 1.4; }
     .message.in { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
     .message.out { background: #d9fdd3; align-self: flex-end; border-bottom-right-radius: 4px; }
     .message-text { word-wrap: break-word; }
-    .message-time { font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
+    .message-time { font-size: 0.75rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
     .message-image { max-width: 100%; max-height: 200px; border-radius: 8px; margin-bottom: 0.3rem; cursor: pointer; }
 
     /* Action cards inside chat */
     .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
     .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
-    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 0.9rem; }
-    .action-card-icon { font-size: 1.2rem; }
-    .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 0.8rem; }
+    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; }
+    .action-card-icon { font-size: 1.3rem; }
+    .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 1rem; margin-bottom: 0.8rem; }
     .action-card-detail { margin-bottom: 0.3rem; }
     .action-card-buttons { display: flex; gap: 0.5rem; }
-    .action-btn { flex: 1; padding: 0.7rem; border: none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .action-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .action-btn.primary { background: var(--success); color: #fff; }
     .action-btn.danger { background: var(--danger); color: #fff; }
     .action-btn.info { background: #2196f3; color: #fff; }
-    .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); }
+    .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); font-size: 1rem; }
     .action-card.tienda { background: #fff3e0; border-color: #ff9800; }
     .action-card.foto-externa { background: #e8f5e9; border-color: #4caf50; }
     .action-card-image { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 0.8rem; cursor: pointer; background: #f5f5f5; }
 
     /* Chat input */
-    .chat-input-area { background: #fff; padding: 0.6rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
-    .chat-input { flex: 1; padding: 0.7rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 0.95rem; outline: none; }
-    .chat-send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .chat-input-area { background: #fff; padding: 0.7rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
+    .chat-input { flex: 1; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
+    .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
     /* QR Section */
     .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
