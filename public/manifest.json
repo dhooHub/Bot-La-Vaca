@@ -3,7 +3,7 @@
   "short_name": "TICObot",
   "description": "Panel de control para ventas por WhatsApp",
   "start_url": "/",
-  "display": "standalone",
+  "display": "minimal-ui",
   "background_color": "#1a1f25",
   "theme_color": "#1a1f25",
   "orientation": "portrait",

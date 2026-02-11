@@ -347,8 +347,23 @@ if (!location.search.includes('v=')) {
       // Primero escapar HTML, luego convertir URLs en links clickeables
       const escaped = escapeHtml(text);
       const urlRegex = /(https?:\/\/[^\s]+)/g;
-      return escaped.replace(urlRegex, '<a href="$1" target="_blank" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+      return escaped.replace(urlRegex, '<a href="$1" onclick="openExternal(event, \'$1\')" style="color:#1a73e8;text-decoration:underline;">$1</a>');
     }
+    // Abrir links en navegador externo (funciona en PWA standalone)
+    function openExternal(e, url) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    // Handler global: interceptar TODOS los clicks en <a> dentro de la app para forzar apertura externa
+    document.addEventListener('click', function(e) {
+      const link = e.target.closest('a[href^="http"]');
+      if (link && !link.href.includes(location.hostname)) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+      }
+    });
     function toast(msg, type = '') {
       const t = $('toast');
       t.textContent = msg;
