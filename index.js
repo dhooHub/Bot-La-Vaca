@@ -189,6 +189,56 @@ function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now
 function getCostaRicaDayName() { const dias = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"]; return dias[getCostaRicaTime().day]; }
 function isStoreOpen() { const{hour,minute}=getCostaRicaTime(); if(hour<HOURS_START)return false; if(hour>HOURS_END_HOUR)return false; if(hour===HOURS_END_HOUR&&minute>=HOURS_END_MIN)return false; return true; }
 function norm(s="") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
+
+// ✅ Corrector inteligente de typos (Levenshtein + duplicados)
+// No usa IA, no consume tokens, corrige automáticamente
+function fixTypos(text) {
+  const VOCAB = [
+    'blusa','blusas','vestido','vestidos','jean','jeans','pantalon','pantalones',
+    'falda','faldas','short','shorts','camisa','camisas','zapato','zapatos',
+    'sueter','sueters','conjunto','conjuntos','camiseta','camisetas',
+    'sandalia','sandalias','bolso','bolsos','cartera','carteras',
+    'top','tops','body','bodys','leggin','leggins','licra','licras',
+    'tienen','precio','precios','disponible','disponibles','catalogo',
+    'envio','envios','horario','abierto','cerrado','comprar','quiero',
+    'busco','necesito','hay','venden','muestren','enseneme',
+    'mujer','mujeres','hombre','hombres','dama','damas','caballero','caballeros',
+    'nina','ninas','nino','ninos',
+    'sinpe','transferencia','efectivo','recoger','domicilio','direccion',
+    'talla','tallas','grande','mediano','pequeno',
+  ];
+  function lev(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const m = [];
+    for (let i = 0; i <= b.length; i++) m[i] = [i];
+    for (let j = 0; j <= a.length; j++) m[0][j] = j;
+    for (let i = 1; i <= b.length; i++)
+      for (let j = 1; j <= a.length; j++)
+        m[i][j] = b[i-1] === a[j-1] ? m[i-1][j-1] : Math.min(m[i-1][j-1]+1, m[i][j-1]+1, m[i-1][j]+1);
+    return m[b.length][a.length];
+  }
+  // 1. Eliminar palabras duplicadas consecutivas ("y y", "de de")
+  let fixed = text.replace(/\b(\w+)\s+\1\b/gi, '$1');
+  // 2. Corregir cada palabra contra el vocabulario
+  const words = fixed.split(/(\s+)/);
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (/^\s+$/.test(w) || w.length < 3) continue;
+    const wN = w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    if (VOCAB.includes(wN)) continue;
+    let best = null, bestD = Infinity;
+    for (let v = 0; v < VOCAB.length; v++) {
+      if (Math.abs(VOCAB[v].length - wN.length) > 2) continue;
+      const d = lev(wN, VOCAB[v]);
+      if (d < bestD) { bestD = d; best = VOCAB[v]; }
+    }
+    const maxD = wN.length <= 5 ? 1 : 2;
+    if (best && bestD > 0 && bestD <= maxD) words[i] = best;
+  }
+  return words.join('');
+}
 function getHumanDelay() { return(Math.floor(Math.random()*(DELAY_MAX-DELAY_MIN+1))+DELAY_MIN)*1000; }
 function sleep(ms) { return new Promise(resolve=>setTimeout(resolve,ms)); }
 function extractPrice(text) { const match=String(text).match(/₡?\s*([\d\s,\.]+)/); if(match)return parseInt(match[1].replace(/[\s,\.]/g,''))||0; return 0; }
@@ -243,7 +293,7 @@ async function loadCatalog() {
 
 // ============ BUSCAR PRECIOS EN CATÁLOGO POR TIPO DE PRODUCTO ============
 function buscarPreciosPorTipo(query) {
-  const lower = query.toLowerCase();
+  const lower = fixTypos(query).toLowerCase();
   
   // Mapeo de palabras a categorías del catálogo
   const mapeoCategoria = {
@@ -301,7 +351,7 @@ function buscarPreciosPorTipo(query) {
 
 
 function searchCatalog(query) {
-  const lower = query.toLowerCase();
+  const lower = fixTypos(query).toLowerCase();
   const keywords = {
     dama: ["dama", "damas", "mujer", "mujeres", "femenino", "femenina"],
     caballero: ["caballero", "caballeros", "hombre", "hombres", "masculino"],
@@ -1633,7 +1683,7 @@ async function handleIncomingMessage(msg) {
   // Normalizar 1/2 a si/no
   const numResp=text.trim();
   if(numResp==="1")text="si"; if(numResp==="2")text="no";
-  const lower=norm(text);
+  const lower=norm(fixTypos(text));
 
   
   // ✅ Detectar solicitud de APARTAR/SEPARAR producto (sin pagar)
