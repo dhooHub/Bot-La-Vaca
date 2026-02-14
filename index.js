@@ -251,8 +251,8 @@ let catalogProducts = [];
 let lastCatalogLoad = 0;
 
 async function loadCatalog() {
-  // Recargar máximo cada 5 minutos
-  if (Date.now() - lastCatalogLoad < 5 * 60 * 1000 && catalogProducts.length > 0) {
+  // Recargar máximo cada 2 minutos
+  if (Date.now() - lastCatalogLoad < 2 * 60 * 1000 && catalogProducts.length > 0) {
     return catalogProducts;
   }
   
@@ -295,7 +295,7 @@ async function loadCatalog() {
 function buscarPreciosPorTipo(query) {
   const lower = fixTypos(query).toLowerCase();
   
-  // Mapeo de palabras a categorías del catálogo
+  // Mapeo de palabras a subcategorías del catálogo
   const mapeoCategoria = {
     'jean': 'jeans', 'jeans': 'jeans',
     'blusa': 'blusas', 'blusas': 'blusas',
@@ -305,7 +305,19 @@ function buscarPreciosPorTipo(query) {
     'short': 'shorts', 'shorts': 'shorts',
     'chaqueta': 'chaquetas', 'chaquetas': 'chaquetas',
     'sueter': 'chaquetas', 'sweater': 'chaquetas', 'saco': 'chaquetas',
-    'accesorio': 'accesorios', 'accesorios': 'accesorios'
+    'accesorio': 'accesorios', 'accesorios': 'accesorios',
+    'camisa': 'camisas', 'camisas': 'camisas',
+    'conjunto': 'conjuntos', 'conjuntos': 'conjuntos',
+    'zapato': 'zapatos', 'zapatos': 'zapatos',
+    'sandalia': 'sandalias', 'sandalias': 'sandalias'
+  };
+  
+  // Mapeo de subcategoría a categoría raíz (para el link)
+  const mapeoRoot = {
+    'jeans': 'damas', 'blusas': 'damas', 'vestidos': 'damas',
+    'faldas': 'damas', 'pantalones': 'damas', 'shorts': 'damas',
+    'chaquetas': 'damas', 'accesorios': 'damas', 'camisas': 'damas',
+    'conjuntos': 'damas', 'zapatos': 'damas', 'sandalias': 'damas'
   };
   
   // Buscar qué categoría menciona
@@ -323,28 +335,36 @@ function buscarPreciosPorTipo(query) {
   
   // Buscar productos de esa categoría en el catálogo
   const productos = catalogProducts.filter(p => 
-    p.categoria && p.categoria.toLowerCase().includes(categoriaId) && !p.agotado
+    p.categoria && p.categoria.toLowerCase() === categoriaId && !p.agotado
   );
   
   if (productos.length === 0) return { categoria: categoriaId, display: categoriaDisplay, encontrados: 0 };
   
   // Calcular precios (con descuento aplicado)
   const precios = productos.map(p => {
-    if (p.descuento > 0) {
-      return Math.round(p.precio * (1 - p.descuento / 100));
-    }
+    if (p.descuento > 0) return Math.round(p.precio * (1 - p.descuento / 100));
     return p.precio;
   });
   
   const minPrecio = Math.min(...precios);
   const maxPrecio = Math.max(...precios);
   
+  // Info de descuentos
+  const conDescuento = productos.filter(p => p.descuento > 0);
+  const maxDescuento = conDescuento.length > 0 ? Math.max(...conDescuento.map(p => p.descuento)) : 0;
+  
+  // Root para el link
+  const rootId = mapeoRoot[categoriaId] || 'damas';
+  
   return {
     categoria: categoriaId,
+    rootCategoria: rootId,
     display: categoriaDisplay,
     encontrados: productos.length,
     minPrecio,
     maxPrecio,
+    conDescuento: conDescuento.length,
+    maxDescuento,
     productos
   };
 }
@@ -1755,11 +1775,17 @@ async function handleIncomingMessage(msg) {
         session.precio = precioFinal;
         session.productoFoto = p.codigo;
       } else {
-        // Múltiples productos - dar rango de precios
-        await sendTextWithTyping(waId,
-          `Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 👕\n\n` +
-          `Para que tengas una mejor idea, revisá la sección:\n🛍️ ${CATALOG_URL}/catalogo.html?cat=${resultado.categoria}`
-        );
+        // Múltiples productos - rango de precios + descuentos + link directo a subcategoría
+        const linkCatalogo = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
+        let mensaje = `¡Claro! Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
+        
+        if (resultado.conDescuento > 0) {
+          mensaje += `\n\n🔥 Además tenemos varias opciones de ${resultado.display} con descuento, hasta ${resultado.maxDescuento}% OFF`;
+        }
+        
+        mensaje += `\n\nMiralas acá 👇\n${linkCatalogo}`;
+        
+        await sendTextWithTyping(waId, mensaje);
         session.state = "ESPERANDO_RESPUESTA_CATALOGO";
       }
       saveDataToDisk();
@@ -2481,10 +2507,13 @@ async function handleIncomingMessage(msg) {
           session.precio = precioFinal;
           session.productoFoto = p.codigo;
         } else {
-          await sendTextWithTyping(waId,
-            `Tenemos ${resultadoFB.display} desde ₡${resultadoFB.minPrecio.toLocaleString()} hasta ₡${resultadoFB.maxPrecio.toLocaleString()} 👕\n\n` +
-            `Para que tengas una mejor idea, revisá la sección:\n🛍️ ${CATALOG_URL}/catalogo.html?cat=${resultadoFB.categoria}`
-          );
+          const linkFB = `${CATALOG_URL}/catalogo.html?root=${resultadoFB.rootCategoria}&cat=${resultadoFB.categoria}`;
+          let msgFB = `¡Claro! Tenemos ${resultadoFB.display} desde ₡${resultadoFB.minPrecio.toLocaleString()} hasta ₡${resultadoFB.maxPrecio.toLocaleString()} 🛍️`;
+          if (resultadoFB.conDescuento > 0) {
+            msgFB += `\n\n🔥 Además tenemos varias opciones de ${resultadoFB.display} con descuento, hasta ${resultadoFB.maxDescuento}% OFF`;
+          }
+          msgFB += `\n\nMiralas acá 👇\n${linkFB}`;
+          await sendTextWithTyping(waId, msgFB);
           session.state = "ESPERANDO_RESPUESTA_CATALOGO";
         }
         saveDataToDisk();
