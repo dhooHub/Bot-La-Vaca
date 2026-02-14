@@ -320,6 +320,9 @@ function buscarPreciosPorTipo(query) {
     'conjuntos': 'damas', 'zapatos': 'damas', 'sandalias': 'damas'
   };
   
+  // Palabras clave de estilo/descripción que se buscan en el nombre del producto
+  const estilos = ['plus', 'skinny', 'recto', 'campana', 'ancho', 'slim', 'straight', 'tejida', 'tejido', 'crop', 'largo', 'corto', 'corta', 'manga larga', 'manga corta'];
+  
   // Buscar qué categoría menciona
   let categoriaId = null;
   let categoriaDisplay = null;
@@ -333,12 +336,56 @@ function buscarPreciosPorTipo(query) {
   
   if (!categoriaId) return null;
   
-  // Buscar productos de esa categoría en el catálogo
-  const productos = catalogProducts.filter(p => 
+  // FILTRO 1: Por categoría (subcategoría)
+  const todosCategoria = catalogProducts.filter(p => 
     p.categoria && p.categoria.toLowerCase() === categoriaId && !p.agotado
   );
   
-  if (productos.length === 0) return { categoria: categoriaId, display: categoriaDisplay, encontrados: 0 };
+  if (todosCategoria.length === 0) return { categoria: categoriaId, display: categoriaDisplay, encontrados: 0 };
+  
+  // FILTRO 2: Por estilo/descripción (buscar en nombre del producto)
+  let estiloDetectado = null;
+  for (const estilo of estilos) {
+    if (lower.includes(estilo)) {
+      estiloDetectado = estilo;
+      break;
+    }
+  }
+  
+  let filtradosPorEstilo = todosCategoria;
+  if (estiloDetectado) {
+    filtradosPorEstilo = todosCategoria.filter(p => 
+      p.nombre.toLowerCase().includes(estiloDetectado)
+    );
+  }
+  
+  // FILTRO 3: Por talla específica
+  const regexTalla = /(?:talla\s+)?(\d{1,2}\/\d{1,2}|\d{1,2}|xs|s|m|l|xl|xxl|2xl|3xl)/i;
+  const matchTalla = lower.match(regexTalla);
+  let tallaDetectada = null;
+  // Solo tomar como talla si no es parte de otra cosa (ej: "5 mil" no es talla)
+  if (matchTalla) {
+    const posibleTalla = matchTalla[1].toUpperCase();
+    // Verificar que es una talla real buscándola en algún producto
+    const esTallaReal = todosCategoria.some(p => {
+      if (!p.tallas) return false;
+      return p.tallas.split(',').some(t => t.trim().toUpperCase() === posibleTalla);
+    });
+    if (esTallaReal) tallaDetectada = posibleTalla;
+  }
+  
+  let filtradosPorTalla = filtradosPorEstilo;
+  let tallaDisponible = true;
+  if (tallaDetectada) {
+    filtradosPorTalla = filtradosPorEstilo.filter(p => {
+      if (!p.tallas) return false;
+      return p.tallas.split(',').some(t => t.trim().toUpperCase() === tallaDetectada);
+    });
+    if (filtradosPorTalla.length === 0) tallaDisponible = false;
+  }
+  
+  // Productos finales
+  const productos = filtradosPorTalla.length > 0 ? filtradosPorTalla : filtradosPorEstilo;
   
   // Calcular precios (con descuento aplicado)
   const precios = productos.map(p => {
@@ -356,16 +403,24 @@ function buscarPreciosPorTipo(query) {
   // Root para el link
   const rootId = mapeoRoot[categoriaId] || 'damas';
   
+  // Construir display descriptivo
+  let displayFinal = categoriaDisplay;
+  if (estiloDetectado) displayFinal = categoriaDisplay + ' ' + estiloDetectado.toUpperCase();
+  
   return {
     categoria: categoriaId,
     rootCategoria: rootId,
-    display: categoriaDisplay,
+    display: displayFinal,
     encontrados: productos.length,
     minPrecio,
     maxPrecio,
     conDescuento: conDescuento.length,
     maxDescuento,
-    productos
+    productos,
+    estiloDetectado,
+    tallaDetectada,
+    tallaDisponible,
+    totalCategoria: todosCategoria.length
   };
 }
 
@@ -1728,14 +1783,17 @@ async function handleIncomingMessage(msg) {
   const preguntaPrecio = /(?:qu[ée]|cu[aá]l|cu[aá]nto|precio|valen?|cuestan?|cuesta).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)/i;
   const preguntaPrecio2 = /(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:qu[ée]|precio|valen?|cuestan?)/i;
   const preguntaDisponibilidad = /(?:tienen|hay|venden|manejan|ofrecen).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)|(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:para\s*(?:mujer|dama|mujeres|damas))/i;
+  // Detectar preguntas con estilo o talla: "talla plus tiene", "jeans skinny", "jean 5/6", "plus tienen"
+  const preguntaEstiloTalla = /(?:talla\s*)?(?:plus|skinny|recto|campana|ancho|slim|tejida|crop|manga\s*larga|manga\s*corta|\d{1,2}\/\d{1,2}).*(?:tienen|tiene|hay|venden|manejan)|(?:jeans?|blusas?|vestidos?|faldas?).*(?:plus|skinny|recto|campana|ancho|slim|tejida|crop|\d{1,2}\/\d{1,2})|(?:jeans?|blusas?|vestidos?|faldas?)\s+(?:talla\s*)?\d{1,2}\/\d{1,2}/i;
   
   // 🔍 DEBUG: Ver si los regex matchean
   const _matchPrecio = preguntaPrecio.test(lower);
   const _matchPrecio2 = preguntaPrecio2.test(lower);
   const _matchDisp = preguntaDisponibilidad.test(lower);
-  console.log(`🔍 CATEGORIA-CHECK: lower="${lower}" state="${session.state}" matchPrecio=${_matchPrecio} matchPrecio2=${_matchPrecio2} matchDisp=${_matchDisp}`);
+  const _matchEstilo = preguntaEstiloTalla.test(lower);
+  console.log(`🔍 CATEGORIA-CHECK: lower="${lower}" state="${session.state}" matchPrecio=${_matchPrecio} matchPrecio2=${_matchPrecio2} matchDisp=${_matchDisp} matchEstilo=${_matchEstilo}`);
   
-  if ((_matchPrecio || _matchPrecio2 || _matchDisp) && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || session.state === "ESPERANDO_RESPUESTA_CATALOGO")) {
+  if ((_matchPrecio || _matchPrecio2 || _matchDisp || _matchEstilo) && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || session.state === "ESPERANDO_RESPUESTA_CATALOGO")) {
     const resultado = buscarPreciosPorTipo(text);
     console.log(`🔍 CATEGORIA-RESULTADO: ${JSON.stringify(resultado ? {cat: resultado.categoria, encontrados: resultado.encontrados, catalogSize: catalogProducts.length} : 'null')}`);
     
@@ -1761,29 +1819,43 @@ async function handleIncomingMessage(msg) {
         return;
       }
       
+      let linkCatalogo = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
+      if (resultado.tallaDetectada && resultado.tallaDisponible) {
+        linkCatalogo += `&talla=${encodeURIComponent(resultado.tallaDetectada)}`;
+      }
+      
+      // Caso especial: pidió estilo o talla y NO hay disponible
+      if (resultado.tallaDetectada && !resultado.tallaDisponible) {
+        let msgNoTalla = `No tenemos ${resultado.display} en talla ${resultado.tallaDetectada} disponible en este momento 😔`;
+        msgNoTalla += `\n\nPero podés revisar todos los ${resultado.display} disponibles acá 👇\n${linkCatalogo}`;
+        await sendTextWithTyping(waId, msgNoTalla);
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+        saveDataToDisk();
+        return;
+      }
+      
       if (resultado.encontrados === 1) {
-        // Solo 1 producto - dar precio exacto
+        // Solo 1 producto - mostrar directo con link
         const p = resultado.productos[0];
         const precioFinal = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
         const descuentoText = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
-        await sendTextWithTyping(waId,
-          `Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕\n\n` +
-          `¿Te interesa?\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
-        );
-        session.state = "PREGUNTANDO_INTERES";
-        session.producto = p.nombre;
-        session.precio = precioFinal;
-        session.productoFoto = p.codigo;
+        let msg1 = `¡Sí! Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕`;
+        msg1 += `\n\nRevisalo acá 👇\n${linkCatalogo}`;
+        await sendTextWithTyping(waId, msg1);
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
       } else {
-        // Múltiples productos - rango de precios + descuentos + link directo a subcategoría
-        const linkCatalogo = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
+        // Múltiples productos - mostrar rango y link
         let mensaje = `¡Claro! Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
+        
+        if (resultado.tallaDetectada) {
+          mensaje = `¡Sí! Tenemos ${resultado.display} en talla ${resultado.tallaDetectada}, varios estilos disponibles 🛍️`;
+        }
         
         if (resultado.conDescuento > 0) {
           mensaje += `\n\n🔥 Además tenemos varias opciones de ${resultado.display} con descuento, hasta ${resultado.maxDescuento}% OFF`;
         }
         
-        mensaje += `\n\nMiralas acá 👇\n${linkCatalogo}`;
+        mensaje += `\n\nRevisalas acá 👇\n${linkCatalogo}`;
         
         await sendTextWithTyping(waId, mensaje);
         session.state = "ESPERANDO_RESPUESTA_CATALOGO";
@@ -2494,28 +2566,23 @@ async function handleIncomingMessage(msg) {
       if(resultadoFB && resultadoFB.encontrados > 0){
         session.ultimaCategoriaBuscada = resultadoFB.categoria;
         session.saludo_enviado = true;
+        const linkFB = `${CATALOG_URL}/catalogo.html?root=${resultadoFB.rootCategoria}&cat=${resultadoFB.categoria}`;
         if(resultadoFB.encontrados === 1){
           const p = resultadoFB.productos[0];
           const precioFinal = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
           const descuentoText = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
-          await sendTextWithTyping(waId,
-            `Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕\n\n` +
-            `¿Te interesa?\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
-          );
-          session.state = "PREGUNTANDO_INTERES";
-          session.producto = p.nombre;
-          session.precio = precioFinal;
-          session.productoFoto = p.codigo;
+          let msg1FB = `¡Sí! Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕`;
+          msg1FB += `\n\nRevisalo acá 👇\n${linkFB}`;
+          await sendTextWithTyping(waId, msg1FB);
         } else {
-          const linkFB = `${CATALOG_URL}/catalogo.html?root=${resultadoFB.rootCategoria}&cat=${resultadoFB.categoria}`;
           let msgFB = `¡Claro! Tenemos ${resultadoFB.display} desde ₡${resultadoFB.minPrecio.toLocaleString()} hasta ₡${resultadoFB.maxPrecio.toLocaleString()} 🛍️`;
           if (resultadoFB.conDescuento > 0) {
             msgFB += `\n\n🔥 Además tenemos varias opciones de ${resultadoFB.display} con descuento, hasta ${resultadoFB.maxDescuento}% OFF`;
           }
-          msgFB += `\n\nMiralas acá 👇\n${linkFB}`;
+          msgFB += `\n\nRevisalas acá 👇\n${linkFB}`;
           await sendTextWithTyping(waId, msgFB);
-          session.state = "ESPERANDO_RESPUESTA_CATALOGO";
         }
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
         saveDataToDisk();
         return;
       }
