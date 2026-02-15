@@ -586,6 +586,10 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const API_BASE = '';
+    // Guardar pwd de la URL o cookie para autenticación
+    const ADMIN_PWD = new URLSearchParams(window.location.search).get('pwd') 
+      || (document.cookie.match(/admin_pwd=([^;]+)/) || [])[1] 
+      || '';
     let socket;
     let allSales = [];
     let allChats = [];
@@ -984,15 +988,15 @@
       if (!confirm('¿Seguro? Esto eliminará ' + items.join(', ') + ' anteriores al ' + fecha + '.\n\nNo se puede deshacer.')) return;
       
       try {
-        // Obtener pwd: de la URL, de la cookie, o del API_BASE
-        const urlPwd = new URLSearchParams(window.location.search).get('pwd');
-        const cookieMatch = document.cookie.match(/admin_pwd=([^;]+)/);
-        const pwd = urlPwd || (cookieMatch ? cookieMatch[1] : '');
-        const res = await fetch(API_BASE + '/api/admin/purge?pwd=' + encodeURIComponent(pwd), {
+        console.log('Purge pwd:', ADMIN_PWD ? ADMIN_PWD.substring(0,3)+'...' : 'VACIO');
+        const res = await fetch(API_BASE + '/api/admin/purge?pwd=' + encodeURIComponent(ADMIN_PWD), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-admin-pwd': ADMIN_PWD
+          },
           credentials: 'same-origin',
-          body: JSON.stringify({ beforeDate: fecha + 'T23:59:59.999Z', purgeSessions, purgeSales, purgeHistory })
+          body: JSON.stringify({ beforeDate: fecha + 'T23:59:59.999Z', purgeSessions, purgeSales, purgeHistory, pwd: ADMIN_PWD })
         });
         const data = await res.json();
         if (data.success) {
