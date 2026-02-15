@@ -87,6 +87,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const PANEL_PIN = process.env.PANEL_PIN || "1234";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "lavaca2026";
+const USER_PASSWORD = process.env.USER_PASSWORD || "usuario2026";
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const HOURS_START = 9;
@@ -3105,8 +3107,6 @@ app.get("/api/crm/stats", adminAuth, (req, res) => {
 });
 
 // ============ ADMIN PANEL ============
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "lavaca2026";
-const USER_PASSWORD = process.env.USER_PASSWORD || "usuario2026";
 
 // Middleware de auth con roles (dueno/usuario)
 function adminAuth(req, res, next) {
