@@ -2734,17 +2734,35 @@ async function executeAction(clientWaId, actionType, data = {}) {
         session.codigo = p.codigo;
         session.talla_color = [p.talla, p.color, p.tamano].filter(Boolean).join(", ");
         session.foto_url = p.foto_url_local || p.foto_url;
-      }
-      session.multi_disponibles = hayDisponibles;
-      session.state = "PREGUNTANDO_METODO";
+        session.multi_disponibles = hayDisponibles;
+        session.state = "PREGUNTANDO_METODO";
       
-      await sendTextWithTyping(clientWaId,
-        `No tenemos ${noHayNombres} 😔\n\n` +
-        `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
-        `¿Cómo lo querés recibir?\n\n` +
-        `1. 📦 Envío a domicilio\n` +
-        `2. 🏪 Recoger en tienda`
-      );
+        await sendTextWithTyping(clientWaId,
+          `No tenemos ${noHayNombres} 😔\n\n` +
+          `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
+          `¿Cómo lo querés recibir?\n\n` +
+          `1. 📦 Envío a domicilio\n` +
+          `2. 🏪 Recoger en tienda`
+        );
+      } else {
+        // Varios disponibles — cliente elige cuáles quiere
+        session.multi_disponibles = hayDisponibles;
+        session.state = "MULTI_SELECCION_CLIENTE";
+        
+        const listaNum = hayDisponibles.map((p, i) => 
+          `${i+1}. ${p.producto || 'Producto'} - ₡${(p.precio||0).toLocaleString()}`
+        ).join("\n");
+        const totalDisp = hayDisponibles.reduce((s,p) => s + (p.precio||0), 0);
+        
+        await sendTextWithTyping(clientWaId,
+          `No tenemos ${noHayNombres} 😔\n\n` +
+          `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
+          `¿Cuáles querés llevar?\n\n${listaNum}\n\n` +
+          `💰 Total: ₡${totalDisp.toLocaleString()}\n\n` +
+          `• Escribí *"todos"* para llevarlos todos\n` +
+          `• O escribí el número del que querés (ej: *1*)`
+        );
+      }
       
       saveDataToDisk();
       return { success: true, message: "Parcial con opciones" };
