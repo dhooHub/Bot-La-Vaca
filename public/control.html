@@ -984,10 +984,11 @@
       if (!confirm('¿Seguro? Esto eliminará ' + items.join(', ') + ' anteriores al ' + fecha + '.\n\nNo se puede deshacer.')) return;
       
       try {
-        // Extraer pwd de cookie como respaldo
-        const pwdMatch = document.cookie.match(/admin_pwd=([^;]+)/);
-        const pwdParam = pwdMatch ? '?pwd=' + encodeURIComponent(pwdMatch[1]) : '';
-        const res = await fetch(API_BASE + '/api/admin/purge' + pwdParam, {
+        // Obtener pwd: de la URL, de la cookie, o del API_BASE
+        const urlPwd = new URLSearchParams(window.location.search).get('pwd');
+        const cookieMatch = document.cookie.match(/admin_pwd=([^;]+)/);
+        const pwd = urlPwd || (cookieMatch ? cookieMatch[1] : '');
+        const res = await fetch(API_BASE + '/api/admin/purge?pwd=' + encodeURIComponent(pwd), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
