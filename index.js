@@ -3042,12 +3042,16 @@ app.use(express.json());
 app.post("/api/admin/purge", (req, res) => {
   // Autenticación flexible: query, header, cookie o body
   const pwd = req.query.pwd || req.headers['x-admin-pwd'] || req.body?.pwd;
+  console.log(`🗑️ Purge attempt: query=${req.query.pwd?'SI':'NO'}, header=${req.headers['x-admin-pwd']?'SI':'NO'}, body=${req.body?.pwd?'SI':'NO'}, cookie=${req.headers.cookie?'SI':'NO'}, pwd=${pwd?pwd.substring(0,3)+'...':'VACIO'}`);
   let authed = false;
   if(pwd === ADMIN_PASSWORD || pwd === USER_PASSWORD) authed = true;
   if(!authed && req.headers.cookie) {
     if(req.headers.cookie.includes(`admin_pwd=${ADMIN_PASSWORD}`) || req.headers.cookie.includes(`admin_pwd=${USER_PASSWORD}`)) authed = true;
   }
-  if(!authed) return res.status(403).json({ success: false, error: "No autorizado" });
+  if(!authed) {
+    console.log(`🗑️ Purge DENIED. ADMIN_PASSWORD=${ADMIN_PASSWORD}, pwd received=${pwd}`);
+    return res.status(403).json({ success: false, error: "No autorizado" });
+  }
   
   const { beforeDate, purgeSessions, purgeSales, purgeHistory } = req.body;
   if (!beforeDate) return res.json({ success: false, error: "Falta fecha" });
