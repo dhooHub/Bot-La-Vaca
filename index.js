@@ -533,19 +533,19 @@ SINÓNIMOS (tratá estas palabras como iguales):
 
 REGLA PARA PRODUCTOS DE MUJER/DAMA/FEMENINO:
 Si preguntan por CUALQUIER producto para mujer/dama/femenino, respondé:
-"¡Hola! Pura vida 🙌 Te invito a revisar nuestro catálogo en https://www.lavacacr.com donde tenemos ropa para dama. Si no encontrás lo que buscás, podés visitarnos en nuestra tienda en Heredia centro (200m sur de Correos de CR) donde tenemos más variedad 😊"
+"¡Hola! Pura vida 🙌 Te invito a revisar nuestro catálogo en https://www.lavacacr.com donde tenemos ropa para dama. Si te gusta algo, dale al botón 'Me interesa' y te confirmamos disponibilidad 😊"
 
-REGLA PARA PRODUCTOS DE HOMBRE/CABALLERO O NIÑOS:
-Si preguntan por productos para hombre/caballero o niños/niñas, respondé:
-"Esos productos los manejamos en tienda física 🏪 Te invitamos a visitarnos en Heredia centro, 200m sur de Correos de CR. ¡Con gusto te atendemos! 😊"
+REGLA PARA PRODUCTOS QUE NO ESTÁN EN CATÁLOGO:
+Si preguntan por productos para hombre/caballero, niños/niñas, o cualquier producto que no encontrés en el catálogo, respondé:
+"¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊"
 
 Si preguntan "¿solo eso tienen?", "¿eso es todo?", "¿no hay más?", "¿solo esas opciones?" o similar:
-- Respondé: "De momento para venta en línea sí, pero podés visitar la tienda en Heredia centro (200m sur de Correos de CR) donde tenemos mucha más variedad 🙌"
+- Respondé: "De momento en el catálogo online tenemos esos. Dame un momento, te paso con un compañer@ para que te ayude mejor 😊"
 
 Si preguntan por productos que NO son ropa de damas (uniformes, ropa de niños, ropa de hombre, fajas, etc.):
-- Decí que esos productos los manejamos EN TIENDA
-- Invitá a visitar la tienda física donde pueden ver toda la variedad
-- NO digas que no tenemos, decí que en tienda pueden encontrarlo
+- Respondé: "Dame un momento, te paso con un compañer@ y ya te respondemos 😊"
+- NUNCA digas "hay en tienda física" ni "visitanos en tienda"
+- NUNCA digas que no tenemos — pasá la consulta al compañer@
 
 LO QUE SÍ PODÉS RESPONDER:
 - Horarios de atención
@@ -1818,19 +1818,30 @@ async function handleIncomingMessage(msg) {
       saveDataToDisk();
       
       if (resultado.encontrados === 0) {
-        // No hay productos de esa categoría - verificar si es categoría inactiva
-        if (!categoriaActiva("damas")) {
-          await sendTextWithTyping(waId,
-            `Por este medio de momento no te ofrezco ${resultado.display}, sin embargo en tienda sí tenemos toda la variedad.\n\n` +
-            `¡Podés visitarnos! 📍 ${STORE_ADDRESS}\n` +
-            `¡Con gusto te atendemos! 😊`
-          );
-        } else {
-          await sendTextWithTyping(waId,
-            `De momento no tenemos ${resultado.display} disponibles en el catálogo online 😔\n\n` +
-            `Pero en tienda tenemos más variedad. ¡Visitanos!\n📍 ${STORE_ADDRESS}`
-          );
-        }
+        // No hay productos de esa categoría → pasar a compañer@ 
+        session.saludo_enviado = true;
+        session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+        saveDataToDisk();
+        
+        const quote = {
+          waId,
+          phone: profile.phone || waId,
+          name: profile.name || "",
+          producto: `❓ Busca: ${resultado.display || text.trim()}`,
+          precio: null,
+          codigo: null,
+          foto_url: null,
+          talla_color: null,
+          consulta_producto: true,
+          created_at: new Date().toISOString()
+        };
+        pendingQuotes.set(waId, quote);
+        io.emit("new_pending", quote);
+        sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+        
+        await sendTextWithTyping(waId,
+          `¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊`
+        );
         return;
       }
       
@@ -1932,14 +1943,26 @@ async function handleIncomingMessage(msg) {
   const preguntaHayMas = /(?:hay|tienen|no hay)\s*(?:mas|más|otros?|otras?)/i;
   
   if ((preguntaSonTodos.test(lower) || preguntaHayMas.test(lower)) && (session.state === "ESPERANDO_RESPUESTA_CATALOGO" || session.ultimaCategoriaBuscada)) {
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    saveDataToDisk();
+    
+    const quote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: `❓ Pregunta si hay más: ${text.trim()}`,
+      precio: null, codigo: null, foto_url: null, talla_color: null,
+      consulta_producto: true,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, quote);
+    io.emit("new_pending", quote);
+    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+    
     await sendTextWithTyping(waId,
-      `En el catálogo online tenemos esos, pero en tienda hay más variedad 😊\n\n` +
-      `¡Podés visitarnos!\n📍 ${STORE_ADDRESS}\n` +
-      `¡Con gusto te atendemos! 🙌`
+      `En el catálogo online tenemos esos 😊 Dame un momento, te paso con un compañer@ para que te ayude mejor 🙌`
     );
     session.ultimaCategoriaBuscada = null;
-    session.state = "NEW";
-    saveDataToDisk();
     return;
   }
 
@@ -2511,13 +2534,24 @@ async function handleIncomingMessage(msg) {
   
   if (categoriaInactiva) {
     session.saludo_enviado = true;
-    resetSession(session);
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
     saveDataToDisk();
     
+    const quote = {
+      waId,
+      phone: profile.phone || waId,
+      name: profile.name || "",
+      producto: `❓ Categoría ${categoriaInactiva}: ${text.trim()}`,
+      precio: null, codigo: null, foto_url: null, talla_color: null,
+      consulta_producto: true,
+      created_at: new Date().toISOString()
+    };
+    pendingQuotes.set(waId, quote);
+    io.emit("new_pending", quote);
+    sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+    
     await sendTextWithTyping(waId,
-      `Por este medio de momento no te ofrezco ropa de ${categoriaInactiva}, sin embargo en tienda sí tenemos toda la variedad.\n\n` +
-      `¡Podés visitarnos! 📍 ${STORE_ADDRESS}\n\n` +
-      `¡Con gusto te atendemos! 😊`
+      `¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊`
     );
     return;
   }
@@ -2590,21 +2624,49 @@ async function handleIncomingMessage(msg) {
       // Si no hay productos de esa categoría → responder según tipo
       if(resultadoFB && resultadoFB.encontrados === 0){
         session.saludo_enviado = true;
+        session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
         saveDataToDisk();
+        
+        const quote = {
+          waId,
+          phone: profile.phone || waId,
+          name: profile.name || "",
+          producto: `❓ Busca: ${text.trim()}`,
+          precio: null, codigo: null, foto_url: null, talla_color: null,
+          consulta_producto: true,
+          created_at: new Date().toISOString()
+        };
+        pendingQuotes.set(waId, quote);
+        io.emit("new_pending", quote);
+        sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+        
         await sendTextWithTyping(waId,
-          `De momento no tenemos ${resultadoFB.display} disponibles en el catálogo online 😔\n\n` +
-          `Pero en tienda tenemos más variedad. ¡Visitanos!\n📍 ${STORE_ADDRESS}`
+          `¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊`
         );
         return;
       }
       
-      // Detectar si pregunta por hombre/caballero/niño → tienda física
+      // Detectar si pregunta por hombre/caballero/niño → pasar a compañer@
       if(/caballero|hombre|niñ|nin/i.test(lower) && !/blusa|vestido|jean|pantalon|oferta|descuento/i.test(lower)){
         session.saludo_enviado = true;
+        session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
         saveDataToDisk();
+        
+        const quote = {
+          waId,
+          phone: profile.phone || waId,
+          name: profile.name || "",
+          producto: `❓ Consulta: ${text.trim()}`,
+          precio: null, codigo: null, foto_url: null, talla_color: null,
+          consulta_producto: true,
+          created_at: new Date().toISOString()
+        };
+        pendingQuotes.set(waId, quote);
+        io.emit("new_pending", quote);
+        sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+        
         await sendTextWithTyping(waId,
-          `Esos productos los manejamos en tienda física 🏪\n\n` +
-          `Te invitamos a visitarnos en ${STORE_ADDRESS}. ¡Con gusto te atendemos! 😊`
+          `¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊`
         );
         return;
       }
@@ -2648,7 +2710,7 @@ async function handleIncomingMessage(msg) {
       session.saludo_enviado=true;saveDataToDisk();
       await sendTextWithTyping(waId,frase("saludos",waId));
     }else{
-      await sendTextWithTyping(waId,"Si tenés alguna duda, podés llamarnos al 2237-3335 o visitarnos en tienda 🙌");
+      await sendTextWithTyping(waId,"Si tenés alguna duda, podés llamarnos al 2237-3335 🙌");
     }
   }
 }
