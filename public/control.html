@@ -347,7 +347,7 @@
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 0.8rem 1rem;
+      padding: 0.9rem 1rem;
       margin-bottom: 0.5rem;
       display: flex;
       align-items: center;
@@ -356,6 +356,7 @@
       transition: all 0.2s;
     }
     .chat-item:hover { background: rgba(255,255,255,0.03); }
+    .chat-item.active { border-color: var(--primary); background: rgba(34,197,94,0.05); }
     .chat-avatar {
       width: 45px;
       height: 45px;
@@ -369,17 +370,56 @@
       flex-shrink: 0;
     }
     .chat-info { flex: 1; min-width: 0; }
-    .chat-name { font-weight: 600; }
+    .chat-name { font-weight: 600; font-size: 1.05rem; }
     .chat-preview {
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .chat-time {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
+    }
+    .chat-detail {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: -0.3rem 0 0.5rem;
+      padding: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .msg-row { 
+      margin-bottom: 0.5rem; 
+      display: flex; 
+      flex-direction: column; 
+    }
+    .msg-row.bot { align-items: flex-start; }
+    .msg-row.client { align-items: flex-end; }
+    .msg-bubble {
+      max-width: 85%;
+      padding: 0.6rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    .msg-row.client .msg-bubble {
+      background: #0b5e2e;
+      color: #e4e6ef;
+      border-bottom-right-radius: 2px;
+    }
+    .msg-row.bot .msg-bubble {
+      background: #2a2e3d;
+      color: #e4e6ef;
+      border-bottom-left-radius: 2px;
+    }
+    .msg-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
     }
     
     /* Empty State */
@@ -585,11 +625,15 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
+    const ADMIN_TOKEN_INJECTED = '';
     const API_BASE = '';
-    // Guardar pwd de la URL o cookie para autenticación
-    const ADMIN_PWD = new URLSearchParams(window.location.search).get('pwd') 
-      || (document.cookie.match(/admin_pwd=([^;]+)/) || [])[1] 
-      || '';
+    
+    // Helper: agregar token a cualquier URL
+    function authUrl(url) {
+      if(!ADMIN_TOKEN_INJECTED) return url;
+      const sep = url.includes('?') ? '&' : '?';
+      return url + sep + 'token=' + encodeURIComponent(ADMIN_TOKEN_INJECTED);
+    }
     let socket;
     let allSales = [];
     let allChats = [];
@@ -660,7 +704,7 @@
     
     async function loadDashboard() {
       try {
-        const res = await fetch(API_BASE + '/api/admin/dashboard');
+        const res = await fetch(authUrl(API_BASE + '/api/admin/dashboard'));
         if (res.ok) {
           dashboard = await res.json();
           renderDashboard();
@@ -671,7 +715,7 @@
       
       // También cargar ventas
       try {
-        const res = await fetch(API_BASE + '/api/admin/sales?limit=100');
+        const res = await fetch(authUrl(API_BASE + '/api/admin/sales?limit=100'));
         if (res.ok) {
           const data = await res.json();
           allSales = data.sales || [];
@@ -882,7 +926,7 @@
     
     async function updateField(saleId, field, value) {
       try {
-        const res = await fetch(API_BASE + '/api/admin/sales/update', {
+        const res = await fetch(authUrl(API_BASE + '/api/admin/sales/update'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ saleId, field, value })
@@ -938,23 +982,70 @@
         return;
       }
       
-      container.innerHTML = filtered.slice(0, 50).map(chat => {
+      container.innerHTML = filtered.slice(0, 50).map((chat, idx) => {
         const lastMsg = chat.lastMsg;
         const time = lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '';
         const preview = lastMsg?.text || (lastMsg?.hasImage ? '📷 Imagen' : '...');
         const initials = chat.waId.slice(-4, -2);
+        const msgCount = chat.messages ? chat.messages.length : 0;
         
         return `
-          <div class="chat-item">
+          <div class="chat-item" onclick="toggleChat(this, '${chat.waId}')" id="chat-${idx}">
             <div class="chat-avatar">${initials}</div>
             <div class="chat-info">
-              <div class="chat-name">${formatPhone(chat.waId)}</div>
-              <div class="chat-preview">${preview.substring(0, 50)}${preview.length > 50 ? '...' : ''}</div>
+              <div class="chat-name">${formatPhone(chat.waId)}${msgCount ? ' <span style="font-size:0.75rem;color:var(--text-muted);">(' + msgCount + ' msgs)</span>' : ''}</div>
+              <div class="chat-preview">${preview.substring(0, 60)}${preview.length > 60 ? '...' : ''}</div>
             </div>
             <div class="chat-time">${time}</div>
           </div>
+          <div class="chat-detail" id="detail-${chat.waId}" style="display:none;"></div>
         `;
       }).join('');
+    }
+    
+    let openChatId = null;
+    
+    async function toggleChat(el, waId) {
+      const detail = document.getElementById('detail-' + waId);
+      if(!detail) return;
+      
+      // Si ya está abierto, cerrar
+      if(openChatId === waId) {
+        detail.style.display = 'none';
+        el.classList.remove('active');
+        openChatId = null;
+        return;
+      }
+      
+      // Cerrar el anterior
+      if(openChatId) {
+        const prev = document.getElementById('detail-' + openChatId);
+        if(prev) prev.style.display = 'none';
+        document.querySelectorAll('.chat-item.active').forEach(e => e.classList.remove('active'));
+      }
+      
+      // Buscar mensajes en allChats
+      const chat = allChats.find(c => c.waId === waId);
+      if(!chat || !chat.messages || chat.messages.length === 0) {
+        detail.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:1rem;">Sin mensajes guardados</div>';
+      } else {
+        detail.innerHTML = chat.messages.map(m => {
+          const isBot = m.from === 'bot';
+          const t = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+          const txt = m.text || (m.hasImage ? '📷 Imagen' : '...');
+          return `<div class="msg-row ${isBot ? 'bot' : 'client'}">
+            <div class="msg-bubble">${txt.replace(/\n/g, '<br>')}</div>
+            <div class="msg-time">${isBot ? '🤖 ' : '👤 '}${t}</div>
+          </div>`;
+        }).join('');
+        
+        // Scroll al final
+        detail.scrollTop = detail.scrollHeight;
+      }
+      
+      detail.style.display = 'block';
+      el.classList.add('active');
+      openChatId = waId;
     }
     
     function formatPhone(waId) {
@@ -988,15 +1079,12 @@
       if (!confirm('¿Seguro? Esto eliminará ' + items.join(', ') + ' anteriores al ' + fecha + '.\n\nNo se puede deshacer.')) return;
       
       try {
-        console.log('Purge pwd:', ADMIN_PWD ? ADMIN_PWD.substring(0,3)+'...' : 'VACIO');
-        const res = await fetch(API_BASE + '/api/admin/purge?pwd=' + encodeURIComponent(ADMIN_PWD), {
+        console.log('Purge token:', ADMIN_TOKEN_INJECTED ? 'SI' : 'NO');
+        const res = await fetch(authUrl(API_BASE + '/api/admin/purge'), {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-admin-pwd': ADMIN_PWD
-          },
+          headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ beforeDate: fecha + 'T23:59:59.999Z', purgeSessions, purgeSales, purgeHistory, pwd: ADMIN_PWD })
+          body: JSON.stringify({ beforeDate: fecha + 'T23:59:59.999Z', purgeSessions, purgeSales, purgeHistory })
         });
         const data = await res.json();
         if (data.success) {
