@@ -667,13 +667,12 @@ function getStateDescription(state) {
     ESPERANDO_CONFIRMACION_VENDEDOR: "Se le dijo que estamos verificando disponibilidad",
     MULTI_ESPERANDO_DISPONIBILIDAD: "Tiene una lista de productos, esperamos a que el dueño confirme disponibilidad",
     MULTI_SELECCION_CLIENTE: "Se le mostraron los productos disponibles y debe elegir cuáles comprar",
-    PREGUNTANDO_INTERES: "Se le preguntó si quiere comprar el producto (sí o no)",
     PREGUNTANDO_METODO: "Se le preguntó si quiere envío o retiro en tienda",
-    ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia - Cantón - Distrito",
+    ESPERANDO_UBICACION_ENVIO: "Se le pidió Provincia y Cantón para calcular envío",
     ZONA_RECIBIDA: "Se le dijo que estamos calculando el envío",
     PRECIO_TOTAL_ENVIADO: "Se le mostró el precio total y se preguntó si está de acuerdo",
     ESPERANDO_SINPE: "Se le dieron los datos de SINPE y se espera el comprobante",
-    ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono, provincia, cantón, distrito y señas",
+    ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono y dirección exacta para envío",
     CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
   return map[state] || state;
@@ -702,7 +701,6 @@ const FRASES = {
   catalogo: ["Te paso el catálogo con los productos disponibles para venta en línea. Si te gusta algo, le das click al botón 'Me interesa' 🙌","Aquí te dejo los productos disponibles para venta en línea. Si ves algo que te guste, dale al botón 'Me interesa' 😊","Te comparto el catálogo de venta en línea. Si algo te llama la atención, tocá 'Me interesa' 🙌"],
   pedir_talla: ["¿Qué talla, tamaño o color lo necesitás? 👕","¿En qué talla y color lo ocupás? 😊","¿Qué talla/color te gustaría? 👗","¿Me decís la talla y el color que buscás? 🙌"],
   si_hay: ["¡Sí lo tenemos disponible! 🎉","¡Qué dicha, sí hay! 🙌","¡Perfecto, lo tenemos! 😊","¡Sí está disponible! 🎉","¡Claro que sí, hay en stock! 🙌"],
-  te_interesa: ["¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo"],
   confirmacion: ["¡Buenísimo! 🙌","¡Perfecto! 🎉","¡Excelente! 👍","¡Genial! 🙌","¡Dale! 😊","¡Qué bien! 🎉","¡Tuanis! 🙌","¡Listo! 👍"],
   no_quiere: ["¡Con gusto! 🙌 ¿Te puedo ayudar con algo más?","¡Está bien! 🙌 ¿Hay algo más en que te pueda ayudar?","No hay problema 👍 ¿Ocupás algo más?","Dale 🙌 ¿Te ayudo con alguna otra cosa?"],
   despedida: ["¡Pura vida! 🙌 Cualquier cosa aquí estamos. ¡Que te vaya bien!","¡Con gusto! 😊 Cuando ocupés, nos escribís. ¡Pura vida!","¡Dale! 🙌 Aquí estamos para cuando gustés. ¡Buena vibra!","¡Perfecto! 😊 Si necesitás algo en el futuro, con gusto te ayudamos. ¡Pura vida!"],
@@ -722,14 +720,12 @@ const FRASES = {
     ESPERANDO_DETALLES_FOTO: "Y sobre la foto que me mandaste, ¿qué talla, color o tamaño te interesa? 👕",
     ESPERANDO_TALLA: "Y sobre tu producto, ¿me decís la talla y color? 👕",
     ESPERANDO_CONFIRMACION_VENDEDOR: "Y sobre tu consulta, ya estoy verificando disponibilidad 🙌",
-    PREGUNTANDO_INTERES: "¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo",
-    ESPERANDO_ZONA: "Y sobre tu pedido, ¿de qué zona sos? 📍",
     PREGUNTANDO_METODO: "Y sobre tu pedido, ¿envío o retiro en tienda?\n\n1. 📦 Envío\n2. 🏪 Recoger",
-    ESPERANDO_UBICACION_ENVIO: "Y sobre tu envío, escribí tu *Provincia - Cantón - Distrito* 📍",
+    ESPERANDO_UBICACION_ENVIO: "Y sobre tu envío, ¿de qué zona sos? Escribí tu *Provincia y Cantón* 📍",
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
     ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
-    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, ocupo: *Nombre, Teléfono, Provincia, Cantón, Distrito y Señas* 📦",
+    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, ocupo: *Nombre completo, Teléfono y Dirección exacta (distrito, señas)* 📦",
     CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
@@ -1763,7 +1759,7 @@ async function handleIncomingMessage(msg) {
 
   
   // ✅ Detectar solicitud de APARTAR/SEPARAR producto (sin pagar)
-  const ESTADOS_POST_EXISTENCIA = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "PRECIO_TOTAL_ENVIADO"];
+  const ESTADOS_POST_EXISTENCIA = ["PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "PRECIO_TOTAL_ENVIADO"];
   const pideApartar = /\b(apart|separ|guard|reserv).*\b(mientras|llego|voy|rato|ratito|momento)|\b(me lo|lo)\s*(apartan?|separan?|guardan?|reservan?)|apartame|separame|guardame|reservame|mientras llego|ya voy para alla|ya voy para allá/i;
   
   if (ESTADOS_POST_EXISTENCIA.includes(session.state) && pideApartar.test(lower)) {
@@ -1931,7 +1927,7 @@ async function handleIncomingMessage(msg) {
 
 
   // ✅ Detectar CANCELACIÓN de compra durante el flujo (ANTES de la IA)
-  const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_INTERES", "PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "PREGUNTANDO_INTERES_PARCIAL", "MULTI_SELECCION_CLIENTE"];
+  const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "MULTI_SELECCION_CLIENTE"];
   const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
   
   if(ESTADOS_VENTA_CANCEL.includes(session.state) && pideCancelar.test(lower)){
@@ -1949,7 +1945,7 @@ async function handleIncomingMessage(msg) {
   // ============ IA: Detectar interrupciones en medio del flujo ============
   // ⚠️ NO clasificar si estamos esperando SINPE (imagen o texto de pago deben ir directo al handler)
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"&&session.state!=="ESPERANDO_SINPE"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_UBICACION_ENVIO","PRECIO_TOTAL_ENVIADO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","PREGUNTANDO_METODO","ESPERANDO_UBICACION_ENVIO","PRECIO_TOTAL_ENVIADO","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
@@ -2017,7 +2013,7 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ Detectar preguntas sobre envío en cualquier estado de venta activa (excepto cuando ya están dando datos)
-  const ESTADOS_VENTA_ACTIVA = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO"];
+  const ESTADOS_VENTA_ACTIVA = ["PREGUNTANDO_METODO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO"];
   const regexPreguntaEnvio = /(?:hac[eé]n?\s*env[ií]o|costo\s*(?:de[l]?\s*)?env[ií]o|cu[áa]nto\s*(?:cuesta|sale|cobra|es)\s*(?:el\s*)?env[ií]o|env[ií]an?\s*a\s+\w|mandan?\s*a\s+\w|llega\s*a\s+\w|env[ií]os?\s*a\s+\w)/i;
   
   if(ESTADOS_VENTA_ACTIVA.includes(session.state) && regexPreguntaEnvio.test(text)){
@@ -2031,16 +2027,8 @@ async function handleIncomingMessage(msg) {
     
     const tieneSi = /\bsi\b|sí|quiero|dale|claro|por\s*fa|me\s*interesa/i.test(text);
     
-    if(session.state === "PREGUNTANDO_INTERES" && tieneSi){
-      account.metrics.intent_yes+=1;
-      session.state="PREGUNTANDO_METODO";
-      respEnvio += `\nPara calcular el monto exacto ocupo tus datos de envío 😊\n\n${frase("pedir_metodo",waId)}`;
-    } else if(session.state === "PREGUNTANDO_INTERES"){
-      respEnvio += `\nEntonces, ¿te interesa adquirir la prenda? 😊\n\n1. ✅ Sí, quiero\n2. ❌ No, gracias`;
-    } else {
-      const recordatorio = FRASES.recordatorio_flujo[session.state] || "";
-      if(recordatorio) respEnvio += `\n${recordatorio}`;
-    }
+    const recordatorio = FRASES.recordatorio_flujo[session.state] || "";
+    if(recordatorio) respEnvio += `\n${recordatorio}`;
     
     await sendTextWithTyping(waId, respEnvio);
     saveDataToDisk();
@@ -2059,38 +2047,6 @@ async function handleIncomingMessage(msg) {
   // ====== MULTI: Esperando a que dueño confirme disponibilidad ======
   if(session.state==="MULTI_ESPERANDO_DISPONIBILIDAD"){
     await sendTextWithTyping(waId, "Estoy revisando tu lista, un momento 🙌");
-    return;
-  }
-
-  // ====== PARCIAL: Cliente decide si quiere los productos disponibles ======
-  if(session.state==="PREGUNTANDO_INTERES_PARCIAL"){
-    const tieneSi = lower.includes("1") || lower.includes("si") || lower.includes("sí") || lower.includes("interesa") || lower.includes("quiero");
-    const tieneNo = lower.includes("2") || lower.includes("no");
-    
-    if(tieneSi){
-      const disp = session.multi_disponibles || [];
-      if(disp.length === 1){
-        // Un solo producto disponible - flujo normal
-        session.state = "PREGUNTANDO_METODO";
-        await sendTextWithTyping(waId, `¡Perfecto! 🎉\n\n${frase("pedir_metodo", waId)}`);
-      } else {
-        // Varios productos - preguntar cuáles
-        session.state = "MULTI_SELECCION_CLIENTE";
-        const lista = disp.map((p,i) => `${i+1}. ${p.producto} - ₡${(p.precio||0).toLocaleString()}`).join("\n");
-        const total = disp.reduce((s,p) => s + (p.precio||0), 0);
-        await sendTextWithTyping(waId,
-          `¡Perfecto! 🎉\n\n¿Cuáles querés llevar?\n\n${lista}\n\n💰 Total: ₡${total.toLocaleString()}\n\n` +
-          `• Escribí *"todos"* para llevarlos todos\n` +
-          `• O escribí los números separados por coma (ej: *1,2*)`
-        );
-      }
-    } else if(tieneNo){
-      session.state = "PREGUNTANDO_ALGO_MAS";
-      await sendTextWithTyping(waId, `No hay problema 😊 ¿Te puedo ayudar con algo más?\n\n${CATALOG_URL}`);
-    } else {
-      await sendTextWithTyping(waId, `¿Te interesa?\n\n1. ✅ Sí, me interesa\n2. ❌ No, gracias\n\nRespondé con el número 👆`);
-    }
-    saveDataToDisk();
     return;
   }
 
@@ -2156,20 +2112,6 @@ async function handleIncomingMessage(msg) {
     return;
   }
 
-  if(session.state==="PREGUNTANDO_INTERES"){
-    if(lower==="si"||lower==="sí"||lower.includes("quiero")||lower.includes("interesa")){
-      account.metrics.intent_yes+=1; session.state="PREGUNTANDO_METODO";
-      await sendTextWithTyping(waId,`${frase("confirmacion",waId)}\n\n${frase("pedir_metodo",waId)}`);
-      saveDataToDisk();return;
-    }
-    if(lower==="no"||lower.includes("no me")){
-      account.metrics.intent_no+=1; session.state="PREGUNTANDO_ALGO_MAS";
-      await sendTextWithTyping(waId,frase("no_quiere",waId));
-      saveDataToDisk();return;
-    }
-    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. ✅ Sí\n2. ❌ No");return;
-  }
-
   if(session.state==="PREGUNTANDO_ALGO_MAS"){
     if(lower==="no"||lower.includes("nada")||lower.includes("eso es todo")){
       await sendTextWithTyping(waId,frase("despedida",waId)); resetSession(session); saveDataToDisk(); return;
@@ -2187,7 +2129,7 @@ async function handleIncomingMessage(msg) {
     if(lower.includes("envio")||lower.includes("envío")||lower==="si"||lower==="1"){
       session.delivery_method="envio"; account.metrics.delivery_envio+=1;
       session.state="ESPERANDO_UBICACION_ENVIO";
-      await sendTextWithTyping(waId,"¡Claro! 📦 Para calcularte el costo del envío necesito tu ubicación.\n\nEscribí tu *Provincia - Cantón - Distrito* 📍\n(Ej: Heredia - Central - Mercedes)");
+      await sendTextWithTyping(waId,"¡Claro! 📦 ¿De qué zona sos?\n\nEscribí tu *Provincia y Cantón* 📍\n(Ej: Heredia, Central)");
       saveDataToDisk();return;
     }
     if(lower.includes("recoger")||lower.includes("tienda")||lower==="no"||lower==="2"){
@@ -2199,31 +2141,19 @@ async function handleIncomingMessage(msg) {
     await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda");return;
   }
 
-  // PRE-PAGO: Provincia-Cantón-Distrito en 1 sola pregunta
+  // PRE-PAGO: Provincia y Cantón para calcular envío
   if(session.state==="ESPERANDO_UBICACION_ENVIO"){
-    if(text.trim().length < 5){
-      await sendTextWithTyping(waId,"Ocupo tu ubicación 📍\n\nEscribí tu *Provincia - Cantón - Distrito*\n(Ej: Heredia - Central - Mercedes)");
+    if(text.trim().length < 3){
+      await sendTextWithTyping(waId,"Ocupo tu zona para calcular el envío 📍\n\n(Ej: Heredia, Central)");
       return;
-    }
-    const partes = text.split(/[-,\/]/).map(p => p.trim()).filter(p => p.length > 0);
-    if(partes.length >= 3){
-      session.envio_provincia = partes[0];
-      session.envio_canton = partes[1];
-      session.envio_distrito = partes[2];
-    } else {
-      session.envio_provincia = text.trim();
-      session.envio_canton = "";
-      session.envio_distrito = "";
     }
     session.client_zone = text.trim();
     session.state = "ZONA_RECIBIDA";
     
-    // PRIMERO responder al cliente
     await sendTextWithTyping(waId,frase("espera_zona",waId));
     
-    // DESPUÉS notificar al dueño
     console.log(`📍 Zona recibida de ${waId}: ${session.client_zone}`);
-    io.emit("zone_received",{waId, zone:session.client_zone, producto:session.producto, codigo:session.codigo, precio:session.precio, talla_color:session.talla_color, foto_url:session.foto_url, provincia:session.envio_provincia, canton:session.envio_canton, distrito:session.envio_distrito});
+    io.emit("zone_received",{waId, zone:session.client_zone, producto:session.producto, codigo:session.codigo, precio:session.precio, talla_color:session.talla_color, foto_url:session.foto_url});
     sendPushoverAlert("ZONA", {waId, zone:session.client_zone, phone:profile.phone||waId});
     saveDataToDisk();return;
   }
@@ -2299,7 +2229,7 @@ async function handleIncomingMessage(msg) {
   if(session.state==="ESPERANDO_DATOS_ENVIO"){
     console.log(`📦 ESPERANDO_DATOS_ENVIO detectado, texto: "${text.substring(0,50)}..."`);
     if(text.trim().length < 3){
-      await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*");
+      await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre completo, Teléfono y Dirección exacta (distrito, señas)*");
       return;
     }
     
@@ -2400,7 +2330,7 @@ async function handleIncomingMessage(msg) {
       session.envio_nombre = null;
       session.envio_telefono = null;
       session.envio_direccion = null;
-      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nOcupo:\n*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nOcupo:\n*Nombre completo, Teléfono y Dirección exacta*\n\n(Ej: María López, 88881234, Mercedes de Heredia, frente a la iglesia)");
       saveDataToDisk();return;
     }
     
@@ -2706,16 +2636,16 @@ async function executeAction(clientWaId, actionType, data = {}) {
   const session = getSession(clientWaId);
 
   if (actionType === "SI_HAY") {
-    session.state = "PREGUNTANDO_INTERES";
+    session.state = "PREGUNTANDO_METODO";
     pendingQuotes.delete(clientWaId);
     account.metrics.quotes_sent += 1;
     const price = session.precio || 0;
     await sendTextWithTyping(clientWaId,
-      `${frase("si_hay", clientWaId)}\n\n📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 ₡${price.toLocaleString()}\n\n¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
+      `${frase("si_hay", clientWaId)}\n\n📦 ${session.producto || 'Artículo'}\n👕 ${session.talla_color || '-'}\n💰 ₡${price.toLocaleString()}\n\n¿Cómo lo querés recibir?\n\n1. 📦 Envío a domicilio\n2. 🏪 Recoger en tienda`
     );
     saveDataToDisk();
     io.emit("pending_resolved", { waId: clientWaId });
-    return { success: true, message: "Stock confirmado, preguntando interés" };
+    return { success: true, message: "Stock confirmado, preguntando método" };
   }
 
   if (actionType === "ENVIO") {
@@ -2790,15 +2720,14 @@ async function executeAction(clientWaId, actionType, data = {}) {
         session.foto_url = p.foto_url_local || p.foto_url;
       }
       session.multi_disponibles = hayDisponibles;
-      session.state = "PREGUNTANDO_INTERES_PARCIAL";
+      session.state = "PREGUNTANDO_METODO";
       
       await sendTextWithTyping(clientWaId,
         `No tenemos ${noHayNombres} 😔\n\n` +
         `Pero sí te puedo ofrecer:\n\n${linksDisponibles}\n\n` +
-        `¿Te interesa?\n\n` +
-        `1. ✅ Sí, me interesa\n` +
-        `2. ❌ No, gracias\n\n` +
-        `Respondé con el número 👆`
+        `¿Cómo lo querés recibir?\n\n` +
+        `1. 📦 Envío a domicilio\n` +
+        `2. 🏪 Recoger en tienda`
       );
       
       saveDataToDisk();
@@ -2853,10 +2782,10 @@ async function executeAction(clientWaId, actionType, data = {}) {
       session.codigo = p.codigo;
       session.talla_color = [p.talla, p.color, p.tamano].filter(Boolean).join(", ");
       session.foto_url = p.foto_url_local || p.foto_url;
-      session.state = "PREGUNTANDO_INTERES";
+      session.state = "PREGUNTANDO_METODO";
       
       await sendTextWithTyping(clientWaId,
-        `¡Ese sí lo tenemos! 🎉\n\n¿Te interesa comprar este producto?\n\n1. ✅ Sí, quiero comprarlo\n2. 👀 No, solo estoy viendo`
+        `¡Ese sí lo tenemos! 🎉\n\n📦 ${session.producto}\n👕 ${session.talla_color || '-'}\n💰 ₡${(session.precio||0).toLocaleString()}\n\n¿Cómo lo querés recibir?\n\n1. 📦 Envío a domicilio\n2. 🏪 Recoger en tienda`
       );
     } else {
       // Varios disponibles — cliente elige cuáles comprar
@@ -2884,12 +2813,12 @@ async function executeAction(clientWaId, actionType, data = {}) {
     io.emit("pending_resolved", { waId: clientWaId });
     if (session.delivery_method === "envio") {
       session.state = "ESPERANDO_DATOS_ENVIO";
+      const zonaYa = session.client_zone ? `\n📍 Zona: ${session.client_zone}` : '';
       await sendTextWithTyping(clientWaId,
-        `¡Pago confirmado! 🙌 Ahora dejamos todo listo para enviarlo mañana.\n\n` +
-        `Ahora necesito tus datos para enviarte el paquete 📦\n\n` +
-        `Ocupo:\n` +
-        `*Nombre, Teléfono, Provincia, Cantón, Distrito y Señas*\n\n` +
-        `(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)`
+        `¡Pago confirmado! 🙌${zonaYa}\n\n` +
+        `Para enviarte el paquete ocupo tus datos completos 📦\n\n` +
+        `*Nombre completo\nTeléfono\nDirección exacta (distrito, señas)*\n\n` +
+        `(Ej: María López, 88881234, Mercedes de Heredia, frente a la iglesia)`
       );
       saveDataToDisk();
       return { success: true, message: "Pago confirmado, pidiendo datos de envío" };
@@ -3071,10 +3000,7 @@ app.get("/api/history", (req, res) => {
 
 app.use(express.json());
 
-app.post("/api/admin/purge", (req, res) => {
-  const pwd = req.query.pwd;
-  if (pwd !== PANEL_PIN && pwd !== USER_PASSWORD) return res.status(403).json({ success: false, error: "No autorizado" });
-  
+app.post("/api/admin/purge", adminAuth, (req, res) => {
   const { beforeDate, purgeSessions, purgeSales, purgeHistory } = req.body;
   if (!beforeDate) return res.json({ success: false, error: "Falta fecha" });
   
@@ -3273,7 +3199,7 @@ app.get("/api/admin/dashboard", adminAuth, (req, res) => {
       activeSessions.push(info);
       
       // Abandonados: cliente no respondió en >2h mientras bot esperaba respuesta
-      const clientWaiting = ["PREGUNTANDO_INTERES","PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO","ESPERANDO_SINPE","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
+      const clientWaiting = ["PREGUNTANDO_METODO","PRECIO_TOTAL_ENVIADO","ESPERANDO_UBICACION_ENVIO","ESPERANDO_SINPE","ESPERANDO_DATOS_ENVIO","CONFIRMANDO_DATOS_ENVIO"];
       if(clientWaiting.includes(s.state) && age > TWO_HOURS){
         abandoned.push(info);
       }
