@@ -3094,6 +3094,22 @@ app.post("/api/admin/purge", (req, res) => {
     historyDeleted = before - chatHistory.length;
   }
   
+  // Resetear métricas si se purgaron sesiones o ventas
+  if(purgeSessions || purgeSales) {
+    account.metrics.chats_total = 0;
+    account.metrics.quotes_sent = 0;
+    account.metrics.intent_yes = 0;
+    account.metrics.intent_no = 0;
+    account.metrics.delivery_envio = 0;
+    account.metrics.delivery_recoger = 0;
+    account.metrics.sinpe_confirmed = 0;
+    account.metrics.sales_completed = salesLog.length;
+    account.metrics.total_revenue = salesLog.reduce((s, v) => s + (v.total||0), 0);
+    account.metrics.estados_sent = 0;
+    account.metrics.mensajes_enviados = 0;
+    account.metrics.ia_calls = 0;
+  }
+  
   saveDataToDisk();
   console.log(`🗑️ PURGA: sesiones=${sessionsDeleted} ventas=${salesDeleted} historial=${historyDeleted} (antes de ${beforeDate})`);
   res.json({ success: true, sessionsDeleted, salesDeleted, historyDeleted });
