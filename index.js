@@ -1866,6 +1866,53 @@ async function handleIncomingMessage(msg) {
     }
   }
   
+  // ✅ Detectar talla suelta con contexto de categoría anterior
+  // Ej: después de preguntar por jeans, escribe "y talla 5/6" o "5/6" o "y en M"
+  if (session.ultimaCategoriaBuscada && (session.state === "ESPERANDO_RESPUESTA_CATALOGO" || session.state === "NEW")) {
+    const regexTallaSuelta = /^(?:y\s+)?(?:talla\s+)?(\d{1,2}\/\d{1,2})\s*(?:tienen|hay|tiene)?$/i;
+    const regexTallaLetraSuelta = /^(?:y\s+)?(?:talla\s+)?(?:en\s+)?\b(xxl|2xl|3xl|xl|xs|s|m|l)\b\s*(?:tienen|hay|tiene)?$/i;
+    const matchSuelta = lower.trim().match(regexTallaSuelta) || lower.trim().match(regexTallaLetraSuelta);
+    
+    if (matchSuelta) {
+      const tallaQuery = `${session.ultimaCategoriaBuscada} ${matchSuelta[1]}`;
+      console.log(`🔍 TALLA-CONTEXTO: "${lower}" → buscando "${tallaQuery}" en categoría ${session.ultimaCategoriaBuscada}`);
+      await loadCatalog();
+      const resultadoTalla = buscarPreciosPorTipo(tallaQuery);
+      
+      if (resultadoTalla && resultadoTalla.encontrados > 0) {
+        let linkCat = `${CATALOG_URL}/catalogo.html?root=${resultadoTalla.rootCategoria}&cat=${resultadoTalla.categoria}`;
+        if (resultadoTalla.tallaDetectada && resultadoTalla.tallaDisponible) {
+          linkCat += `&talla=${encodeURIComponent(resultadoTalla.tallaDetectada)}`;
+        }
+        
+        if (resultadoTalla.encontrados === 1) {
+          const p = resultadoTalla.productos[0];
+          const pf = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
+          const dt = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
+          await sendTextWithTyping(waId, `¡Sí! Tenemos ${p.nombre} a ₡${pf.toLocaleString()}${dt} 👕\n\nRevisalo acá 👇\n${linkCat}`);
+        } else {
+          let msg = resultadoTalla.tallaDetectada 
+            ? `¡Sí! Tenemos ${resultadoTalla.display} en talla ${resultadoTalla.tallaDetectada}, varios estilos disponibles 🛍️`
+            : `¡Claro! Tenemos ${resultadoTalla.display} desde ₡${resultadoTalla.minPrecio.toLocaleString()} hasta ₡${resultadoTalla.maxPrecio.toLocaleString()} 🛍️`;
+          if (resultadoTalla.conDescuento > 0) {
+            msg += `\n\n🔥 Además tenemos varias opciones con descuento, hasta ${resultadoTalla.maxDescuento}% OFF`;
+          }
+          msg += `\n\nRevisalas acá 👇\n${linkCat}`;
+          await sendTextWithTyping(waId, msg);
+        }
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+        saveDataToDisk();
+        return;
+      } else if (resultadoTalla && resultadoTalla.tallaDetectada && !resultadoTalla.tallaDisponible) {
+        const linkSinTalla = `${CATALOG_URL}/catalogo.html?root=${resultadoTalla.rootCategoria}&cat=${resultadoTalla.categoria}`;
+        await sendTextWithTyping(waId, `No tenemos ${resultadoTalla.display} en talla ${resultadoTalla.tallaDetectada} en este momento 😔\n\nPero podés revisar todos los ${resultadoTalla.display} disponibles acá 👇\n${linkSinTalla}`);
+        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+        saveDataToDisk();
+        return;
+      }
+    }
+  }
+
   // ✅ Detectar "esos son todos" después de mostrar catálogo
   const preguntaSonTodos = /(?:esos|esas|estos|estas)\s*(?:son|nomas|nomás|nada mas|nada más)?\s*(?:todos|todas|todo|lo que hay|lo que tienen|tienen)/i;
   const preguntaHayMas = /(?:hay|tienen|no hay)\s*(?:mas|más|otros?|otras?)/i;
