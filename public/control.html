@@ -109,6 +109,7 @@
     /* Content */
     .content { display: none; padding: 1rem; max-width: 1200px; margin: 0 auto; }
     .content.active { display: block; }
+    .hidden { display: none !important; }
     
     /* Cards */
     .card {
@@ -468,29 +469,64 @@
     </div>
     
     <div class="card">
-      <div class="card-title">📈 Métricas del Bot</div>
+      <div class="card-title">📊 Embudo de Conversión</div>
       <div class="metrics-grid">
         <div class="metric-card">
           <div class="metric-value" id="chatsToday">0</div>
           <div class="metric-label">Chats Hoy</div>
         </div>
+        <div class="metric-card" style="border-color:rgba(59,130,246,0.3);">
+          <div class="metric-value" style="color:#3b82f6;" id="quotesTotal">0</div>
+          <div class="metric-label">📋 Consultaron</div>
+          <div class="metric-sub">Pidieron producto</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(168,85,247,0.3);">
+          <div class="metric-value" style="color:#a855f7;" id="metodoTotal">0</div>
+          <div class="metric-label">🚚 Eligieron Envío</div>
+          <div class="metric-sub">Envío + Retiro</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(34,197,94,0.3);">
+          <div class="metric-value" style="color:#22c55e;" id="salesCount">0</div>
+          <div class="metric-label">✅ Ventas</div>
+          <div class="metric-sub">Pagaron SINPE</div>
+        </div>
+      </div>
+      <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 0;">
         <div class="metric-card">
-          <div class="metric-value" id="quotesTotal">0</div>
-          <div class="metric-label">Cotizaciones</div>
+          <div class="metric-value" style="font-size:1.4rem;" id="convConsulta">0%</div>
+          <div class="metric-label">Chat → Consulta</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" id="intentYes">0</div>
-          <div class="metric-label">Interesados</div>
+          <div class="metric-value" style="font-size:1.4rem;" id="convMetodo">0%</div>
+          <div class="metric-label">Consulta → Envío</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value" id="contactsTotal">0</div>
-          <div class="metric-label">Contactos</div>
+          <div class="metric-value" style="font-size:1.4rem;" id="convVenta">0%</div>
+          <div class="metric-label">Chat → Venta</div>
         </div>
       </div>
     </div>
+    
+    <div class="card" style="border-color:rgba(239,68,68,0.2);">
+      <div class="card-title" style="cursor:pointer;" onclick="document.getElementById('purgePanel').classList.toggle('hidden')">🗑️ Limpiar datos antiguos <span style="font-size:0.75rem;color:var(--text-muted);">▼</span></div>
+      <div id="purgePanel" class="hidden">
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Eliminar datos anteriores a la fecha seleccionada. No se puede deshacer.</p>
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:150px;">
+            <label style="color:var(--text-muted);font-size:0.75rem;">Antes de:</label>
+            <input type="date" id="purgeDate" class="form-input" style="margin-top:4px;">
+          </div>
+          <button onclick="purgarDatos()" style="background:#ef4444;color:#fff;border:none;padding:0.6rem 1.2rem;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">🗑️ Eliminar</button>
+        </div>
+        <div style="display:flex;gap:15px;margin-top:10px;flex-wrap:wrap;">
+          <label style="color:var(--text);font-size:0.85rem;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="purgeSessions" checked> Sesiones</label>
+          <label style="color:var(--text);font-size:0.85rem;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="purgeSales"> Ventas</label>
+          <label style="color:var(--text);font-size:0.85rem;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="purgeHistory" checked> Historial</label>
+        </div>
+        <div id="purgeResult" style="margin-top:10px;"></div>
+      </div>
+    </div>
   </div>
-
-  <!-- Tab: Ventas WA -->
   <div class="content" id="tab-ventas">
     <div class="filters">
       <select class="filter-select" id="filterStatus">
@@ -668,15 +704,32 @@
         document.getElementById('revenueTotal').textContent = '₡' + (d.sales.all?.revenue || 0).toLocaleString();
       }
       
-      // Métricas
+      // Métricas de embudo
       if (d.chats) {
         document.getElementById('chatsToday').textContent = d.chats.today || 0;
       }
       if (d.metrics) {
-        document.getElementById('quotesTotal').textContent = d.metrics.quotes_sent || 0;
-        document.getElementById('intentYes').textContent = d.metrics.intent_yes || 0;
+        const totalChats = d.metrics.chats_total || 0;
+        const consultas = d.metrics.quotes_sent || 0;
+        const metodo = (d.metrics.delivery_envio || 0) + (d.metrics.delivery_recoger || 0);
+        const ventas = d.metrics.sales_completed || 0;
+        
+        document.getElementById('quotesTotal').textContent = consultas;
+        document.getElementById('metodoTotal').textContent = metodo;
+        document.getElementById('salesCount').textContent = ventas;
+        
+        const pctConsulta = totalChats > 0 ? Math.round((consultas / totalChats) * 100) : 0;
+        const pctMetodo = consultas > 0 ? Math.round((metodo / consultas) * 100) : 0;
+        const pctVenta = totalChats > 0 ? Math.round((ventas / totalChats) * 100) : 0;
+        
+        document.getElementById('convConsulta').textContent = pctConsulta + '%';
+        document.getElementById('convMetodo').textContent = pctMetodo + '%';
+        document.getElementById('convVenta').textContent = pctVenta + '%';
+        
+        document.getElementById('convConsulta').style.color = pctConsulta >= 30 ? '#22c55e' : pctConsulta >= 15 ? '#f59e0b' : '#ef4444';
+        document.getElementById('convMetodo').style.color = pctMetodo >= 50 ? '#22c55e' : pctMetodo >= 25 ? '#f59e0b' : '#ef4444';
+        document.getElementById('convVenta').style.color = pctVenta >= 15 ? '#22c55e' : pctVenta >= 5 ? '#f59e0b' : '#ef4444';
       }
-      document.getElementById('contactsTotal').textContent = d.contacts_total || 0;
       
       // Alertas
       renderAlerts(d.alerts || {});
@@ -915,6 +968,44 @@
     document.getElementById('filterSearch').addEventListener('input', renderSales);
     document.getElementById('filterChats').addEventListener('input', renderChats);
     
+    async function purgarDatos() {
+      const fecha = document.getElementById('purgeDate').value;
+      if (!fecha) { alert('Seleccioná una fecha'); return; }
+      const purgeSessions = document.getElementById('purgeSessions').checked;
+      const purgeSales = document.getElementById('purgeSales').checked;
+      const purgeHistory = document.getElementById('purgeHistory').checked;
+      if (!purgeSessions && !purgeSales && !purgeHistory) { alert('Seleccioná al menos una opción'); return; }
+      
+      var items = [];
+      if (purgeSessions) items.push('sesiones');
+      if (purgeSales) items.push('ventas');
+      if (purgeHistory) items.push('historial');
+      
+      if (!confirm('¿Seguro? Esto eliminará ' + items.join(', ') + ' anteriores al ' + fecha + '.\n\nNo se puede deshacer.')) return;
+      
+      try {
+        const res = await fetch(API_BASE + '/api/admin/purge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ beforeDate: fecha + 'T23:59:59.999Z', purgeSessions, purgeSales, purgeHistory })
+        });
+        const data = await res.json();
+        if (data.success) {
+          var msg = '✅ Limpieza completada:';
+          if (data.sessionsDeleted > 0) msg += ' ' + data.sessionsDeleted + ' sesiones';
+          if (data.salesDeleted > 0) msg += ' ' + data.salesDeleted + ' ventas';
+          if (data.historyDeleted > 0) msg += ' ' + data.historyDeleted + ' mensajes';
+          if (data.sessionsDeleted === 0 && data.salesDeleted === 0 && data.historyDeleted === 0) msg += ' No había datos anteriores a esa fecha';
+          document.getElementById('purgeResult').innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:10px;border-radius:8px;font-size:0.85rem;">' + msg + '</div>';
+          loadDashboard();
+        } else {
+          document.getElementById('purgeResult').innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:10px;border-radius:8px;font-size:0.85rem;">' + (data.error || 'Error al limpiar') + '</div>';
+        }
+      } catch(e) {
+        document.getElementById('purgeResult').innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:10px;border-radius:8px;font-size:0.85rem;">Error de conexión: ' + e.message + '</div>';
+      }
+    }
+
     // Iniciar
     init();
     
