@@ -1940,12 +1940,11 @@ async function handleIncomingMessage(msg) {
 
   // ✅ Detectar CANCELACIÓN de compra durante el flujo (ANTES de la IA)
   const ESTADOS_VENTA_CANCEL = ["PREGUNTANDO_METODO", "ESPERANDO_UBICACION_ENVIO", "ZONA_RECIBIDA", "PRECIO_TOTAL_ENVIADO", "ESPERANDO_SINPE", "ESPERANDO_DATOS_ENVIO", "CONFIRMANDO_DATOS_ENVIO", "ESPERANDO_CONFIRMACION_VENDEDOR", "MULTI_ESPERANDO_DISPONIBILIDAD", "MULTI_SELECCION_CLIENTE"];
-  const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto)/i;
+  const pideCancelar = /(?:ya no|no quiero|cancelar|cancela|cancelemos|mejor no|dejalo|déjalo|olvidalo|olvídalo|no me interesa|cambié de opinión|cambie de opinion|no va|nel|ya no lo quiero|ya no quiero|no lo quiero|desisto|solo preguntaba|solo pregunto|solo consultaba|nada mas|nada más|no gracias|no, gracias|no por ahora|luego veo|después veo|despues veo|voy a pensarlo|lo pienso|tal vez luego|tal vez después|quizás luego|quizas luego|era solo una consulta|solo era consulta|no por el momento|por ahora no|ahora no|no ocupo|no necesito)/i;
   
   if(ESTADOS_VENTA_CANCEL.includes(session.state) && pideCancelar.test(lower)){
     await sendTextWithTyping(waId,
-      `Lamentamos que canceles tu compra 😔\n\n` +
-      `Igualmente estamos para servirte cuando gustés. ¡Pura vida! 🙌`
+      `¡Con gusto! 😊 Cualquier cosa aquí estamos para ayudarte.\n\n¡Pura vida! 🙌\n\n${CATALOG_URL}`
     );
     pendingQuotes.delete(waId);
     io.emit("pending_resolved", { waId });
@@ -2150,7 +2149,12 @@ async function handleIncomingMessage(msg) {
       await sendTextWithTyping(waId,`📦 ${session.producto||'Artículo'}\n👕 ${session.talla_color||'-'}\n💰 Precio: ₡${price.toLocaleString()}\n\n🏪 Retiro en tienda:\n📍 ${STORE_ADDRESS}\n🕒 ${HOURS_DAY}\n\n¿Estás de acuerdo?\n\n1. ✅ Sí\n2. ❌ No\n\nResponde con el número 👆`);
       saveDataToDisk();return;
     }
-    await sendTextWithTyping(waId,"Por favor contestá con el número de la opción 🙌\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda");return;
+    // Si dice gracias pero sin rechazo claro, despedir amablemente
+    if(lower.includes("gracias")||lower.includes("gracia")){
+      await sendTextWithTyping(waId,`¡Con gusto! 😊 Si te decidís, aquí estamos.\n\n¡Pura vida! 🙌`);
+      resetSession(session); saveDataToDisk(); return;
+    }
+    await sendTextWithTyping(waId,"¿Cómo lo querés recibir? 🙌\n\n1. 📦 Envío a domicilio\n2. 🏪 Recoger en tienda\n\nRespondé con el número 👆");return;
   }
 
   // PRE-PAGO: Provincia y Cantón para calcular envío
