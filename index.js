@@ -2970,6 +2970,46 @@ io.on("connection", (socket) => {
   socket.on("update_contact", (data) => { if (!data.waId) return; const p = getProfile(data.waId); if (data.name !== undefined) p.name = data.name; if (data.blocked !== undefined) p.blocked = data.blocked; saveDataToDisk(); io.emit("contact_updated", { contact: p }); });
   socket.on("delete_contact", (data) => { if (!data.waId) return; profiles.delete(data.waId); saveDataToDisk(); io.emit("contact_deleted", { waId: data.waId }); });
   socket.on("delete_chats", (data) => { if (!data.waId) return; const n = normalizePhone(data.waId); chatHistory = chatHistory.filter(m => m.waId !== n); sessions.delete(n); pendingQuotes.delete(n); saveDataToDisk(); io.emit("chats_deleted", { waId: n }); });
+  
+  // Purgar datos antiguos por fecha
+  socket.on("purge_data", (data) => {
+    const { beforeDate, purgeSessions, purgeSales, purgeHistory } = data;
+    if (!beforeDate) return socket.emit("purge_result", { success: false, error: "Falta fecha" });
+    const cutoff = new Date(beforeDate).getTime();
+    let sessionsDeleted = 0, salesDeleted = 0, historyDeleted = 0;
+    
+    if (purgeSessions) {
+      const before = sessions.size;
+      for (const [id, s] of sessions.entries()) {
+        if (s.last_activity && s.last_activity < cutoff) {
+          sessions.delete(id);
+          sessionsDeleted++;
+        }
+      }
+    }
+    
+    if (purgeSales) {
+      const before = salesLog.length;
+      salesLog = salesLog.filter(s => {
+        const saleTime = s.date ? new Date(s.date).getTime() : (s.timestamp ? new Date(s.timestamp).getTime() : Date.now());
+        return saleTime >= cutoff;
+      });
+      salesDeleted = before - salesLog.length;
+    }
+    
+    if (purgeHistory) {
+      const before = chatHistory.length;
+      chatHistory = chatHistory.filter(m => {
+        const msgTime = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
+        return msgTime >= cutoff;
+      });
+      historyDeleted = before - chatHistory.length;
+    }
+    
+    saveDataToDisk();
+    console.log(`🗑️ PURGA: sesiones=${sessionsDeleted} ventas=${salesDeleted} historial=${historyDeleted} (antes de ${beforeDate})`);
+    socket.emit("purge_result", { success: true, sessionsDeleted, salesDeleted, historyDeleted });
+  });
   socket.on("get_metrics", () => { socket.emit("metrics", { metrics: account.metrics }); });
   socket.on("search_history", (filters) => { const results = searchHistory(filters); socket.emit("history_results", { count: results.length, messages: results }); });
 });
@@ -2980,6 +3020,50 @@ app.get("/status", (req, res) => res.json({ connection: connectionStatus, phone:
 app.get("/api/history", (req, res) => {
   const results = searchHistory({ phone: req.query.phone, from: req.query.from, to: req.query.to, text: req.query.text });
   res.json({ count: results.length, messages: results });
+});
+
+app.use(express.json());
+
+app.post("/api/admin/purge", (req, res) => {
+  const pwd = req.query.pwd;
+  if (pwd !== PANEL_PIN && pwd !== USER_PASSWORD) return res.status(403).json({ success: false, error: "No autorizado" });
+  
+  const { beforeDate, purgeSessions, purgeSales, purgeHistory } = req.body;
+  if (!beforeDate) return res.json({ success: false, error: "Falta fecha" });
+  
+  const cutoff = new Date(beforeDate).getTime();
+  let sessionsDeleted = 0, salesDeleted = 0, historyDeleted = 0;
+  
+  if (purgeSessions) {
+    for (const [id, s] of sessions.entries()) {
+      if (s.last_activity && s.last_activity < cutoff) {
+        sessions.delete(id);
+        sessionsDeleted++;
+      }
+    }
+  }
+  
+  if (purgeSales) {
+    const before = salesLog.length;
+    salesLog = salesLog.filter(s => {
+      const saleTime = s.date ? new Date(s.date).getTime() : (s.timestamp ? new Date(s.timestamp).getTime() : Date.now());
+      return saleTime >= cutoff;
+    });
+    salesDeleted = before - salesLog.length;
+  }
+  
+  if (purgeHistory) {
+    const before = chatHistory.length;
+    chatHistory = chatHistory.filter(m => {
+      const msgTime = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
+      return msgTime >= cutoff;
+    });
+    historyDeleted = before - chatHistory.length;
+  }
+  
+  saveDataToDisk();
+  console.log(`🗑️ PURGA: sesiones=${sessionsDeleted} ventas=${salesDeleted} historial=${historyDeleted} (antes de ${beforeDate})`);
+  res.json({ success: true, sessionsDeleted, salesDeleted, historyDeleted });
 });
 
 app.get("/api/sales", (req, res) => {
