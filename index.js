@@ -360,13 +360,14 @@ function buscarPreciosPorTipo(query) {
   }
   
   // FILTRO 3: Por talla específica
-  const regexTalla = /(?:talla\s+)?(\d{1,2}\/\d{1,2}|\d{1,2}|xs|s|m|l|xl|xxl|2xl|3xl)/i;
-  const matchTalla = lower.match(regexTalla);
+  // Primero buscar tallas numéricas (19/20, 5/6, etc), luego letras como palabra suelta
+  const regexTallaNum = /(\d{1,2}\/\d{1,2})/;
+  const regexTallaLetra = /\b(xxl|2xl|3xl|xl|xs|s|m|l)\b/i;
+  let matchTalla = lower.match(regexTallaNum);
+  if (!matchTalla) matchTalla = lower.match(regexTallaLetra);
   let tallaDetectada = null;
-  // Solo tomar como talla si no es parte de otra cosa (ej: "5 mil" no es talla)
   if (matchTalla) {
     const posibleTalla = matchTalla[1].toUpperCase();
-    // Verificar que es una talla real buscándola en algún producto
     const esTallaReal = todosCategoria.some(p => {
       if (!p.tallas) return false;
       return p.tallas.split(',').some(t => t.trim().toUpperCase() === posibleTalla);
