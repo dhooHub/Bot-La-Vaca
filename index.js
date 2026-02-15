@@ -674,7 +674,7 @@ function getStateDescription(state) {
     ZONA_RECIBIDA: "Se le dijo que estamos calculando el envío",
     PRECIO_TOTAL_ENVIADO: "Se le mostró el precio total y se preguntó si está de acuerdo",
     ESPERANDO_SINPE: "Se le dieron los datos de SINPE y se espera el comprobante",
-    ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono y dirección exacta para envío",
+    ESPERANDO_DATOS_ENVIO: "Se le pidió nombre, teléfono, provincia, cantón, distrito y otras señas para envío",
     CONFIRMANDO_DATOS_ENVIO: "Se le mostró resumen del pedido y se preguntó si está correcto (1=sí, 2=no)",
   };
   return map[state] || state;
@@ -727,7 +727,7 @@ const FRASES = {
     ZONA_RECIBIDA: "Y sobre tu pedido, estoy calculando el envío 🙌",
     PRECIO_TOTAL_ENVIADO: "Y sobre tu pedido, ¿estás de acuerdo con el precio?\n\n1. ✅ Sí\n2. ❌ No",
     ESPERANDO_SINPE: "Y sobre tu pago, estoy esperando el comprobante de SINPE 🧾",
-    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, ocupo: *Nombre completo, Teléfono y Dirección exacta (distrito, señas)* 📦",
+    ESPERANDO_DATOS_ENVIO: "Y sobre tu envío, ocupo: *Nombre, Teléfono, Provincia, Cantón, Distrito y Otras señas* 📦",
     CONFIRMANDO_DATOS_ENVIO: "Y sobre tu pedido, ¿los datos están correctos?\n\n1. ✅ Sí\n2. ❌ No",
   },
 };
@@ -1095,12 +1095,22 @@ function parseWebMessage(text) {
   if(!text.includes("interesado")||!text.includes("producto"))return null;
   const result={producto:null,precio:null,codigo:null,foto_url:null,talla:null,color:null,tamano:null,producto_url:null};
   
-  // Extraer nombre del producto (después de "producto:" hasta el salto de línea o "Precio:")
-  const productoMatch=text.match(/producto:\s*([^\n]+?)(?:\s*Precio:|$)/i); 
+  // Extraer nombre del producto - múltiples formatos:
+  // Formato 1: "producto:\n\nNombre - ₡Precio"
+  // Formato 2: "producto:\s*Nombre"  
+  // Formato 3: Línea con "Nombre - ₡Precio (X% OFF) - Código: XXX"
+  const productoMatch=text.match(/producto:\s*\n?\s*([^\n]+?)(?:\s*-\s*[₡¢]|\s*Precio:|$)/i); 
   if(productoMatch)result.producto=productoMatch[1].trim();
   
-  // Extraer precio (puede tener formato "₡8 175" o "₡8175" o con "(con X% OFF)")
-  const precioMatch=text.match(/Precio:\s*[₡¢]?\s*([\d\s,\.]+)/i); 
+  // Si no encontró nombre, buscar patrón "Nombre - ₡Precio"
+  if(!result.producto){
+    const altMatch = text.match(/\n\s*([^₡¢\n]+?)\s*-\s*[₡¢]/);
+    if(altMatch) result.producto = altMatch[1].trim();
+  }
+  
+  // Extraer precio - múltiples formatos:
+  // "₡8 175", "₡8,175", "₡8175", "Precio: ₡8175", "- ₡8 175 (25% OFF)"
+  const precioMatch=text.match(/[₡¢]\s*([\d\s,\.]+)/i); 
   if(precioMatch)result.precio=parseInt(precioMatch[1].replace(/[\s,\.]/g,''))||0;
   
   // Extraer código
@@ -2231,7 +2241,7 @@ async function handleIncomingMessage(msg) {
   if(session.state==="ESPERANDO_DATOS_ENVIO"){
     console.log(`📦 ESPERANDO_DATOS_ENVIO detectado, texto: "${text.substring(0,50)}..."`);
     if(text.trim().length < 3){
-      await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre completo, Teléfono y Dirección exacta (distrito, señas)*");
+      await sendTextWithTyping(waId,"Ocupo tus datos para el envío 📦\n\n*Nombre completo\nTeléfono\nProvincia\nCantón\nDistrito\nOtras señas*");
       return;
     }
     
@@ -2332,7 +2342,7 @@ async function handleIncomingMessage(msg) {
       session.envio_nombre = null;
       session.envio_telefono = null;
       session.envio_direccion = null;
-      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nOcupo:\n*Nombre completo, Teléfono y Dirección exacta*\n\n(Ej: María López, 88881234, Mercedes de Heredia, frente a la iglesia)");
+      await sendTextWithTyping(waId,"Dale, vamos de nuevo 🙌\n\nOcupo:\n*Nombre completo\nTeléfono\nProvincia\nCantón\nDistrito\nOtras señas*\n\n(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)");
       saveDataToDisk();return;
     }
     
@@ -2819,8 +2829,13 @@ async function executeAction(clientWaId, actionType, data = {}) {
       await sendTextWithTyping(clientWaId,
         `¡Pago confirmado! 🙌${zonaYa}\n\n` +
         `Para enviarte el paquete ocupo tus datos completos 📦\n\n` +
-        `*Nombre completo\nTeléfono\nDirección exacta (distrito, señas)*\n\n` +
-        `(Ej: María López, 88881234, Mercedes de Heredia, frente a la iglesia)`
+        `*Nombre completo\n` +
+        `Teléfono\n` +
+        `Provincia\n` +
+        `Cantón\n` +
+        `Distrito\n` +
+        `Otras señas*\n\n` +
+        `(Ej: María López, 88881234, Heredia, Central, Mercedes, frente a la iglesia)`
       );
       saveDataToDisk();
       return { success: true, message: "Pago confirmado, pidiendo datos de envío" };
