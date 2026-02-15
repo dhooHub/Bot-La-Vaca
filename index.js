@@ -47,6 +47,11 @@ const io = new Server(server);
 const logger = pino({ level: "silent" });
 
 // Servir archivos estáticos con headers anti-caché para HTML
+// Interceptar acceso directo a control.html → redirigir a /admin
+app.get("/control.html", (req, res) => {
+  res.redirect("/admin");
+});
+
 app.use(express.static(path.join(__dirname, "public"), {
   etag: false,
   lastModified: false,
@@ -89,6 +94,7 @@ const PORT = process.env.PORT || 3000;
 const PANEL_PIN = process.env.PANEL_PIN || "1234";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "lavaca2026";
 const USER_PASSWORD = process.env.USER_PASSWORD || "usuario2026";
+const adminTokens = new Map(); // Tokens de sesión temporales
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const HOURS_START = 9;
@@ -3040,18 +3046,20 @@ app.get("/api/history", (req, res) => {
 app.use(express.json());
 
 app.post("/api/admin/purge", (req, res) => {
-  // Autenticación flexible: query, header, cookie o body
   const pwd = req.query.pwd || req.headers['x-admin-pwd'] || req.body?.pwd;
-  console.log(`🗑️ Purge attempt: query=${req.query.pwd?'SI':'NO'}, header=${req.headers['x-admin-pwd']?'SI':'NO'}, body=${req.body?.pwd?'SI':'NO'}, cookie=${req.headers.cookie?'SI':'NO'}, pwd=${pwd?pwd.substring(0,3)+'...':'VACIO'}`);
+  const token = req.query.token || req.headers['x-admin-token'] || req.body?.token;
   let authed = false;
-  if(pwd === ADMIN_PASSWORD || pwd === USER_PASSWORD) authed = true;
+  // Check token
+  if(token && adminTokens.has(token)) {
+    const t = adminTokens.get(token);
+    if(t.expires > Date.now()) authed = true;
+    else adminTokens.delete(token);
+  }
+  if(!authed && (pwd === ADMIN_PASSWORD || pwd === USER_PASSWORD)) authed = true;
   if(!authed && req.headers.cookie) {
     if(req.headers.cookie.includes(`admin_pwd=${ADMIN_PASSWORD}`) || req.headers.cookie.includes(`admin_pwd=${USER_PASSWORD}`)) authed = true;
   }
-  if(!authed) {
-    console.log(`🗑️ Purge DENIED. ADMIN_PASSWORD=${ADMIN_PASSWORD}, pwd received=${pwd}`);
-    return res.status(403).json({ success: false, error: "No autorizado" });
-  }
+  if(!authed) return res.status(403).json({ success: false, error: "No autorizado" });
   
   const { beforeDate, purgeSessions, purgeSales, purgeHistory } = req.body;
   if (!beforeDate) return res.json({ success: false, error: "Falta fecha" });
@@ -3152,6 +3160,15 @@ app.get("/api/crm/stats", adminAuth, (req, res) => {
 // Middleware de auth con roles (dueno/usuario)
 function adminAuth(req, res, next) {
   const pwd = req.query.pwd || req.headers['x-admin-pwd'];
+  const token = req.query.token || req.headers['x-admin-token'];
+  // Check token de sesión
+  if(token && adminTokens.has(token)) {
+    const t = adminTokens.get(token);
+    if(t.expires > Date.now()) {
+      req.role = t.pwd === ADMIN_PASSWORD ? "dueno" : "usuario";
+      return next();
+    } else { adminTokens.delete(token); }
+  }
   // Check password
   if(pwd === ADMIN_PASSWORD) { req.role = "dueno"; return next(); }
   if(pwd === USER_PASSWORD) { req.role = "usuario"; return next(); }
@@ -3174,8 +3191,14 @@ function adminAuth(req, res, next) {
 
 app.get("/admin", adminAuth, (req, res) => {
   const pwd = req.query.pwd || '';
-  res.setHeader('Set-Cookie', `admin_pwd=${pwd}; Path=/; Max-Age=86400`);
-  res.sendFile(path.join(__dirname, "public", "control.html"));
+  // Generar token de sesión temporal (válido 24h)
+  const sessionToken = Buffer.from(pwd + ':' + Date.now()).toString('base64');
+  adminTokens.set(sessionToken, { pwd, expires: Date.now() + 86400000 });
+  res.setHeader('Set-Cookie', `admin_pwd=${pwd}; Path=/; Max-Age=86400; SameSite=Lax`);
+  const htmlPath = path.join(__dirname, "public", "control.html");
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  html = html.replace("const ADMIN_TOKEN_INJECTED = '';", `const ADMIN_TOKEN_INJECTED = '${sessionToken}';`);
+  res.send(html);
 });
 
 // API: Obtener rol actual
