@@ -1032,7 +1032,9 @@
         detail.innerHTML = chat.messages.map(m => {
           const isBot = m.from === 'bot';
           const t = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-          const txt = m.text || (m.hasImage ? '📷 Imagen' : '...');
+          let txt = m.text || (m.hasImage ? '📷 Imagen' : '...');
+          // Convertir URLs en links clickeables
+          txt = txt.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#60a5fa;word-break:break-all;">$1</a>');
           return `<div class="msg-row ${isBot ? 'bot' : 'client'}">
             <div class="msg-bubble">${txt.replace(/\n/g, '<br>')}</div>
             <div class="msg-time">${isBot ? '🤖 ' : '👤 '}${t}</div>
