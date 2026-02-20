@@ -583,6 +583,7 @@
       </select>
       <input type="text" class="filter-input" id="filterSearch" placeholder="Buscar cliente/producto">
       <span class="filter-count" id="salesCount">0 pedidos</span>
+      <button onclick="showManualSale()" style="background:#22c55e;color:#fff;border:none;padding:0.5rem 1rem;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;">➕ Venta Manual</button>
     </div>
     
     <div id="salesList">
@@ -866,13 +867,14 @@
         const methodClass = sale.method === 'envio' ? 'envio' : 'retiro';
         const methodIcon = sale.method === 'envio' ? '🚚' : '🏪';
         const status = sale.status || 'pendiente';
+        const manualBadge = sale.manual ? '<span style="font-size:0.65rem;padding:0.15rem 0.4rem;border-radius:10px;background:rgba(168,85,247,0.2);color:#a855f7;font-weight:600;margin-left:4px;">✋ Manual</span>' : '';
         
         return `
           <div class="sale-item" data-id="${sale.id}">
             <div class="sale-header">
               <div class="sale-product">
                 ${sale.producto || 'Artículo'}
-                <span class="sale-method ${methodClass}">${methodIcon} ${method}</span>
+                <span class="sale-method ${methodClass}">${methodIcon} ${method}</span>${manualBadge}
                 <span class="sale-status ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
               </div>
               <div class="sale-price">
@@ -886,6 +888,7 @@
               <span>📅 ${dateStr}, ${timeStr}</span>
               ${sale.zone ? `<span>📍 ${sale.zone}</span>` : ''}
               <span>🔖 Ref: ${sale.id || sale.sinpe_reference || '-'}</span>
+              ${sale.notas ? `<span>📝 ${sale.notas}</span>` : ''}
             </div>
             <div class="status-buttons">
               <button class="status-btn pendiente ${status === 'pendiente' ? 'active' : ''}" onclick="updateStatus('${sale.id}', 'pendiente')">Pendiente</button>
@@ -1105,12 +1108,137 @@
       }
     }
 
+    // ===== VENTA MANUAL =====
+    let manualMethod = '';
+    function showManualSale() {
+      document.getElementById('manualSaleModal').style.display = 'flex';
+      manualMethod = '';
+      ['ms_producto','ms_precio','ms_talla','ms_name','ms_phone','ms_zone','ms_shipping','ms_envio_datos','ms_sinpe','ms_notas'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+      document.getElementById('ms_envio_fields').style.display = 'none';
+      document.getElementById('ms_total_display').style.display = 'none';
+      document.getElementById('ms_result').innerHTML = '';
+      document.getElementById('ms_method_envio').style.borderColor = 'var(--border)';
+      document.getElementById('ms_method_envio').style.background = 'transparent';
+      document.getElementById('ms_method_recoger').style.borderColor = 'var(--border)';
+      document.getElementById('ms_method_recoger').style.background = 'transparent';
+    }
+    function hideManualSale() { document.getElementById('manualSaleModal').style.display = 'none'; }
+    function setManualMethod(method) {
+      manualMethod = method;
+      const btnE = document.getElementById('ms_method_envio'), btnR = document.getElementById('ms_method_recoger');
+      const envF = document.getElementById('ms_envio_fields');
+      if(method === 'envio') {
+        btnE.style.borderColor = '#22c55e'; btnE.style.background = 'rgba(34,197,94,0.15)';
+        btnR.style.borderColor = 'var(--border)'; btnR.style.background = 'transparent';
+        envF.style.display = 'block';
+      } else {
+        btnR.style.borderColor = '#3b82f6'; btnR.style.background = 'rgba(59,130,246,0.15)';
+        btnE.style.borderColor = 'var(--border)'; btnE.style.background = 'transparent';
+        envF.style.display = 'none';
+      }
+      updateManualTotal();
+    }
+    function updateManualTotal() {
+      const precio = Number(document.getElementById('ms_precio').value) || 0;
+      const shipping = manualMethod === 'envio' ? (Number(document.getElementById('ms_shipping').value) || 0) : 0;
+      const display = document.getElementById('ms_total_display');
+      if(precio > 0) { display.style.display = 'block'; document.getElementById('ms_total_value').textContent = '₡' + (precio + shipping).toLocaleString(); }
+      else { display.style.display = 'none'; }
+    }
+    async function submitManualSale() {
+      const producto = document.getElementById('ms_producto').value.trim();
+      const precio = document.getElementById('ms_precio').value;
+      if(!producto) { alert('Escribí el nombre del producto'); return; }
+      if(!precio || Number(precio) <= 0) { alert('Escribí el precio'); return; }
+      if(!manualMethod) { alert('Seleccioná método de entrega'); return; }
+      const body = {
+        producto, precio: Number(precio), talla_color: document.getElementById('ms_talla').value.trim(),
+        method: manualMethod, phone: document.getElementById('ms_phone').value.trim(),
+        name: document.getElementById('ms_name').value.trim(), zone: document.getElementById('ms_zone').value.trim(),
+        shipping: manualMethod === 'envio' ? Number(document.getElementById('ms_shipping').value) || 0 : 0,
+        envio_datos: document.getElementById('ms_envio_datos').value.trim(),
+        sinpe_reference: document.getElementById('ms_sinpe').value.trim(),
+        notas: document.getElementById('ms_notas').value.trim()
+      };
+      try {
+        const res = await fetch(authUrl(API_BASE + '/api/admin/sales/manual'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if(data.success) {
+          document.getElementById('ms_result').innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:10px;border-radius:8px;font-size:0.85rem;">✅ Venta registrada: ' + data.sale.id + ' - ₡' + data.sale.total.toLocaleString() + '</div>';
+          allSales.push(data.sale); renderSales(); loadDashboard();
+          setTimeout(hideManualSale, 1500);
+        } else {
+          document.getElementById('ms_result').innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:10px;border-radius:8px;font-size:0.85rem;">❌ ' + (data.error || 'Error') + '</div>';
+        }
+      } catch(e) {
+        document.getElementById('ms_result').innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:10px;border-radius:8px;font-size:0.85rem;">❌ Error: ' + e.message + '</div>';
+      }
+    }
+
     // Iniciar
     init();
+    
+    // Listeners para total en tiempo real
+    document.getElementById('ms_precio').addEventListener('input', updateManualTotal);
+    document.getElementById('ms_shipping').addEventListener('input', updateManualTotal);
     
     // Refresh cada 30 segundos
     setInterval(loadDashboard, 30000);
   </script>
+
+  <!-- Modal Venta Manual -->
+  <div id="manualSaleModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;padding:1rem;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;position:relative;">
+      <button onclick="hideManualSale()" style="position:absolute;top:10px;right:15px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text);">✕</button>
+      <h2 style="margin:0 0 0.5rem;font-size:1.2rem;color:var(--text);">➕ Registrar Venta Manual</h2>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 1rem;">Ventas atendidas por WhatsApp sin pasar por el bot</p>
+      
+      <div style="display:flex;flex-direction:column;gap:0.8rem;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+          <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Producto *</label><input type="text" id="ms_producto" placeholder="Ej: Blusa floral" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+          <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Precio ₡ *</label><input type="number" id="ms_precio" placeholder="8500" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+        </div>
+        <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Talla / Color</label><input type="text" id="ms_talla" placeholder="Ej: M, Rosado" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+          <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Nombre cliente</label><input type="text" id="ms_name" placeholder="María López" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+          <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Teléfono</label><input type="text" id="ms_phone" placeholder="88881234" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+        </div>
+        <div>
+          <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Método de entrega *</label>
+          <div style="display:flex;gap:0.5rem;margin-top:0.3rem;">
+            <button type="button" id="ms_method_envio" onclick="setManualMethod('envio')" style="flex:1;padding:0.6rem;border:2px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer;font-size:0.85rem;font-weight:600;">📦 Envío</button>
+            <button type="button" id="ms_method_recoger" onclick="setManualMethod('recoger')" style="flex:1;padding:0.6rem;border:2px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer;font-size:0.85rem;font-weight:600;">🏪 Retiro</button>
+          </div>
+        </div>
+        <div id="ms_envio_fields" style="display:none;border:1px solid var(--border);border-radius:8px;padding:0.8rem;background:var(--bg);">
+          <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.5rem;display:block;">📦 Datos de envío</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;">
+            <div><label style="font-size:0.7rem;color:var(--text-muted);">Zona</label><input type="text" id="ms_zone" placeholder="Heredia, Central" style="width:100%;padding:0.5rem;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+            <div>
+              <label style="font-size:0.7rem;color:var(--text-muted);">Costo envío ₡</label>
+              <input type="number" id="ms_shipping" placeholder="2500" style="width:100%;padding:0.5rem;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;">
+              <div style="display:flex;gap:0.3rem;margin-top:0.3rem;">
+                <button type="button" onclick="document.getElementById('ms_shipping').value=2500;updateManualTotal()" style="padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);cursor:pointer;font-size:0.75rem;">₡2,500</button>
+                <button type="button" onclick="document.getElementById('ms_shipping').value=3500;updateManualTotal()" style="padding:0.2rem 0.5rem;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);cursor:pointer;font-size:0.75rem;">₡3,500</button>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:0.5rem;"><label style="font-size:0.7rem;color:var(--text-muted);">Dirección completa</label><textarea id="ms_envio_datos" placeholder="Nombre, tel, provincia, cantón, distrito, señas..." rows="2" style="width:100%;padding:0.5rem;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:vertical;font-family:inherit;"></textarea></div>
+        </div>
+        <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Referencia SINPE</label><input type="text" id="ms_sinpe" placeholder="Opcional" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;"></div>
+        <div><label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Notas</label><textarea id="ms_notas" placeholder="Ej: cliente de IG, pidió por llamada..." rows="2" style="width:100%;padding:0.5rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:vertical;font-family:inherit;"></textarea></div>
+        <div id="ms_total_display" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.8rem;text-align:center;display:none;">
+          <span style="font-size:0.8rem;color:var(--text-muted);">Total:</span>
+          <span id="ms_total_value" style="font-size:1.3rem;font-weight:700;color:#22c55e;margin-left:0.5rem;">₡0</span>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+          <button onclick="hideManualSale()" style="flex:1;padding:0.7rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:0.85rem;">Cancelar</button>
+          <button onclick="submitManualSale()" style="flex:1;padding:0.7rem;background:#22c55e;border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:0.85rem;font-weight:700;">💰 Registrar Venta</button>
+        </div>
+        <div id="ms_result" style="margin-top:0.5rem;"></div>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>
