@@ -3284,6 +3284,42 @@ app.get("/api/admin/role", adminAuth, (req, res) => {
   res.json({ role: req.role });
 });
 
+// API: Crear venta manual (atención humana por WhatsApp)
+app.post("/api/admin/sales/manual", adminAuth, express.json(), (req, res) => {
+  const { producto, precio, talla_color, method, phone, name, zone, shipping, envio_datos, sinpe_reference, notas } = req.body;
+  if(!producto || !precio || !method) return res.status(400).json({ error: "Faltan datos obligatorios: producto, precio, método" });
+  const parsedPrecio = Number(precio) || 0;
+  const parsedShipping = Number(shipping) || 0;
+  const total = parsedPrecio + parsedShipping;
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
+  const sale = {
+    id: `VM-${Date.now().toString(36).toUpperCase()}`,
+    date: new Date().toISOString(),
+    waId: normalizedPhone,
+    phone: phone || "",
+    name: name || "",
+    producto, codigo: "", talla_color: talla_color || "",
+    method, precio: parsedPrecio, shipping: parsedShipping, total,
+    zone: zone || "", envio_datos: envio_datos || "",
+    sinpe_reference: sinpe_reference || "", comprobante_url: "", foto_url: "",
+    status: "pendiente", guia_correos: "", fecha_factura: "", fecha_envio: "", fecha_recibido: "",
+    manual: true, notas: notas || ""
+  };
+  salesLog.push(sale);
+  account.metrics.sales_completed = (account.metrics.sales_completed || 0) + 1;
+  account.metrics.total_revenue = (account.metrics.total_revenue || 0) + total;
+  if(normalizedPhone) {
+    const profile = getProfile(normalizedPhone);
+    if(name) profile.name = name;
+    profile.purchases = (profile.purchases || 0) + 1;
+    updateCrmClient(normalizedPhone, sale);
+  }
+  saveDataToDisk();
+  io.emit("sale_completed", sale);
+  console.log(`📝 VENTA MANUAL #${sale.id}: ₡${total.toLocaleString()} - ${producto} (${method})`);
+  res.json({ success: true, sale });
+});
+
 // API: Actualizar venta (guia, fechas, status)
 app.post("/api/admin/sales/update", adminAuth, express.json(), (req, res) => {
   const { saleId, field, value } = req.body;
