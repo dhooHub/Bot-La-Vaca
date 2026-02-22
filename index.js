@@ -133,6 +133,7 @@ const sessions = new Map();
 const profiles = new Map();
 const pendingQuotes = new Map();
 let salesLog = []; // Registro de ventas completadas
+let alertsLog = []; // Registro de alertas enviadas al empleado
 let crmClients = new Map(); // Mini CRM - Clientes con historial de compras
 let categoriasActivas = new Set(); // Categorías con showIndex: 1 (tienen productos)
 
@@ -695,11 +696,11 @@ function saveDataToDisk() {
       delete copy.foto_base64; // No guardar imágenes en disco
       return copy;
     });
-    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave,salesLog},null,2)); 
+    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave,salesLog,alertsLog},null,2)); 
     saveHistory(); 
   } catch(e){console.log("⚠️ Error guardando:",e.message);} 
 }
-function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; console.log(`📂 Datos cargados (${salesLog.length} ventas)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
+function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
 // ============ FRASES ============
@@ -985,7 +986,7 @@ async function descargarImagenCatalogo(codigo, waId) {
   }
 }
 
-// ✅ Función para enviar alertas a Pushover
+// ✅ Función para enviar alertas a Pushover con registro y callback de atención
 async function sendPushoverAlert(tipo, datos) {
   if (!PUSHOVER_USER_KEY || !PUSHOVER_APP_TOKEN) return;
   
@@ -993,6 +994,21 @@ async function sendPushoverAlert(tipo, datos) {
     const phone = datos.phone || datos.waId || "Desconocido";
     const phoneFormatted = formatPhone(phone);
     const chatLink = `${PANEL_URL}/?chat=${normalizePhone(phone)}`;
+    
+    // Crear registro de alerta ANTES de enviar
+    const alertId = `A-${Date.now().toString(36).toUpperCase()}`;
+    const alertEntry = {
+      id: alertId,
+      tipo,
+      fecha: new Date().toISOString(),
+      phone: phoneFormatted,
+      waId: normalizePhone(phone),
+      producto: datos.producto || datos.talla_color || "",
+      estado: "pendiente",       // pendiente | atendida
+      fecha_atendida: null,
+      minutos_respuesta: null,
+      receipt: null              // receipt de Pushover para tracking
+    };
     
     let title = "";
     let message = "";
@@ -1005,7 +1021,6 @@ async function sendPushoverAlert(tipo, datos) {
       message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "-"}\n👤 ${phoneFormatted}`;
     } else if (tipo === "SINPE") {
       title = "💰 CLIENTE PAGÓ - REVISAR";
-      // Buscar sesión para obtener detalles
       const ses = sessions.get(normalizePhone(datos.waId || phone)) || {};
       const precio = ses.precio || 0;
       const envio = ses.shipping_cost || 0;
@@ -1027,7 +1042,9 @@ async function sendPushoverAlert(tipo, datos) {
     
     if (!title) return;
     
-    // Priority 1 = alto (suena como alarma, requiere retry+expire)
+    // Callback URL para registrar cuando el empleado presiona Acknowledge
+    const callbackUrl = `${PANEL_URL}/api/pushover/callback`;
+    
     const pushBody = {
       token: PUSHOVER_APP_TOKEN,
       user: PUSHOVER_USER_KEY,
@@ -1035,9 +1052,10 @@ async function sendPushoverAlert(tipo, datos) {
       message,
       url: chatLink,
       url_title: "Abrir Panel",
-      priority: 1,
-      retry: 60,
-      expire: 600,
+      priority: 2,          // Emergencia: requiere acknowledge explícito
+      retry: 60,            // Reintentar cada 60s
+      expire: 600,          // Hasta 10 min
+      callback: callbackUrl, // Pushover llama aquí cuando se hace acknowledge
       sound: "cashregister"
     };
     
@@ -1048,7 +1066,12 @@ async function sendPushoverAlert(tipo, datos) {
     });
     
     if (response.ok) {
-      console.log(`📲 Pushover enviado: ${tipo}`);
+      const result = await response.json();
+      alertEntry.receipt = result.receipt || null; // Guardar receipt para tracking
+      alertsLog.push(alertEntry);
+      // Mantener solo las últimas 500 alertas
+      if (alertsLog.length > 500) alertsLog = alertsLog.slice(-500);
+      console.log(`📲 Pushover enviado: ${tipo} | alertId: ${alertId}`);
     } else {
       console.log(`⚠️ Pushover error:`, await response.text());
     }
@@ -3098,6 +3121,82 @@ io.on("connection", (socket) => {
 });
 
 // ============ ENDPOINTS ============
+// ── PUSHOVER CALLBACK: Pushover llama aquí cuando el empleado hace Acknowledge ──
+app.post("/api/pushover/callback", express.urlencoded({ extended: true }), express.json(), (req, res) => {
+  // Pushover envía: receipt, acknowledged, acknowledged_at, acknowledged_by, called_back, called_back_at
+  const { receipt, acknowledged, acknowledged_at } = req.body;
+  
+  if (!receipt) return res.sendStatus(200); // Responder siempre 200 a Pushover
+  
+  // Buscar la alerta por receipt
+  const alert = alertsLog.find(a => a.receipt === receipt);
+  if (alert && acknowledged === "1") {
+    alert.estado = "atendida";
+    alert.fecha_atendida = acknowledged_at 
+      ? new Date(parseInt(acknowledged_at) * 1000).toISOString() 
+      : new Date().toISOString();
+    // Calcular minutos de respuesta
+    const inicio = new Date(alert.fecha).getTime();
+    const fin = new Date(alert.fecha_atendida).getTime();
+    alert.minutos_respuesta = Math.round((fin - inicio) / 60000);
+    saveDataToDisk();
+    console.log(`✅ Alerta ${alert.id} atendida en ${alert.minutos_respuesta} min`);
+  }
+  
+  res.sendStatus(200);
+});
+
+// ── API: Stats y log de alertas ──
+app.get("/api/admin/alerts", adminAuth, (req, res) => {
+  const { from, to, limit } = req.query;
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  const weekAgo = new Date(now - 7*24*60*60*1000).toISOString();
+  const monthAgo = new Date(now - 30*24*60*60*1000).toISOString();
+
+  let filtered = [...alertsLog].reverse(); // Más recientes primero
+  if (from) filtered = filtered.filter(a => a.fecha >= from);
+  if (to)   filtered = filtered.filter(a => a.fecha <= to + "T23:59:59");
+  if (limit) filtered = filtered.slice(0, parseInt(limit));
+
+  // Stats globales
+  const total     = alertsLog.length;
+  const atendidas = alertsLog.filter(a => a.estado === "atendida").length;
+  const pendientes= alertsLog.filter(a => a.estado === "pendiente").length;
+  const tiempos   = alertsLog.filter(a => a.minutos_respuesta !== null).map(a => a.minutos_respuesta);
+  const promMin   = tiempos.length > 0 ? Math.round(tiempos.reduce((s,v)=>s+v,0) / tiempos.length) : null;
+  const maxMin    = tiempos.length > 0 ? Math.max(...tiempos) : null;
+  const minMin    = tiempos.length > 0 ? Math.min(...tiempos) : null;
+
+  // Stats por período
+  const alertsToday = alertsLog.filter(a => a.fecha.startsWith(today));
+  const alertsWeek  = alertsLog.filter(a => a.fecha >= weekAgo);
+  const alertsMonth = alertsLog.filter(a => a.fecha >= monthAgo);
+
+  // Stats por tipo
+  const byTipo = {};
+  alertsLog.forEach(a => {
+    if (!byTipo[a.tipo]) byTipo[a.tipo] = { total:0, atendidas:0 };
+    byTipo[a.tipo].total++;
+    if (a.estado === "atendida") byTipo[a.tipo].atendidas++;
+  });
+
+  res.json({
+    stats: {
+      total, atendidas, pendientes,
+      pct_atendidas: total > 0 ? Math.round((atendidas/total)*100) : 0,
+      tiempo_promedio_min: promMin,
+      tiempo_max_min: maxMin,
+      tiempo_min_min: minMin,
+      today:  { total: alertsToday.length,  atendidas: alertsToday.filter(a=>a.estado==="atendida").length },
+      week:   { total: alertsWeek.length,   atendidas: alertsWeek.filter(a=>a.estado==="atendida").length },
+      month:  { total: alertsMonth.length,  atendidas: alertsMonth.filter(a=>a.estado==="atendida").length },
+      by_tipo: byTipo
+    },
+    alerts: filtered
+  });
+});
+
 app.get("/health", (req, res) => res.send("OK"));
 app.get("/status", (req, res) => res.json({ connection: connectionStatus, phone: connectedPhone, botPaused, storeOpen: isStoreOpen(), metrics: account.metrics }));
 app.get("/api/history", (req, res) => {
