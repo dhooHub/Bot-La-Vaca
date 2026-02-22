@@ -2365,11 +2365,11 @@ async function handleIncomingMessage(msg) {
         sinpe_reference: session.sinpe_reference,
         comprobante_url: session.comprobante_url,
         foto_url: session.foto_url,
-        status: "pendiente",
+        status: "alistado",
         guia_correos: "",
-        fecha_factura: "",
+        fecha_alistado: "",
         fecha_envio: "",
-        fecha_recibido: ""
+        fecha_entregado: ""
       };
       salesLog.push(sale);
       account.metrics.sales_completed = (account.metrics.sales_completed||0) + 1;
@@ -2976,11 +2976,11 @@ async function executeAction(clientWaId, actionType, data = {}) {
         sinpe_reference: session.sinpe_reference,
         comprobante_url: session.comprobante_url,
         foto_url: session.foto_url,
-        status: "pendiente",
+        status: "alistado",
         guia_correos: "",
-        fecha_factura: "",
+        fecha_alistado: "",
         fecha_envio: "",
-        fecha_recibido: ""
+        fecha_entregado: ""
       };
       salesLog.push(sale);
       account.metrics.sales_completed = (account.metrics.sales_completed||0) + 1;
@@ -3401,7 +3401,7 @@ app.post("/api/admin/sales/manual", adminAuth, express.json(), (req, res) => {
     method, precio: parsedPrecio, shipping: parsedShipping, total,
     zone: zone || "", envio_datos: envio_datos || "",
     sinpe_reference: sinpe_reference || "", comprobante_url: "", foto_url: "",
-    status: "pendiente", guia_correos: "", fecha_factura: "", fecha_envio: "", fecha_recibido: "",
+    status: "alistado", guia_correos: "", fecha_alistado: "", fecha_envio: "", fecha_entregado: "",
     manual: true, notas: notas || ""
   };
   salesLog.push(sale);
@@ -3427,15 +3427,15 @@ app.post("/api/admin/sales/update", adminAuth, express.json(), (req, res) => {
   const sale = salesLog.find(s => s.id === saleId);
   if(!sale) return res.status(404).json({ error: "Venta no encontrada" });
   
-  const allowedFields = ["status", "guia_correos", "fecha_factura", "fecha_envio", "fecha_recibido"];
+  const allowedFields = ["status", "guia_correos", "fecha_alistado", "fecha_envio", "fecha_entregado"];
   if(!allowedFields.includes(field)) return res.status(400).json({ error: "Campo no permitido" });
   
   sale[field] = value;
   
   // Auto-actualizar status según fechas
-  if(field === "fecha_recibido" && value) sale.status = "recibido";
-  else if(field === "fecha_envio" && value) sale.status = sale.status !== "recibido" ? "enviado" : sale.status;
-  else if(field === "fecha_factura" && value) sale.status = (!sale.status || sale.status === "pendiente") ? "facturado" : sale.status;
+  if(field === "fecha_entregado" && value) sale.status = "entregado";
+  else if(field === "fecha_envio" && value && sale.status !== "entregado") sale.status = "en_transito";
+  else if(field === "status") sale.status = value;
   
   saveDataToDisk();
   console.log(`📝 Venta ${saleId}: ${field} = ${value} (status: ${sale.status})`);
