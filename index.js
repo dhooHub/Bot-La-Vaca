@@ -3222,7 +3222,7 @@ app.post("/api/admin/purge", (req, res) => {
   }
   if(!authed) return res.status(403).json({ success: false, error: "No autorizado" });
   
-  const { beforeDate, purgeSessions, purgeSales, purgeHistory } = req.body;
+  const { beforeDate, purgeSessions, purgeSales, purgeHistory, purgeAlerts } = req.body;
   if (!beforeDate) return res.json({ success: false, error: "Falta fecha" });
   
   const cutoff = new Date(beforeDate).getTime();
@@ -3254,6 +3254,16 @@ app.post("/api/admin/purge", (req, res) => {
     });
     historyDeleted = before - chatHistory.length;
   }
+
+  let alertsDeleted = 0;
+  if (purgeAlerts) {
+    const before = alertsLog.length;
+    alertsLog = alertsLog.filter(a => {
+      const t = a.fecha ? new Date(a.fecha).getTime() : Date.now();
+      return t >= cutoff;
+    });
+    alertsDeleted = before - alertsLog.length;
+  }
   
   // Resetear métricas si se purgaron sesiones o ventas
   if(purgeSessions || purgeSales) {
@@ -3272,8 +3282,8 @@ app.post("/api/admin/purge", (req, res) => {
   }
   
   saveDataToDisk();
-  console.log(`🗑️ PURGA: sesiones=${sessionsDeleted} ventas=${salesDeleted} historial=${historyDeleted} (antes de ${beforeDate})`);
-  res.json({ success: true, sessionsDeleted, salesDeleted, historyDeleted });
+  console.log(`🗑️ PURGA: sesiones=${sessionsDeleted} ventas=${salesDeleted} historial=${historyDeleted} alertas=${alertsDeleted} (antes de ${beforeDate})`);
+  res.json({ success: true, sessionsDeleted, salesDeleted, historyDeleted, alertsDeleted });
 });
 
 app.get("/api/sales", (req, res) => {
