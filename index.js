@@ -1116,8 +1116,23 @@ function addPendingQuote(session) {
   const profile=getProfile(session.waId);
   const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, producto_url:session.producto_url||null, created_at:new Date().toISOString() };
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
+  // Actualizar sesión en panel para pre-llenar resumen
+  io.emit("session_updated", { waId: session.waId, producto: session.producto, precio: session.precio, talla_color: session.talla_color, shipping_cost: session.shipping_cost || null, envio_datos_raw: session.envio_datos_raw || null, delivery_method: session.delivery_method || null, client_zone: session.client_zone || null });
   // Enviar notificación
   sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+}
+
+function emitSessionUpdate(waId, session) {
+  io.emit("session_updated", {
+    waId,
+    producto: session.producto || null,
+    precio: session.precio || null,
+    talla_color: session.talla_color || null,
+    shipping_cost: session.shipping_cost || null,
+    envio_datos_raw: session.envio_datos_raw || null,
+    delivery_method: session.delivery_method || null,
+    client_zone: session.client_zone || null
+  });
 }
 
 function parseWebMessage(text) {
@@ -3019,6 +3034,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
     saveDataToDisk();
     console.log(`👤 Chat tomado por humano: ${clientWaId}`);
     io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: true });
+    // Enviar datos de sesión actualizados para pre-llenar el modal de resumen
+    emitSessionUpdate(normalizePhone(clientWaId), session);
     return { success: true, message: "Chat tomado. Bot pausado para este cliente." };
   }
 
@@ -3085,7 +3102,22 @@ io.on("connection", (socket) => {
           pendingZones.push({waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
         }
       }
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()), humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id) });
+      // Serializar sesiones activas con datos relevantes para el resumen
+      const activeSessions = {};
+      for (const [wId, s] of sessions.entries()) {
+        if (s.producto || s.precio || s.talla_color || s.shipping_cost || s.envio_datos_raw) {
+          activeSessions[wId] = {
+            producto: s.producto || null,
+            precio: s.precio || null,
+            talla_color: s.talla_color || null,
+            shipping_cost: s.shipping_cost || null,
+            envio_datos_raw: s.envio_datos_raw || null,
+            delivery_method: s.delivery_method || null,
+            client_zone: s.client_zone || null
+          };
+        }
+      }
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()), humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id), activeSessions });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
