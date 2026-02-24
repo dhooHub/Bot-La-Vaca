@@ -341,27 +341,31 @@
 </header>
 
 <div class="nav-tabs">
-  <button class="nav-tab active" onclick="showTab('resumen',this)">📊 Resumen</button>
-  <button class="nav-tab" onclick="showTab('ventas',this)">💰 Ventas</button>
+  <button class="nav-tab active" onclick="showTab('ventas',this)">💰 Ventas</button>
   <button class="nav-tab" onclick="showTab('chats',this)">💬 Chats</button>
   <button class="nav-tab" onclick="showTab('alertas',this)">🔔 Alertas</button>
   <button class="nav-tab" onclick="showTab('likes',this);loadLikesStats();">❤️ Likes</button>
+  <button class="nav-tab" onclick="showTab('contactos',this);loadContactos();">👥 Contactos</button>
 </div>
 
-<div id="p-resumen" class="panel active"><div class="loading"><div class="spin"></div><p>Cargando datos...</p></div></div>
-
-<div id="p-ventas" class="panel">
+<div id="p-ventas" class="panel active">
   <div class="filters">
     <label>Desde</label><input type="date" id="vFrom">
     <label>Hasta</label><input type="date" id="vTo">
-    <select id="vOrigen"><option value="all">Todos</option><option value="bot">🤖 Bot</option><option value="manual">✍️ Manual</option></select>
     <select id="vMethod"><option value="all">Todos métodos</option><option value="envio">📦 Envío</option><option value="recoger">🏪 Retiro</option></select>
-    <select id="vStatus"><option value="all">Todos estados</option><option value="pendiente">🟡 Pendiente</option><option value="facturado">🔵 Facturado</option><option value="enviado">🟣 Enviado</option><option value="recibido">🟢 Recibido</option></select>
+    <select id="vStatus"><option value="all">Todos estados</option><option value="alistado">🟡 Alistado</option><option value="en_transito">🔵 En tránsito</option><option value="entregado">🟢 Entregado</option></select>
     <input type="text" id="vSearch" placeholder="Buscar cliente o producto...">
     <button class="btn-filter" onclick="loadVentas()">Filtrar</button>
     <button onclick="showPurgeModal('ventas')" style="padding:7px 14px;background:#fff0f0;color:var(--red);border:1px solid #fecaca;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🗑️ Limpiar</button>
   </div>
   <div id="ventasContent"><div class="loading"><div class="spin"></div><p>Cargando ventas...</p></div></div>
+  <div style="border-top:1px solid var(--border);padding:10px 0 4px;display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;">
+    <div style="text-align:center;"><div style="font-size:1.1rem;font-weight:800;" id="convChats">—</div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Chats</div></div>
+    <div style="text-align:center;"><div style="font-size:1.1rem;font-weight:800;" id="convVentas">—</div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Ventas</div></div>
+    <div style="text-align:center;"><div style="font-size:1.1rem;font-weight:800;" id="convPct" style="color:var(--red)">—%</div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Conversión</div></div>
+    <div style="text-align:center;"><div style="font-size:1.1rem;font-weight:800;" id="convTicket">—</div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Ticket prom.</div></div>
+    <div style="text-align:center;"><div style="font-size:1.1rem;font-weight:800;" id="convNeto">—</div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Neto mes</div></div>
+  </div>
 </div>
 
 <div id="p-chats" class="panel">
@@ -405,6 +409,38 @@
       </div>
     </div>
     <div id="ownerLikesAll" style="display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+</div>
+
+<div id="p-contactos" class="panel">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+    <input type="text" id="ctSearch" placeholder="🔍 Buscar contacto..." oninput="renderContactos()" style="flex:1;min-width:180px;padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;font-family:inherit;">
+    <span id="ctCount" style="font-size:.8rem;color:var(--muted);white-space:nowrap;"></span>
+    <button onclick="abrirModalContacto()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Agregar</button>
+    <button onclick="loadContactos()" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.82rem;cursor:pointer;font-family:inherit;">↻</button>
+  </div>
+  <div style="background:#fafafa;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px;">
+    <div style="font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">🏆 Top compradores</div>
+    <div id="ctTop" style="font-size:.82rem;color:var(--muted);">Cargando...</div>
+  </div>
+  <div id="ctList">Cargando...</div>
+</div>
+
+<!-- Modal Contacto -->
+<div id="modalContacto" onclick="if(event.target===this)cerrarModalContacto()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:16px;padding:1.5rem;width:92%;max-width:400px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div id="tituloModalContacto" style="font-size:1rem;font-weight:700;">👤 Contacto</div>
+      <button onclick="cerrarModalContacto()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;">✕</button>
+    </div>
+    <input type="hidden" id="ctEditId">
+    <div style="margin-bottom:10px;"><label style="font-size:.68rem;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px;">Nombre</label><input id="ctNombre" type="text" placeholder="Nombre completo" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;"></div>
+    <div style="margin-bottom:10px;"><label style="font-size:.68rem;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px;">Teléfono / WhatsApp</label><input id="ctTelefono" type="tel" placeholder="50688881234" inputmode="numeric" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;"></div>
+    <div style="margin-bottom:14px;"><label style="font-size:.68rem;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px;">Notas</label><input id="ctNotas" type="text" placeholder="Notas" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="cerrarModalContacto()" style="flex:1;padding:.75rem;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">Cancelar</button>
+      <button onclick="guardarContacto()" style="flex:2;padding:.75rem;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Guardar</button>
+    </div>
   </div>
 </div>
 
@@ -575,96 +611,28 @@ async function loadAll(){
     setConn(dash.connection==='connected'?'on':'off', dash.connection==='connected'?'✓ Conectado':'Desconectado');
     $('updText').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CR');
     dashAlerts = dash.alerts;
-    renderResumen(dash);
+    renderConvStats(dash);
   } catch(e){
     setConn('off','Sin conexión');
-    $('p-resumen').innerHTML=`<div class="empty"><div class="empty-icon">⚡</div>Sin conexión al bot.<br><small>${esc(e.message)}</small></div>`;
   }
   loadVentas();
   loadChats();
   loadAlerts();
 }
 
-// ── RESUMEN ──
-function renderResumen(d){
-  const m  = d.metrics||{};
+function renderConvStats(d){
   const s  = d.sales||{};
   const ch = d.chats||{};
-  const ab = (d.alerts?.abandoned||[]).length;
-  const nf = (d.alerts?.no_followup||[]).length;
-  const ct = m.chats_total||0;
+  const ct = (d.metrics?.chats_total)||ch.total||0;
   const sc = s.all?.count||0;
-
-  const cvPct  = pct(sc,ct);
-  const snpPct = pct(m.sinpe_confirmed||0, m.intent_yes||1);
-  const retPct = Math.max(0, 100-pct(ab,Math.max(ct,1)));
-  const resPct = pct(m.quotes_sent||0, ct||1);
-
-  $('p-resumen').innerHTML = `<div class="fade-up">
-
-    <div class="slabel">Hoy</div>
-    <div class="kpis">
-      <div class="kpi green"><div class="kpi-lbl">Ventas hoy</div><div class="kpi-val">${s.today?.count||0}</div><div class="kpi-sub">${fmtM(s.today?.revenue||0)}</div></div>
-      <div class="kpi green"><div class="kpi-lbl">Neto hoy</div><div class="kpi-val">${fmtM(s.today?.net||0)}</div><div class="kpi-sub">sin envíos</div></div>
-      <div class="kpi blue"><div class="kpi-lbl">Chats hoy</div><div class="kpi-val">${ch.today||0}</div><div class="kpi-sub">conversaciones</div></div>
-      <div class="kpi purple"><div class="kpi-lbl">Activos ahora</div><div class="kpi-val">${ch.active||0}</div><div class="kpi-sub">sesiones abiertas</div></div>
-    </div>
-
-    <div class="slabel">Esta Semana</div>
-    <div class="kpis">
-      <div class="kpi orange"><div class="kpi-lbl">Ventas</div><div class="kpi-val">${s.week?.count||0}</div><div class="kpi-sub">${fmtM(s.week?.revenue||0)}</div></div>
-      <div class="kpi orange"><div class="kpi-lbl">Neto</div><div class="kpi-val">${fmtM(s.week?.net||0)}</div><div class="kpi-sub">sin envíos</div></div>
-      <div class="kpi blue"><div class="kpi-lbl">Chats</div><div class="kpi-val">${ch.week||0}</div><div class="kpi-sub">conversaciones</div></div>
-      <div class="kpi red"><div class="kpi-lbl">Abandonados</div><div class="kpi-val">${ab}</div><div class="kpi-sub">&gt;2h sin responder</div></div>
-    </div>
-
-    <div class="slabel">Este Mes</div>
-    <div class="kpis">
-      <div class="kpi green"><div class="kpi-lbl">Ventas</div><div class="kpi-val">${s.month?.count||0}</div><div class="kpi-sub">${fmtM(s.month?.revenue||0)}</div></div>
-      <div class="kpi green"><div class="kpi-lbl">Neto mes</div><div class="kpi-val">${fmtM(s.month?.net||0)}</div><div class="kpi-sub">sin envíos</div></div>
-      <div class="kpi blue"><div class="kpi-lbl">Envíos cobrados</div><div class="kpi-val">${fmtM(s.month?.shipping||0)}</div><div class="kpi-sub">a clientes</div></div>
-    </div>
-
-    <div class="slabel">Histórico Total</div>
-    <div class="kpis">
-      <div class="kpi green"><div class="kpi-lbl">Total ventas</div><div class="kpi-val">${sc}</div><div class="kpi-sub">${fmtM(s.all?.revenue||0)}</div></div>
-      <div class="kpi green"><div class="kpi-lbl">Neto total</div><div class="kpi-val">${fmtM(s.all?.net||0)}</div><div class="kpi-sub">sin envíos</div></div>
-      <div class="kpi blue"><div class="kpi-lbl">Total chats</div><div class="kpi-val">${ct}</div><div class="kpi-sub">desde inicio</div></div>
-      <div class="kpi orange"><div class="kpi-lbl">Cotizaciones</div><div class="kpi-val">${m.quotes_sent||0}</div><div class="kpi-sub">enviadas por bot</div></div>
-      <div class="kpi orange"><div class="kpi-lbl">Interesados</div><div class="kpi-val">${m.intent_yes||0}</div><div class="kpi-sub">confirmaron interés</div></div>
-      <div class="kpi green"><div class="kpi-lbl">SINPE conf.</div><div class="kpi-val">${m.sinpe_confirmed||0}</div><div class="kpi-sub">pagos recibidos</div></div>
-      <div class="kpi blue"><div class="kpi-lbl">A domicilio</div><div class="kpi-val">${m.delivery_envio||0}</div><div class="kpi-sub">envíos</div></div>
-      <div class="kpi purple"><div class="kpi-lbl">En tienda</div><div class="kpi-val">${m.delivery_recoger||0}</div><div class="kpi-sub">retiros</div></div>
-      <div class="kpi red"><div class="kpi-lbl">Sin seguim.</div><div class="kpi-val">${nf}</div><div class="kpi-sub">esperan al dueño</div></div>
-      <div class="kpi"><div class="kpi-lbl">Contactos</div><div class="kpi-val">${d.contacts_total||0}</div><div class="kpi-sub">en base</div></div>
-      <div class="kpi"><div class="kpi-lbl">Msgs bot</div><div class="kpi-val">${m.mensajes_enviados||0}</div><div class="kpi-sub">enviados</div></div>
-      <div class="kpi"><div class="kpi-lbl">Llamadas IA</div><div class="kpi-val">${m.ia_calls||0}</div><div class="kpi-sub">a OpenAI</div></div>
-    </div>
-
-    <div class="slabel">Indicadores de Eficiencia</div>
-    <div class="effs">
-      <div class="eff-card">
-        <div class="eff-top"><div class="eff-name">Tasa de Conversión</div><div class="eff-pct" style="color:${bColor(cvPct,10,20)}">${cvPct}%</div></div>
-        ${bar(cvPct,bColor(cvPct,10,20))}
-        <div class="eff-note">${sc} ventas de ${ct} chats · objetivo &gt;20%</div>
-      </div>
-      <div class="eff-card">
-        <div class="eff-top"><div class="eff-name">Cierre SINPE</div><div class="eff-pct" style="color:${bColor(snpPct,30,60)}">${snpPct}%</div></div>
-        ${bar(snpPct,bColor(snpPct,30,60))}
-        <div class="eff-note">${m.sinpe_confirmed||0} pagos de ${m.intent_yes||0} interesados</div>
-      </div>
-      <div class="eff-card">
-        <div class="eff-top"><div class="eff-name">Retención (no abandono)</div><div class="eff-pct" style="color:${bColor(retPct,60,80)}">${retPct}%</div></div>
-        ${bar(retPct,bColor(retPct,60,80))}
-        <div class="eff-note">${ab} abandonados de ${ct} chats · objetivo &gt;80%</div>
-      </div>
-      <div class="eff-card">
-        <div class="eff-top"><div class="eff-name">Respuesta del bot</div><div class="eff-pct" style="color:var(--blue)">${resPct}%</div></div>
-        ${bar(resPct,'var(--blue)')}
-        <div class="eff-note">${m.quotes_sent||0} cotizaciones de ${ct} chats totales</div>
-      </div>
-    </div>
-  </div>`;
+  const cvPct = ct>0 ? Math.round((sc/ct)*100) : 0;
+  const ticket = sc>0 ? Math.round((s.all?.revenue||0)/sc) : 0;
+  const pctColor = cvPct>=15?'var(--green)':cvPct>=5?'var(--orange)':'var(--red)';
+  if($('convChats'))  $('convChats').textContent  = ct;
+  if($('convVentas')) $('convVentas').textContent = sc;
+  if($('convPct'))  { $('convPct').textContent = cvPct+'%'; $('convPct').style.color = pctColor; }
+  if($('convTicket')) $('convTicket').textContent = '₡'+ticket.toLocaleString('es-CR');
+  if($('convNeto'))   $('convNeto').textContent   = '₡'+(s.month?.net||0).toLocaleString('es-CR');
 }
 
 // ── VENTAS ──
@@ -1086,6 +1054,100 @@ const month  = new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10);
 $('vFrom').value=month; $('vTo').value=today;
 $('cFrom').value=month; $('cTo').value=today;
 loadAll();
+
+// ── CONTACTOS ──
+let allContactos = [];
+
+async function loadContactos(){
+  $('ctList').innerHTML = '<div class="loading"><div class="spin"></div><p>Cargando...</p></div>';
+  $('ctTop').innerHTML  = 'Cargando...';
+  try {
+    const r = await fetch(`${BOT}/api/admin/contacts?pwd=${PWD}`);
+    const d = await r.json();
+    allContactos = d.contacts||[];
+    renderContactos();
+    renderCtTop();
+  } catch(e){
+    $('ctList').innerHTML = '<div class="empty">Error de conexión</div>';
+  }
+}
+
+function renderContactos(){
+  const sr   = ($('ctSearch')?.value||'').toLowerCase();
+  const list = allContactos.filter(c => !sr || (c.name||'').toLowerCase().includes(sr) || (c.waId||'').includes(sr));
+  $('ctCount').textContent = list.length + ' contactos';
+  if(!list.length){ $('ctList').innerHTML='<div class="empty"><div class="empty-icon">👥</div>Sin contactos</div>'; return; }
+  const colors=['#075E54','#128C7E','#2c6e49','#1565c0','#6a1b9a'];
+  $('ctList').innerHTML = list.map(c=>{
+    const col = colors[(c.waId||'x').charCodeAt((c.waId||'x').length-1)%5];
+    const ini = (c.name||c.waId||'?').slice(0,2).toUpperCase();
+    const ph  = fmtCtPhone(c.waId||c.phone||'');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border);">
+      <div style="width:38px;height:38px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;">${ini}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:.9rem;">${esc(c.name||'—')}</div>
+        <div style="font-size:.75rem;color:var(--muted);">${ph} · ${c.purchases||0} compras · ${fmtM(c.total_spent||0)}</div>
+        ${c.notes?`<div style="font-size:.72rem;color:#9ca3af;">${esc(c.notes)}</div>`:''}
+      </div>
+      <div style="display:flex;gap:5px;">
+        <button onclick="abrirModalContacto('${esc(c.waId)}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:.28rem .45rem;cursor:pointer;font-size:.82rem;">✏️</button>
+        <button onclick="eliminarContacto('${esc(c.waId)}')" style="background:none;border:1px solid rgba(220,38,38,.3);border-radius:6px;padding:.28rem .45rem;cursor:pointer;font-size:.82rem;color:var(--red);">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCtTop(){
+  const top = allContactos.filter(c=>(c.purchases||0)>0).slice(0,20);
+  if(!top.length){ $('ctTop').innerHTML='<span style="color:#9ca3af;">Sin compras registradas aún</span>'; return; }
+  $('ctTop').innerHTML = top.map((c,i)=>{
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:.82rem;min-width:24px;">${medal}</span>
+      <div style="flex:1;font-size:.82rem;font-weight:600;">${esc(c.name||fmtCtPhone(c.waId||''))}</div>
+      <div style="font-size:.78rem;color:var(--green);font-weight:700;">${c.purchases||0} compras · ${fmtM(c.total_spent||0)}</div>
+    </div>`;
+  }).join('');
+}
+
+function fmtCtPhone(w){ const d=String(w).replace(/\D/g,''); return d.length===11&&d.startsWith('506')?d.slice(0,3)+' '+d.slice(3,7)+'-'+d.slice(7):d.length>=8?d.slice(-8,-4)+'-'+d.slice(-4):w; }
+
+function abrirModalContacto(waId){
+  const c = waId ? allContactos.find(x=>x.waId===waId) : null;
+  $('tituloModalContacto').textContent = c ? '✏️ Editar Contacto' : '👤 Agregar Contacto';
+  $('ctEditId').value   = waId||'';
+  $('ctNombre').value   = c?.name||'';
+  $('ctTelefono').value = c?.waId||c?.phone||'';
+  $('ctNotas').value    = c?.notes||'';
+  const m = $('modalContacto'); m.style.display='flex';
+}
+function cerrarModalContacto(){ $('modalContacto').style.display='none'; }
+
+async function guardarContacto(){
+  const tel = ($('ctTelefono').value||'').replace(/\D/g,'');
+  if(!tel){ alert('Teléfono es requerido'); return; }
+  const editId = $('ctEditId').value;
+  const waId   = editId||tel;
+  try {
+    const r = await fetch(`${BOT}/api/admin/contacts?pwd=${PWD}`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ waId, name:$('ctNombre').value.trim(), phone:tel, notes:$('ctNotas').value.trim() })
+    });
+    const d = await r.json();
+    if(d.success){ cerrarModalContacto(); loadContactos(); }
+    else alert('Error: '+(d.error||''));
+  } catch(e){ alert('Error de conexión'); }
+}
+
+async function eliminarContacto(waId){
+  if(!confirm('¿Eliminar este contacto?')) return;
+  try {
+    const r = await fetch(`${BOT}/api/admin/contacts/${encodeURIComponent(waId)}?pwd=${PWD}`,{method:'DELETE'});
+    const d = await r.json();
+    if(d.success) loadContactos();
+    else alert('Error: '+(d.error||''));
+  } catch(e){ alert('Error de conexión'); }
+}
 
 </script>
 </body>
