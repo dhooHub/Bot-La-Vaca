@@ -120,13 +120,13 @@
     
     /* Chat info */
     .chat-info { flex: 1; min-width: 0; }
-    .chat-name { font-weight: 600; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--wa-text); }
-    .chat-preview { font-size: 0.88rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .chat-name { font-weight: 700; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #000; }
+    .chat-preview { font-size: 0.92rem; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
     .chat-preview .bot-icon { font-size: 0.75rem; }
     
     /* Chat meta */
     .chat-meta { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-    .chat-time { font-size: 0.75rem; color: var(--wa-muted); white-space: nowrap; }
+    .chat-time { font-size: 0.78rem; color: #555; white-space: nowrap; font-weight: 600; }
     .chat-unread { min-width: 20px; height: 20px; padding: 0 5px; background: var(--wa-green); border-radius: 10px; font-size: 0.72rem; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; }
     .chat-action-icon { font-size: 1rem; }
 
@@ -163,9 +163,9 @@
     .message-bubble { padding: 0.55rem 0.85rem 0.3rem; border-radius: 8px; position: relative; box-shadow: 0 1px 0.5px rgba(11,20,26,.13); }
     .message.in .message-bubble { background: var(--wa-bubble-in); border-radius: 0px 8px 8px 8px; }
     .message.out .message-bubble { background: var(--wa-bubble-out); border-radius: 8px 0px 8px 8px; }
-    .message-text { font-size: 0.97rem; line-height: 1.45; color: var(--wa-text); white-space: pre-wrap; word-break: break-word; }
+    .message-text { font-size: 1.05rem; line-height: 1.5; color: #000; white-space: pre-wrap; word-break: break-word; }
     .message-text a { color: #1a73e8; text-decoration: underline; }
-    .message-time { font-size: 0.72rem; color: var(--wa-muted); text-align: right; margin-top: 2px; }
+    .message-time { font-size: 0.75rem; color: #555; text-align: right; margin-top: 2px; }
     .message-image { max-width: 240px; max-height: 200px; border-radius: 6px; cursor: pointer; display: block; margin-bottom: 4px; object-fit: cover; }
     
     /* Date separator */
@@ -201,9 +201,9 @@
     
     /* Quick replies bar */
     .quick-replies-bar { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.4rem 0.75rem; display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
-    .qr-chip { background: var(--wa-input-bg); border: 1px solid var(--wa-border); border-radius: 16px; padding: 0.3rem 0.65rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all .15s; color: var(--wa-text); font-family: inherit; }
+    .qr-chip { background: #fff; border: 2px solid #aaa; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.88rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all .15s; color: #111; font-family: inherit; }
     .qr-chip:hover { background: var(--wa-green); color: #fff; border-color: var(--wa-green); }
-    .qr-chip-manage { background: none; border: 1px dashed #bbb; color: var(--wa-muted); border-radius: 16px; padding: 0.3rem 0.65rem; font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+    .qr-chip-manage { background: none; border: 2px dashed #888; color: #555; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
     .qr-chip-manage:hover { border-color: var(--wa-green-teal); color: var(--wa-green-teal); }
 
     /* Input row */
@@ -323,6 +323,7 @@
       </div>
       <div class="header-right">
         <button class="notif-btn" onclick="showSales()" title="Ventas">💰</button>
+        <button class="notif-btn" onclick="showContacts()" title="Contactos">👥</button>
         <button class="notif-btn" id="notifBtn" onclick="requestNotifications()" title="Activar notificaciones">🔔</button>
         <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
       </div>
@@ -397,13 +398,77 @@
     <img id="viewerImage" src="" style="max-width:95%; max-height:90vh; border-radius:8px;">
   </div>
 
-  <!-- Sales Modal -->
+  <!-- Sales Modal (Ventas unificadas) -->
   <div class="modal-overlay" id="salesModal">
-    <div class="modal-inner" style="background:#fff; border-radius:14px; padding:1.5rem; max-width:520px; width:95%; max-height:88vh; overflow-y:auto; position:relative;">
-      <button onclick="hideSales()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#667781;">✕</button>
-      <h2 style="margin:0 0 6px;font-size:1.15rem;font-weight:700;">💰 Registro de Ventas</h2>
-      <div id="salesSummary" style="background:#f0fdf4;padding:12px;border-radius:10px;margin-bottom:14px;"></div>
+    <div class="modal-inner" style="background:#fff;border-radius:14px;padding:1.25rem;max-width:540px;width:95%;max-height:90vh;overflow-y:auto;position:relative;">
+      <button onclick="hideSales()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#667781;">✕</button>
+      <h2 style="margin:0 0 10px;font-size:1.05rem;font-weight:700;">💰 Ventas</h2>
+
+      <!-- Stats rápidas -->
+      <div id="salesSummary" style="background:#f0fdf4;padding:10px;border-radius:10px;margin-bottom:12px;"></div>
+
+      <!-- Toggle form -->
+      <button onclick="toggleSaleForm()" id="saleFormToggle" style="width:100%;padding:.6rem;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;font-family:inherit;">+ Nueva venta</button>
+
+      <!-- Nueva venta form -->
+      <div id="newSaleForm" style="display:none;background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #e9edef;">
+        <div style="font-size:.85rem;font-weight:700;margin-bottom:8px;">📝 Registrar venta</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button id="nsftE" onclick="setNSFMetodo('envio')" style="flex:1;padding:.45rem;border:2px solid #25D366;background:#e8f5e9;color:#1b5e20;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;">🚚 Envío</button>
+          <button id="nsftR" onclick="setNSFMetodo('retiro')" style="flex:1;padding:.45rem;border:2px solid #e9edef;background:#fff;color:#667781;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;">🏪 Retiro</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Producto *</label><input id="nsfP" type="text" placeholder="Nombre" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Talla/Color</label><input id="nsfTC" type="text" placeholder="Ej: M, Negro" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Precio (₡) *</label><input id="nsfPr" type="number" placeholder="0" inputmode="numeric" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+          <div id="nsfEnvioDiv"><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Envío (₡)</label><input id="nsfEn" type="number" placeholder="0" inputmode="numeric" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Nombre cliente</label><input id="nsfN" type="text" placeholder="María González" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Teléfono</label><input id="nsfTel" type="tel" placeholder="8888-1234" inputmode="numeric" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+        </div>
+        <div id="nsfDirDiv" style="margin-bottom:6px;"><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Dirección</label><textarea id="nsfDir" placeholder="Señas de envío..." rows="2" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></textarea></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Ref. SINPE</label><input id="nsfSinpe" type="text" placeholder="Referencia" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+          <div><label style="font-size:.68rem;font-weight:700;color:#667781;text-transform:uppercase;">Notas</label><input id="nsfNt" type="text" placeholder="Notas" style="width:100%;padding:.45rem .6rem;border:1.5px solid #e9edef;border-radius:8px;font-size:.85rem;font-family:inherit;background:#fff;"></div>
+        </div>
+        <button onclick="saveNewSale()" style="width:100%;padding:.7rem;background:#075E54;color:#fff;border:none;border-radius:10px;font-size:.92rem;font-weight:700;cursor:pointer;font-family:inherit;">💾 Guardar venta</button>
+      </div>
+
+      <!-- Ventas list -->
       <div id="salesList" style="font-size:14px;"></div>
+    </div>
+  </div>
+
+  <!-- Contacts Modal -->
+  <div class="modal-overlay" id="contactsModal">
+    <div class="modal-inner" style="background:#fff;border-radius:14px;padding:1.25rem;max-width:540px;width:95%;max-height:90vh;overflow-y:auto;position:relative;">
+      <button onclick="hideContacts()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#667781;">✕</button>
+      <h2 style="margin:0 0 10px;font-size:1.05rem;font-weight:700;">👥 Contactos</h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+        <input type="text" id="ctSearchInput" placeholder="🔍 Buscar..." oninput="renderContactsModal()" style="flex:1;padding:.5rem .75rem;border:1px solid #e9edef;border-radius:20px;font-size:.88rem;background:#f0f2f5;font-family:inherit;outline:none;">
+        <span id="ctCountLbl" style="font-size:.78rem;color:#667781;white-space:nowrap;"></span>
+        <button onclick="openAddContact()" style="background:#25D366;color:#fff;border:none;border-radius:8px;padding:.45rem .8rem;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Agregar</button>
+      </div>
+      <div id="contactsListModal"></div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Contact Modal -->
+  <div class="modal-overlay" id="addContactModal">
+    <div class="modal-inner" style="background:#fff;border-radius:14px;padding:1.25rem;max-width:400px;width:95%;position:relative;">
+      <button onclick="closeAddContact()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#667781;">✕</button>
+      <h2 id="addContactTitle" style="margin:0 0 12px;font-size:1rem;font-weight:700;">👤 Agregar Contacto</h2>
+      <input type="hidden" id="editCtId">
+      <div style="margin-bottom:8px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Nombre</label><input id="editCtN" type="text" placeholder="Nombre completo" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
+      <div style="margin-bottom:8px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Teléfono</label><input id="editCtTel" type="tel" placeholder="50688881234" inputmode="numeric" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
+      <div style="margin-bottom:12px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Notas</label><input id="editCtNt" type="text" placeholder="Notas" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeAddContact()" style="flex:1;padding:.75rem;background:#f0f2f5;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">Cancelar</button>
+        <button onclick="saveContactModal()" style="flex:2;padding:.75rem;background:#25D366;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Guardar</button>
+      </div>
     </div>
   </div>
 
@@ -1798,68 +1863,162 @@ if (!location.search.includes('v=')) {
       const summary = $('salesSummary');
       const list = $('salesList');
       
-      // Calcular totales
       const today = new Date().toISOString().slice(0,10);
       const todaySales = allSales.filter(s => s.date?.startsWith(today));
       const todayRevenue = todaySales.reduce((sum,s) => sum + (s.total||0), 0);
-      
-      // Este mes
       const thisMonth = new Date().toISOString().slice(0,7);
       const monthSales = allSales.filter(s => s.date?.startsWith(thisMonth));
       const monthRevenue = monthSales.reduce((sum,s) => sum + (s.total||0), 0);
-      
       const totalRevenue = allSales.reduce((sum,s) => sum + (s.total||0), 0);
       
-      summary.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
-          <div>
-            <div style="font-size:11px;color:#666;">Hoy</div>
-            <div style="font-size:18px;font-weight:bold;color:#25d366;">${todaySales.length}</div>
-            <div style="font-size:12px;color:#333;">₡${todayRevenue.toLocaleString()}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;">Este mes</div>
-            <div style="font-size:18px;font-weight:bold;color:#25d366;">${monthSales.length}</div>
-            <div style="font-size:12px;color:#333;">₡${monthRevenue.toLocaleString()}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#666;">Total</div>
-            <div style="font-size:18px;font-weight:bold;color:#25d366;">${allSales.length}</div>
-            <div style="font-size:12px;color:#333;">₡${totalRevenue.toLocaleString()}</div>
-          </div>
-        </div>`;
+      summary.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
+        <div><div style="font-size:11px;color:#666;">Hoy</div><div style="font-size:18px;font-weight:bold;color:#25d366;">${todaySales.length}</div><div style="font-size:12px;color:#333;">₡${todayRevenue.toLocaleString()}</div></div>
+        <div><div style="font-size:11px;color:#666;">Este mes</div><div style="font-size:18px;font-weight:bold;color:#25d366;">${monthSales.length}</div><div style="font-size:12px;color:#333;">₡${monthRevenue.toLocaleString()}</div></div>
+        <div><div style="font-size:11px;color:#666;">Total</div><div style="font-size:18px;font-weight:bold;color:#25d366;">${allSales.length}</div><div style="font-size:12px;color:#333;">₡${totalRevenue.toLocaleString()}</div></div>
+      </div>`;
       
-      // Lista de ventas (más recientes primero)
-      const sorted = [...allSales].reverse().slice(0, 50);
-      if(sorted.length === 0){
-        list.innerHTML = '<p style="text-align:center;color:#999;padding:20px;">No hay ventas registradas aún</p>';
+      const sorted = [...allSales].reverse().slice(0, 80);
+      if(!sorted.length){
+        list.innerHTML = '<p style="text-align:center;color:#999;padding:20px;">No hay ventas aún</p>';
       } else {
         list.innerHTML = sorted.map(s => {
           const date = new Date(s.date);
-          const dateStr = date.toLocaleDateString('es-CR', {day:'2-digit',month:'short'});
-          const timeStr = date.toLocaleTimeString('es-CR', {hour:'2-digit',minute:'2-digit'});
+          const dateStr = date.toLocaleDateString('es-CR',{day:'2-digit',month:'short'});
+          const timeStr = date.toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
           const method = s.method === 'envio' ? '🚚' : '🏪';
           return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #eee;">
-            ${s.foto_url ? `<img src="${s.foto_url}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="width:40px;height:40px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;">📦</div>'}
+            <div style="width:40px;height:40px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">📦</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.producto||'Producto'}</div>
-              <div style="font-size:11px;color:#666;">${s.name||formatPhone(s.waId||s.phone||'')} · ${s.talla_color||''}</div>
-              <div style="font-size:11px;color:#999;">${dateStr} ${timeStr} ${method} ${s.method==='envio'?(s.zone||''):'Retiro'}</div>
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.producto||'Producto'}${s.talla_color?' · '+s.talla_color:''}</div>
+              <div style="font-size:11px;color:#666;">${s.name||formatPhone(s.waId||s.phone||'')}</div>
+              <div style="font-size:11px;color:#999;">${dateStr} ${timeStr} ${method}${s.method==='envio'?(s.zone?' '+s.zone:''):'Retiro'}${s.guia_correos?' 📦 '+s.guia_correos:''}</div>
             </div>
-            <div style="text-align:right;">
+            <div style="text-align:right;flex-shrink:0;">
               <div style="font-weight:bold;color:#25d366;">₡${(s.total||0).toLocaleString()}</div>
-              <div style="font-size:10px;color:#999;">${s.id||''}</div>
+              <div style="font-size:10px;color:#999;">${s.status||''}</div>
             </div>
           </div>`;
         }).join('');
       }
-      
       modal.classList.add('active');
     }
     
-    function hideSales() {
-      $('salesModal').classList.remove('active');
+    function hideSales() { $('salesModal').classList.remove('active'); }
+
+    // Toggle sale form
+    let nsfMetodo = 'envio';
+    function toggleSaleForm() {
+      const form = $('newSaleForm');
+      const btn = $('saleFormToggle');
+      if(form.style.display === 'none') { form.style.display='block'; btn.textContent='✕ Cancelar'; btn.style.background='#667781'; }
+      else { form.style.display='none'; btn.textContent='+ Nueva venta'; btn.style.background='#25D366'; }
     }
+    function setNSFMetodo(m) {
+      nsfMetodo=m;
+      $('nsftE').style.cssText = m==='envio' ? 'flex:1;padding:.45rem;border:2px solid #25D366;background:#e8f5e9;color:#1b5e20;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;' : 'flex:1;padding:.45rem;border:2px solid #e9edef;background:#fff;color:#667781;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;';
+      $('nsftR').style.cssText = m==='retiro' ? 'flex:1;padding:.45rem;border:2px solid #25D366;background:#e8f5e9;color:#1b5e20;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;' : 'flex:1;padding:.45rem;border:2px solid #e9edef;background:#fff;color:#667781;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;';
+      $('nsfEnvioDiv').style.display = m==='envio'?'':'none';
+      $('nsfDirDiv').style.display = m==='envio'?'':'none';
+    }
+    async function saveNewSale() {
+      const prod = $('nsfP')?.value?.trim();
+      const prec = parseInt($('nsfPr')?.value)||0;
+      if(!prod||!prec){ showToast('⚠️ Producto y precio son requeridos'); return; }
+      const body = {
+        producto:prod, precio:prec, talla_color:$('nsfTC')?.value?.trim()||'',
+        method:nsfMetodo, shipping:parseInt($('nsfEn')?.value)||0,
+        name:$('nsfN')?.value?.trim()||'', phone:($('nsfTel')?.value||'').replace(/\D/g,''),
+        envio_datos:$('nsfDir')?.value?.trim()||'',
+        sinpe_reference:$('nsfSinpe')?.value?.trim()||'',
+        notas:$('nsfNt')?.value?.trim()||''
+      };
+      try {
+        const authSep = typeof ADMIN_TOKEN !== 'undefined' && ADMIN_TOKEN ? '?token='+encodeURIComponent(ADMIN_TOKEN) : '';
+        const r = await fetch('/api/admin/sales/manual'+authSep, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        if(r.ok){
+          const d = await r.json();
+          allSales.push(d.sale);
+          ['nsfP','nsfTC','nsfPr','nsfEn','nsfN','nsfTel','nsfDir','nsfSinpe','nsfNt'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+          toggleSaleForm();
+          showSales();
+          showToast('✅ Venta registrada');
+        } else showToast('Error al guardar');
+      } catch(e){ showToast('Error de conexión'); }
+    }
+
+    // ===== CONTACTS MODAL =====
+    let allContactsList = [];
+    function showContacts() {
+      // Refresh from socket contacts object
+      allContactsList = Object.values(contacts||{}).filter(c=>c.waId);
+      renderContactsModal();
+      $('contactsModal').classList.add('active');
+    }
+    function hideContacts(){ $('contactsModal').classList.remove('active'); }
+    function renderContactsModal() {
+      const sr = ($('ctSearchInput')?.value||'').toLowerCase();
+      let list = allContactsList.filter(c => !sr||(c.name||'').toLowerCase().includes(sr)||(c.waId||'').includes(sr));
+      $('ctCountLbl').textContent = list.length+' contactos';
+      if(!list.length){ $('contactsListModal').innerHTML='<p style="text-align:center;color:#999;padding:20px;">Sin contactos</p>'; return; }
+      const avColors=['#075E54','#128C7E','#2c6e49','#1565c0','#6a1b9a'];
+      $('contactsListModal').innerHTML = list.map(c=>{
+        const col=avColors[(c.waId||'x').charCodeAt((c.waId||'x').length-1)%5];
+        const ini=(c.name||c.waId||'?').slice(0,2).toUpperCase();
+        // find purchases from sales
+        const purchases = allSales.filter(s=>(s.waId||s.phone||'')===(c.waId||'')).length;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #f0f2f5;">
+          <div style="width:38px;height:38px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;">${ini}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:.9rem;">${escapeHtml(c.name||'—')}</div>
+            <div style="font-size:.75rem;color:#667781;">${formatPhone(c.waId||c.phone||'')} · ${purchases} compras</div>
+            ${c.notes?`<div style="font-size:.72rem;color:#999;">${escapeHtml(c.notes)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:5px;">
+            <button onclick="openAddContact('${escapeHtml(c.waId)}')" style="background:none;border:1px solid #e9edef;border-radius:6px;padding:.28rem .45rem;cursor:pointer;font-size:.82rem;">✏️</button>
+            <button onclick="deleteContactModal('${escapeHtml(c.waId)}')" style="background:none;border:1px solid rgba(229,57,53,.3);border-radius:6px;padding:.28rem .45rem;cursor:pointer;font-size:.82rem;color:#e53935;">🗑️</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    function openAddContact(waId) {
+      const c = waId ? allContactsList.find(x=>x.waId===waId) : null;
+      $('addContactTitle').textContent = c ? '✏️ Editar Contacto' : '👤 Agregar Contacto';
+      $('editCtId').value = waId||'';
+      $('editCtN').value = c?.name||'';
+      $('editCtTel').value = c?.waId||c?.phone||'';
+      $('editCtNt').value = c?.notes||'';
+      $('addContactModal').classList.add('active');
+    }
+    function closeAddContact(){ $('addContactModal').classList.remove('active'); }
+    async function saveContactModal() {
+      const tel = ($('editCtTel')?.value||'').replace(/\D/g,'');
+      if(!tel){ showToast('⚠️ Teléfono requerido'); return; }
+      const editId = $('editCtId')?.value||'';
+      const waId = editId||tel;
+      try {
+        const authSep = typeof ADMIN_TOKEN !== 'undefined' && ADMIN_TOKEN ? '?token='+encodeURIComponent(ADMIN_TOKEN) : '';
+        const r = await fetch('/api/admin/contacts'+authSep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({waId,name:$('editCtN')?.value?.trim()||'',phone:tel,notes:$('editCtNt')?.value?.trim()||''})});
+        if(r.ok){
+          closeAddContact();
+          // Refresh contacts from API
+          const cr = await fetch('/api/admin/contacts'+authSep);
+          if(cr.ok){ const cd=await cr.json(); cd.contacts.forEach(c=>{ contacts[c.waId]=c; }); }
+          allContactsList = Object.values(contacts);
+          renderContactsModal();
+          showToast('✅ Contacto guardado');
+        } else showToast('Error al guardar');
+      } catch(e){ showToast('Error de conexión'); }
+    }
+    async function deleteContactModal(waId) {
+      if(!confirm('¿Eliminar este contacto?')) return;
+      try {
+        const authSep = typeof ADMIN_TOKEN !== 'undefined' && ADMIN_TOKEN ? '?token='+encodeURIComponent(ADMIN_TOKEN) : '';
+        const r = await fetch('/api/admin/contacts/'+encodeURIComponent(waId)+authSep,{method:'DELETE'});
+        if(r.ok){ delete contacts[waId]; allContactsList=Object.values(contacts); renderContactsModal(); showToast('🗑️ Eliminado'); }
+        else showToast('Error');
+      } catch(e){ showToast('Error'); }
+    }
+    function escapeHtml(t){ return String(t||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
     // ===== BOT TOGGLE =====
     $('botToggle').onclick = () => socket.emit('toggle_bot');
