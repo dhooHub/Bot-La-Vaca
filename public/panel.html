@@ -136,8 +136,26 @@
 
     /* Chat input */
     .chat-input-area { background: #fff; padding: 0.7rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
-    .chat-input { flex: 1; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
+    .chat-input { flex: 1; padding: 0.8rem 1rem; border: 2px solid transparent; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; transition: border-color 0.2s; }
     .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    /* Quick Replies */
+    .quick-replies-bar { background: #fff; border-top: 1px solid #e0e0e0; padding: 0.4rem 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+    .qr-chip { background: var(--bg); border: 1px solid #ddd; border-radius: 16px; padding: 0.3rem 0.7rem; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .qr-chip:hover { background: var(--primary-light); color: #fff; border-color: var(--primary-light); }
+    .qr-chip-manage { background: none; border: 1px dashed #bbb; color: #999; border-radius: 16px; padding: 0.3rem 0.7rem; font-size: 0.82rem; cursor: pointer; }
+    .qr-chip-manage:hover { border-color: var(--primary-light); color: var(--primary-light); }
+    .qr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 300; }
+    .qr-modal-overlay.active { display: flex; }
+    .qr-modal-box { background: #fff; border-radius: 16px; padding: 1.5rem; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
+    .qr-modal-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .qr-modal-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .qr-item { display: grid; grid-template-columns: 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
+    .qr-item-code { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; font-weight: 700; font-family: monospace; }
+    .qr-item-text { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.88rem; resize: vertical; min-height: 55px; }
+    .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
+    .qr-add-btn { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; margin-bottom: 1rem; font-weight: 600; }
+    .qr-save-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 0.8rem; width: 100%; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
 
     /* QR Section */
     .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
@@ -290,6 +308,18 @@
     </div>
   </div>
 
+  <!-- Quick Replies Manager Modal -->
+  <div class="qr-modal-overlay" id="qrManagerOverlay">
+    <div class="qr-modal-box">
+      <div class="qr-modal-title">⚡ Respuestas Rápidas</div>
+      <p class="qr-modal-sub">Escribí un código corto (ej: <strong>envio</strong>) y el mensaje completo que se enviará al cliente.</p>
+      <div id="qrItemsList"></div>
+      <button class="qr-add-btn" onclick="addQrItem()">+ Agregar respuesta</button>
+      <button class="qr-save-btn" onclick="saveQuickReplies()">💾 Guardar</button>
+      <button onclick="closeQrManager()" style="width:100%;margin-top:0.5rem;padding:0.7rem;border:none;border-radius:10px;background:var(--bg);cursor:pointer;font-size:0.95rem;">Cancelar</button>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
@@ -311,6 +341,95 @@ if (!location.search.includes('v=')) {
     let chats = {}, pending = {}, contacts = {};
     let humanModeChats = new Set(); // Chats en modo humano
     let notificationsEnabled = false;
+
+    // ===== QUICK REPLIES =====
+    const DEFAULT_QUICK_REPLIES = [
+      { code: 'hola', text: '¡Hola! Pura vida 🙌 ¿En qué te puedo ayudar? 😊' },
+      { code: 'horario', text: '📅 Nuestro horario de atención es:\n\nLunes a Sábado: 9am - 7pm\nDomingos: 10am - 6pm\n\n📍 Estamos en Heredia centro, 100 mts sur de la esquina del Testy\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones 🙌' },
+      { code: 'direccion', text: '📍 Nos encontramos en:\n\nHeredia centro, 100 mts sur de la esquina del Testy\n\n🕒 Horario: Lunes a Sábado 9am - 7pm | Domingos 10am - 6pm\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones 🙌' },
+      { code: 'sinpe', text: '💳 El pago se hace por SINPE Móvil:\n\n📱 Número: 6326-2291\n👤 Nombre: Moda Exclusiva Agort Ltda\n\nPor favor indicá tu nombre completo al realizar el SINPE y una vez hecho el pago, mandame la foto del comprobante por este medio 🧾\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones 🙌' },
+      { code: 'info-envios', text: '📦 Hacemos envíos a todo el país por medio de Correos de Costa Rica:\n\n• GAM: ₡2,500\n• Fuera del GAM: ₡3,000\n\n⏱️ El paquete tarda aproximadamente 8 días hábiles en llegar.\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones 🙌' },
+      { code: 'datos-envio', text: 'Para coordinar el envío necesito los siguientes datos 📋\n\n• Nombre completo\n• Teléfono\n• Provincia\n• Cantón\n• Distrito\n• Dirección por señas\n\n(Ej: María López, 8888-1234, Heredia, Central, Mercedes, frente a la iglesia)' },
+      { code: 'gracias', text: '¡Muchas gracias por tu compra! 🎉\n\nFue un placer atenderte. Cualquier consulta, aquí estamos con gusto 🙌\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones. ¡Pura vida! 🐄' },
+      { code: 'no-hay', text: 'De momento no contamos con ese producto 😔\n\nCualquier otra consulta estamos para servirte con gusto 🙌\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones.' }
+    ];
+    const QR_VERSION = 3; // Incrementar para forzar recarga de defaults
+    const savedQr = localStorage.getItem('ticobot_qr');
+    const savedVersion = parseInt(localStorage.getItem('ticobot_qr_v') || '0');
+    let quickReplies = (savedQr && savedVersion >= QR_VERSION) ? JSON.parse(savedQr) : DEFAULT_QUICK_REPLIES;
+
+    function saveQuickRepliesLocal() {
+      localStorage.setItem('ticobot_qr', JSON.stringify(quickReplies));
+      localStorage.setItem('ticobot_qr_v', String(QR_VERSION));
+    }
+
+    function applyQuickReply(code) {
+      const qr = quickReplies.find(r => r.code === code);
+      if (!qr) return;
+      const input = $('chatInput');
+      if (input) {
+        input.value = qr.text;
+        input.focus();
+        // Expandir textarea si es necesario
+        input.style.height = 'auto';
+      }
+    }
+
+    function renderQuickRepliesBar() {
+      const bar = $('quickRepliesBar');
+      if (!bar) return;
+      bar.innerHTML = quickReplies.map(qr =>
+        `<button class="qr-chip" onclick="applyQuickReply('${qr.code}')" title="${qr.text.slice(0,60)}...">⚡ ${qr.code}</button>`
+      ).join('') + `<button class="qr-chip-manage" onclick="openQrManager()">✏️</button>`;
+    }
+
+    function openQrManager() {
+      renderQrManagerItems();
+      $('qrManagerOverlay').classList.add('active');
+    }
+
+    function closeQrManager() {
+      $('qrManagerOverlay').classList.remove('active');
+    }
+
+    function renderQrManagerItems() {
+      const list = $('qrItemsList');
+      list.innerHTML = quickReplies.map((qr, i) => `
+        <div class="qr-item" id="qrItem_${i}">
+          <input class="qr-item-code" type="text" value="${qr.code}" placeholder="código" id="qrCode_${i}">
+          <textarea class="qr-item-text" id="qrText_${i}" placeholder="Mensaje completo...">${qr.text}</textarea>
+          <button class="qr-item-del" onclick="deleteQrItem(${i})">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function addQrItem() {
+      quickReplies.push({ code: 'nuevo', text: '' });
+      renderQrManagerItems();
+      // Scroll al final y focus en el nuevo
+      const list = $('qrItemsList');
+      list.scrollTop = list.scrollHeight;
+      const lastCode = document.getElementById('qrCode_' + (quickReplies.length - 1));
+      if (lastCode) { lastCode.focus(); lastCode.select(); }
+    }
+
+    function deleteQrItem(i) {
+      quickReplies.splice(i, 1);
+      renderQrManagerItems();
+    }
+
+    function saveQuickReplies() {
+      // Leer valores del DOM
+      quickReplies = quickReplies.map((_, i) => {
+        const code = (document.getElementById('qrCode_' + i)?.value || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const text = document.getElementById('qrText_' + i)?.value || '';
+        return { code, text };
+      }).filter(qr => qr.code && qr.text);
+      saveQuickRepliesLocal();
+      closeQrManager();
+      renderQuickRepliesBar();
+      toast('✅ Respuestas guardadas', 'success');
+    }
     let swRegistration = null;
     let alertInterval = null; // Para repetir sonido
 
@@ -928,14 +1047,18 @@ if (!location.search.includes('v=')) {
         <div class="messages-container" id="messagesContainer">
           ${renderMessages(chat)}
         </div>
+        <div id="quickRepliesBar" class="quick-replies-bar"></div>
         <div class="chat-input-area">
-          <input type="text" class="chat-input" id="chatInput" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual (no activa modo humano)...'}">
+          <input type="text" class="chat-input" id="chatInput" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual...'}" oninput="handleInputChange(this)">
           <button class="chat-send-btn" onclick="sendMessage()">➤</button>
         </div>
       `;
       
       // Enter to send
       $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+      
+      // Render quick replies bar
+      renderQuickRepliesBar();
       
       // Scroll to bottom
       const container = $('messagesContainer');
@@ -1230,11 +1353,24 @@ if (!location.search.includes('v=')) {
 
     function sendMessage() {
       const input = $('chatInput');
-      const text = input.value.trim();
-      if (!text || !currentChat) return;
+      const raw = input.value.trim();
+      if (!raw || !currentChat) return;
+      
+      // Expandir shortcode si coincide exactamente
+      const match = quickReplies.find(r => r.code === raw.toLowerCase());
+      const text = match ? match.text : raw;
       
       socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
       input.value = '';
+      input.style.borderColor = 'transparent';
+    }
+
+    function handleInputChange(input) {
+      const val = input.value.toLowerCase().trim();
+      const match = quickReplies.find(r => r.code === val);
+      // Hint visual: borde verde si coincide con un shortcode
+      input.style.borderColor = match ? '#25D366' : 'transparent';
+      input.title = match ? '⚡ Atajo detectado: se enviará este mensaje' : '';
     }
 
     function deleteChat() {
