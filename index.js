@@ -1508,6 +1508,14 @@ async function handleIncomingMessage(msg) {
 
   if(profile.blocked)return;
   if(botPaused){console.log("⏸️ Bot pausado");return;}
+  
+  // ====== MODO HUMANO POR CHAT ======
+  if(session.humanMode){
+    console.log(`👤 Modo humano activo para ${displayPhone} - bot no responde`);
+    // Notificar al panel que llegó mensaje nuevo (para que alerte al operador)
+    io.emit("human_mode_message", { waId: normalizePhone(waId), phone: displayPhone, text: text||(hasImage?"(foto)":"(mensaje)"), timestamp: new Date().toISOString() });
+    return;
+  }
 
   // ====== SISTEMA ANTI-RÁFAGA ======
   // Si el cliente envía muchos mensajes seguidos, agrupar y responder una vez
@@ -3006,6 +3014,22 @@ async function executeAction(clientWaId, actionType, data = {}) {
     return { success: true, message: "Enviado" };
   }
 
+  if (actionType === "TOMAR_CHAT") {
+    session.humanMode = true;
+    saveDataToDisk();
+    console.log(`👤 Chat tomado por humano: ${clientWaId}`);
+    io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: true });
+    return { success: true, message: "Chat tomado. Bot pausado para este cliente." };
+  }
+
+  if (actionType === "LIBERAR_CHAT") {
+    session.humanMode = false;
+    saveDataToDisk();
+    console.log(`🤖 Chat liberado al bot: ${clientWaId}`);
+    io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: false });
+    return { success: true, message: "Chat liberado. Bot retoma el control." };
+  }
+
   if (actionType === "SINPE_ERROR") {
     session.state = "ESPERANDO_SINPE";
     session.comprobante_url = null;
@@ -3061,7 +3085,7 @@ io.on("connection", (socket) => {
           pendingZones.push({waId:wId, zone:s.client_zone, producto:s.producto, codigo:s.codigo, precio:s.precio, talla_color:s.talla_color, foto_url:s.foto_url});
         }
       }
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()) });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()), humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id) });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
