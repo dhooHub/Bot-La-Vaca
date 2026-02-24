@@ -495,18 +495,23 @@ async function loadLikesStats() {
     _ownerLikesData = { all: d.all, nameMap: nameMap, maxCount: d.maxCount || 0 };
     function renderLikeList(el, obj, isTop) {
       var entries = Object.entries(obj);
+      if (isTop && entries.length === 0) {
+        el.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;padding:8px;">Aún no hay likes — aparecerán cuando las clientas comiencen a dar ❤️</div>';
+        return;
+      }
       if (entries.length === 0) { el.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;padding:8px;">Sin datos aún</div>'; return; }
       el.innerHTML = entries.map(function(e, i) {
         var cb = e[0].replace(/_[B-Z]$/, '');
         var nm = nameMap[cb] || nameMap[e[0]] || cb;
         var medal = isTop ? (i===0?'🥇':i===1?'🥈':i===2?'🥉':'') : '';
+        var cc = e[1] === 0 ? '#9ca3af' : '#6b1225';
         return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;">'
           + '<img src="' + SITE + '/img/' + cb + '.webp" onerror="this.style.opacity=0.1" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0;">'
           + '<div style="flex:1;min-width:0;"><div style="font-size:0.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + medal + ' ' + nm + '</div>'
           + '<div style="font-size:0.7rem;color:#9ca3af;">Código: ' + cb + '</div></div>'
           + '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">'
-          + '<svg viewBox="0 0 24 24" width="13" height="13" fill="#6b1225"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
-          + '<span style="font-size:0.85rem;font-weight:800;color:#6b1225;">' + e[1] + '</span></div>'
+          + '<svg viewBox="0 0 24 24" width="13" height="13" fill="' + cc + '"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+          + '<span style="font-size:0.85rem;font-weight:800;color:' + cc + ';">' + e[1] + '</span></div>'
           + '</div>';
       }).join('');
     }
