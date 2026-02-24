@@ -1337,7 +1337,23 @@ async function connectWhatsApp() {
 
   sock.ev.on("messages.upsert",async({messages,type})=>{
     if(type!=="notify")return;
-    for(const msg of messages){if(msg.key.fromMe||msg.key.remoteJid?.endsWith("@g.us"))continue;messageQueue.push(msg);processQueue();}
+    for(const msg of messages){
+      // Ignorar grupos siempre
+      if(msg.key.remoteJid?.endsWith("@g.us"))continue;
+      // Mensajes enviados desde el teléfono directamente → guardar en historial como "out"
+      if(msg.key.fromMe){
+        const waId = fromJid(msg.key.remoteJid||"");
+        if(!waId) continue;
+        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.ephemeralMessage?.message?.extendedTextMessage?.text || "";
+        const hasImage = !!(msg.message?.imageMessage || msg.message?.extendedTextMessage?.jpegThumbnail);
+        if(text || hasImage) {
+          addToChatHistory(waId, "out", text || "(foto)");
+          console.log(`📱 Mensaje desde teléfono → ${formatPhone(waId)}: ${(text||"(foto)").slice(0,60)}`);
+        }
+        continue;
+      }
+      messageQueue.push(msg);processQueue();
+    }
   });
 }
 
@@ -3353,6 +3369,64 @@ app.get("/api/admin/chats", adminAuth, (req, res) => {
   
   const convoList = Object.values(convos).sort((a,b) => b.last.localeCompare(a.last));
   res.json({ count: convoList.length, conversations: convoList.slice(0, parseInt(limit)||50) });
+});
+
+// ============ CONTACTS API ============
+
+app.get("/api/admin/contacts", adminAuth, (req, res) => {
+  const { search } = req.query;
+  let list = Array.from(profiles.values());
+  if (search) {
+    const s = search.toLowerCase();
+    list = list.filter(p => (p.name||'').toLowerCase().includes(s) || (p.waId||'').includes(s));
+  }
+  // Enriquecer con stats de ventas
+  const statsByPhone = {};
+  salesLog.forEach(sale => {
+    const phone = sale.waId || sale.phone || '';
+    if (!phone) return;
+    if (!statsByPhone[phone]) statsByPhone[phone] = { count: 0, total: 0, last: null };
+    statsByPhone[phone].count++;
+    statsByPhone[phone].total += (sale.total || 0);
+    if (!statsByPhone[phone].last || sale.date > statsByPhone[phone].last) statsByPhone[phone].last = sale.date;
+  });
+  list = list.map(p => ({
+    ...p,
+    purchases: statsByPhone[p.waId]?.count || p.purchases || 0,
+    total_spent: statsByPhone[p.waId]?.total || 0,
+    last_purchase: statsByPhone[p.waId]?.last || null
+  }));
+  list.sort((a, b) => (b.purchases || 0) - (a.purchases || 0));
+  res.json({ total: list.length, contacts: list });
+});
+
+app.post("/api/admin/contacts", adminAuth, express.json(), (req, res) => {
+  const { waId, name, phone, notes } = req.body;
+  if (!waId) return res.status(400).json({ error: "waId requerido" });
+  const id = normalizePhone(waId);
+  const existing = profiles.get(id) || { waId: id, purchases: 0, created_at: new Date().toISOString() };
+  if (name !== undefined) existing.name = name;
+  if (phone !== undefined) existing.phone = phone;
+  if (notes !== undefined) existing.notes = notes;
+  profiles.set(id, existing);
+  saveDataToDisk();
+  res.json({ success: true, contact: existing });
+});
+
+app.delete("/api/admin/contacts/:waId", adminAuth, (req, res) => {
+  const id = normalizePhone(decodeURIComponent(req.params.waId));
+  if (!profiles.has(id)) return res.status(404).json({ error: "No encontrado" });
+  profiles.delete(id);
+  saveDataToDisk();
+  res.json({ success: true });
+});
+
+app.delete("/api/admin/sales/:saleId", adminAuth, (req, res) => {
+  const idx = salesLog.findIndex(s => s.id === req.params.saleId);
+  if (idx === -1) return res.status(404).json({ error: "Venta no encontrada" });
+  salesLog.splice(idx, 1);
+  saveDataToDisk();
+  res.json({ success: true });
 });
 
 // ============ INICIAR ============
