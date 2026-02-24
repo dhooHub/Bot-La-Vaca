@@ -345,6 +345,7 @@
   <button class="nav-tab" onclick="showTab('ventas',this)">💰 Ventas</button>
   <button class="nav-tab" onclick="showTab('chats',this)">💬 Chats</button>
   <button class="nav-tab" onclick="showTab('alertas',this)">🔔 Alertas</button>
+  <button class="nav-tab" onclick="showTab('likes',this);loadLikesStats();">❤️ Likes</button>
 </div>
 
 <div id="p-resumen" class="panel active"><div class="loading"><div class="spin"></div><p>Cargando datos...</p></div></div>
@@ -375,6 +376,37 @@
 </div>
 
 <div id="p-alertas" class="panel"><div class="loading"><div class="spin"></div><p>Cargando alertas...</p></div></div>
+
+<div id="p-likes" class="panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <h2 style="margin:0;font-size:1.1rem;font-weight:700;">❤️ Estadísticas de Likes</h2>
+    <button onclick="loadLikesStats()" style="background:var(--rose,#6b1225);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:0.8rem;font-weight:600;cursor:pointer;">↻ Actualizar</button>
+  </div>
+  <div id="msgLikesOwner" style="margin-bottom:12px;"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+    <div>
+      <div style="font-weight:700;font-size:0.85rem;color:#dc2626;margin-bottom:10px;">🔥 Top 20 — Más gustados</div>
+      <div id="ownerLikesTop" style="display:flex;flex-direction:column;gap:7px;"></div>
+    </div>
+    <div>
+      <div style="font-weight:700;font-size:0.85rem;color:#6b7280;margin-bottom:10px;">📉 Bottom 20 — Menos gustados</div>
+      <div id="ownerLikesBottom" style="display:flex;flex-direction:column;gap:7px;"></div>
+    </div>
+  </div>
+  <div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:0.85rem;">📋 Todos los productos</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="ownerLikesSearch" placeholder="Buscar..." oninput="filterOwnerLikes()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:7px;font-size:0.8rem;width:140px;">
+        <select id="ownerLikesSort" onchange="filterOwnerLikes()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:7px;font-size:0.8rem;">
+          <option value="desc">Mayor a menor</option>
+          <option value="asc">Menor a mayor</option>
+        </select>
+      </div>
+    </div>
+    <div id="ownerLikesAll" style="display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+</div>
 
 
 
@@ -432,6 +464,91 @@ const pct = (a,b) => b>0 ? Math.round((a/b)*100) : 0;
 const esc = t => String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function bar(v,c){ return `<div class="bar-bg"><div class="bar-fill" style="width:${Math.min(v,100)}%;background:${c}"></div></div>`; }
 function bColor(v,lo,hi){ return v>=hi?'var(--green)':v>=lo?'var(--orange)':'var(--red)'; }
+
+// ===== LIKES STATS =====
+const SITE = 'https://www.lavacacr.com';
+var _ownerLikesData = null;
+
+async function loadLikesStats() {
+  var topEl = $('ownerLikesTop');
+  var botEl = $('ownerLikesBottom');
+  var msgEl = $('msgLikesOwner');
+  if (!topEl) return;
+  topEl.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;">⏳ Cargando...</div>';
+  botEl.innerHTML = '';
+  if (msgEl) msgEl.innerHTML = '';
+  try {
+    var r = await fetch(SITE + '/admin.php?action=likes_stats&pass=2002');
+    var d = await r.json();
+    if (!d.success) { if(msgEl) msgEl.innerHTML = '<div style="color:red;font-size:0.82rem;">' + (d.error||'Error') + '</div>'; return; }
+    // Load product names
+    var nameMap = {};
+    try {
+      var pr = await fetch(SITE + '/products.js?v=' + Date.now());
+      var pt = await pr.text();
+      var pm = pt.match(/\["([^"]+)",\s*"([^"]+)"/g);
+      if (pm) pm.forEach(function(m) {
+        var parts = m.match(/\["([^"]+)",\s*"([^"]+)"/);
+        if (parts) nameMap[parts[1].replace(/_[B-Z]$/, '')] = parts[2];
+      });
+    } catch(ex) {}
+    _ownerLikesData = { all: d.all, nameMap: nameMap, maxCount: d.maxCount || 0 };
+    function renderLikeList(el, obj, isTop) {
+      var entries = Object.entries(obj);
+      if (entries.length === 0) { el.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;padding:8px;">Sin datos aún</div>'; return; }
+      el.innerHTML = entries.map(function(e, i) {
+        var cb = e[0].replace(/_[B-Z]$/, '');
+        var nm = nameMap[cb] || nameMap[e[0]] || cb;
+        var medal = isTop ? (i===0?'🥇':i===1?'🥈':i===2?'🥉':'') : '';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;">'
+          + '<img src="' + SITE + '/img/' + cb + '.webp" onerror="this.style.opacity=0.1" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0;">'
+          + '<div style="flex:1;min-width:0;"><div style="font-size:0.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + medal + ' ' + nm + '</div>'
+          + '<div style="font-size:0.7rem;color:#9ca3af;">Código: ' + cb + '</div></div>'
+          + '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">'
+          + '<svg viewBox="0 0 24 24" width="13" height="13" fill="#6b1225"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+          + '<span style="font-size:0.85rem;font-weight:800;color:#6b1225;">' + e[1] + '</span></div>'
+          + '</div>';
+      }).join('');
+    }
+    renderLikeList(topEl, d.top, true);
+    renderLikeList(botEl, d.bottom, false);
+    filterOwnerLikes();
+  } catch(e) { if(msgEl) msgEl.innerHTML = '<div style="color:red;font-size:0.82rem;">Error de conexión</div>'; }
+}
+
+function filterOwnerLikes() {
+  var el = $('ownerLikesAll');
+  if (!el || !_ownerLikesData) return;
+  var query = ($('ownerLikesSearch') ? $('ownerLikesSearch').value.toLowerCase().trim() : '');
+  var sort  = $('ownerLikesSort') ? $('ownerLikesSort').value : 'desc';
+  var nm    = _ownerLikesData.nameMap;
+  var entries = Object.entries(_ownerLikesData.all || {});
+  entries.sort(function(a,b){ return sort==='desc' ? b[1]-a[1] : a[1]-b[1]; });
+  if (query) entries = entries.filter(function(e){
+    var cb = e[0].replace(/_[B-Z]$/,'');
+    return (nm[cb]||cb).toLowerCase().includes(query) || cb.includes(query);
+  });
+  if (!entries.length) { el.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;padding:8px;">Sin resultados</div>'; return; }
+  var max = _ownerLikesData.maxCount || 1;
+  el.innerHTML = entries.map(function(e,i){
+    var cb = e[0].replace(/_[B-Z]$/,'');
+    var nombre = nm[cb] || nm[e[0]] || cb;
+    var pct = Math.round((e[1]/max)*100);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;">'
+      + '<span style="font-size:0.7rem;color:#9ca3af;width:20px;text-align:right;flex-shrink:0;">' + (i+1) + '</span>'
+      + '<img src="' + SITE + '/img/' + cb + '.webp" onerror="this.style.opacity=0.1" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0;">'
+      + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-size:0.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + nombre + '</div>'
+        + '<div style="height:4px;background:#f3e8eb;border-radius:2px;margin-top:3px;"><div style="height:4px;background:#6b1225;border-radius:2px;width:' + pct + '%;"></div></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">'
+        + '<svg viewBox="0 0 24 24" width="13" height="13" fill="#6b1225"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+        + '<span style="font-size:0.85rem;font-weight:800;color:#6b1225;">' + e[1] + '</span>'
+      + '</div>'
+    + '</div>';
+  }).join('');
+}
+// ========================
 
 function showTab(name,el){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
