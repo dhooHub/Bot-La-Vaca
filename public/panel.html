@@ -139,6 +139,26 @@
     .chat-input { flex: 1; padding: 0.8rem 1rem; border: 2px solid transparent; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; transition: border-color 0.2s; }
     .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
+    /* Resumen Modal */
+    .resumen-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none; align-items: flex-end; justify-content: center; z-index: 400; }
+    .resumen-modal-overlay.active { display: flex; }
+    .resumen-modal-box { background: #fff; border-radius: 20px 20px 0 0; padding: 1.5rem; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    .resumen-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .resumen-tipo-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.2rem; }
+    .resumen-tab { flex: 1; padding: 0.6rem; border: 2px solid #e0e0e0; border-radius: 10px; background: var(--bg); font-size: 0.95rem; font-weight: 600; cursor: pointer; text-align: center; }
+    .resumen-tab.active { border-color: var(--primary-light); background: #e8f5e9; color: #1b5e20; }
+    .resumen-field { margin-bottom: 0.9rem; }
+    .resumen-field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .resumen-field input, .resumen-field textarea { width: 100%; padding: 0.7rem 0.9rem; border: 1.5px solid #e0e0e0; border-radius: 10px; font-size: 0.95rem; outline: none; transition: border-color 0.2s; background: #fafafa; }
+    .resumen-field input:focus, .resumen-field textarea:focus { border-color: var(--primary-light); background: #fff; }
+    .resumen-field textarea { resize: vertical; min-height: 70px; }
+    .resumen-preview { background: #f0f9f0; border: 1.5px solid #a5d6a7; border-radius: 10px; padding: 0.9rem; font-size: 0.88rem; white-space: pre-wrap; margin-bottom: 1rem; color: #1a1a1a; line-height: 1.5; max-height: 200px; overflow-y: auto; }
+    .resumen-preview-label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem; }
+    .resumen-actions { display: flex; gap: 0.5rem; }
+    .resumen-send-btn { flex: 2; padding: 0.9rem; background: var(--primary-light); color: #fff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; }
+    .resumen-cancel-btn { flex: 1; padding: 0.9rem; background: var(--bg); border: none; border-radius: 12px; font-size: 0.95rem; cursor: pointer; }
+    .resumen-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
     /* Quick Replies */
     .quick-replies-bar { background: #fff; border-top: 1px solid #e0e0e0; padding: 0.4rem 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
     .qr-chip { background: var(--bg); border: 1px solid #ddd; border-radius: 16px; padding: 0.3rem 0.7rem; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
@@ -156,6 +176,22 @@
     .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
     .qr-add-btn { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; margin-bottom: 1rem; font-weight: 600; }
     .qr-save-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 0.8rem; width: 100%; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
+
+    /* Resumen Modal */
+    .resumen-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; }
+    .resumen-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .resumen-tab { flex: 1; padding: 0.6rem; border: 2px solid #ddd; border-radius: 10px; background: none; font-size: 0.95rem; cursor: pointer; font-weight: 600; }
+    .resumen-tab.active { border-color: var(--primary-light); background: #e8f5e9; color: #2e7d32; }
+    .resumen-field { margin-bottom: 0.8rem; }
+    .resumen-field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; }
+    .resumen-field input, .resumen-field textarea { width: 100%; padding: 0.7rem; border: 1px solid #ddd; border-radius: 10px; font-size: 1rem; outline: none; }
+    .resumen-field input:focus, .resumen-field textarea:focus { border-color: var(--primary-light); }
+    .resumen-field textarea { resize: vertical; min-height: 80px; }
+    .resumen-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.8rem; }
+    .resumen-preview { background: #f0f9f0; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.8rem; margin-bottom: 1rem; font-size: 0.88rem; white-space: pre-wrap; line-height: 1.5; max-height: 220px; overflow-y: auto; }
+    .resumen-preview-label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem; }
+    .resumen-send-btn { background: var(--success); color: #fff; border: none; border-radius: 12px; padding: 1rem; width: 100%; font-size: 1.05rem; font-weight: 700; cursor: pointer; margin-bottom: 0.5rem; }
+    .resumen-cancel-btn { background: var(--bg); border: none; border-radius: 12px; padding: 0.8rem; width: 100%; font-size: 0.95rem; cursor: pointer; }
 
     /* QR Section */
     .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
@@ -308,6 +344,54 @@
     </div>
   </div>
 
+  <!-- Resumen Modal -->
+  <div class="resumen-modal-overlay" id="resumenModal">
+    <div class="resumen-modal-box">
+      <div class="resumen-modal-title">📋 Resumen de Pedido</div>
+
+      <!-- Tabs envío / retiro -->
+      <div class="resumen-tipo-tabs">
+        <button class="resumen-tab active" id="tabEnvio" onclick="setResumenTipo('envio')">📦 Envío</button>
+        <button class="resumen-tab" id="tabRetiro" onclick="setResumenTipo('retiro')">🏪 Retiro en tienda</button>
+      </div>
+
+      <!-- Campos -->
+      <div class="resumen-row">
+        <div class="resumen-field">
+          <label>Producto</label>
+          <input type="text" id="rProducto" placeholder="Nombre del producto">
+        </div>
+        <div class="resumen-field">
+          <label>Talla / Color</label>
+          <input type="text" id="rTalla" placeholder="Ej: M, Negro">
+        </div>
+      </div>
+      <div class="resumen-row">
+        <div class="resumen-field">
+          <label>Precio producto (₡)</label>
+          <input type="number" id="rPrecio" placeholder="0" oninput="updateResumenPreview()">
+        </div>
+        <div class="resumen-field" id="rEnvioField">
+          <label>Costo envío (₡)</label>
+          <input type="number" id="rEnvio" placeholder="0" oninput="updateResumenPreview()">
+        </div>
+      </div>
+      <div class="resumen-field" id="rDireccionField">
+        <label>Dirección de envío</label>
+        <textarea id="rDireccion" placeholder="Nombre, teléfono, provincia, cantón, distrito, señas..."></textarea>
+      </div>
+
+      <!-- Preview -->
+      <div class="resumen-preview-label">Vista previa del mensaje al cliente:</div>
+      <div class="resumen-preview" id="resumenPreview"></div>
+
+      <div class="resumen-actions">
+        <button class="resumen-cancel-btn" onclick="closeResumenModal()">Cancelar</button>
+        <button class="resumen-send-btn" onclick="sendResumen()">📤 Enviar al cliente</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Quick Replies Manager Modal -->
   <div class="qr-modal-overlay" id="qrManagerOverlay">
     <div class="qr-modal-box">
@@ -319,6 +403,7 @@
       <button onclick="closeQrManager()" style="width:100%;margin-top:0.5rem;padding:0.7rem;border:none;border-radius:10px;background:var(--bg);cursor:pointer;font-size:0.95rem;">Cancelar</button>
     </div>
   </div>
+
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
@@ -340,6 +425,7 @@ if (!location.search.includes('v=')) {
     let allSales = [];
     let chats = {}, pending = {}, contacts = {};
     let humanModeChats = new Set(); // Chats en modo humano
+    let activeSessions = {}; // Datos de sesión activa por waId
     let notificationsEnabled = false;
 
     // ===== QUICK REPLIES =====
@@ -357,6 +443,118 @@ if (!location.search.includes('v=')) {
     const savedQr = localStorage.getItem('ticobot_qr');
     const savedVersion = parseInt(localStorage.getItem('ticobot_qr_v') || '0');
     let quickReplies = (savedQr && savedVersion >= QR_VERSION) ? JSON.parse(savedQr) : DEFAULT_QUICK_REPLIES;
+
+    // ===== RESUMEN MODAL =====
+    let resumenTipo = 'envio';
+
+    function openResumenModal() {
+      if (!currentChat) return;
+      const chat = chats[currentChat];
+      const session = activeSessions[currentChat] || {};
+
+      // Pre-llenar con datos de sesión si existen
+      document.getElementById('rProducto').value = session.producto || '';
+      document.getElementById('rTalla').value = session.talla_color || '';
+      document.getElementById('rPrecio').value = session.precio || '';
+      document.getElementById('rEnvio').value = session.shipping_cost || '';
+
+      // Buscar la última dirección que escribió el cliente en el historial
+      const msgs = chat?.messages || [];
+      const lastClientMsg = [...msgs].reverse().find(m =>
+        m.direction === 'in' &&
+        m.text && m.text.length > 20 &&
+        /provincia|canton|cantón|distrito|señas|senas|heredia|san jose|alajuela|cartago/i.test(m.text)
+      );
+      document.getElementById('rDireccion').value = lastClientMsg?.text || session.envio_datos_raw || '';
+
+      setResumenTipo('envio');
+      updateResumenPreview();
+      document.getElementById('resumenModal').classList.add('active');
+    }
+
+    function closeResumenModal() {
+      document.getElementById('resumenModal').classList.remove('active');
+    }
+
+    function setResumenTipo(tipo) {
+      resumenTipo = tipo;
+      document.getElementById('tabEnvio').classList.toggle('active', tipo === 'envio');
+      document.getElementById('tabRetiro').classList.toggle('active', tipo === 'retiro');
+      document.getElementById('rEnvioField').style.display = tipo === 'envio' ? '' : 'none';
+      document.getElementById('rDireccionField').style.display = tipo === 'envio' ? '' : 'none';
+      updateResumenPreview();
+    }
+
+    function updateResumenPreview() {
+      const producto = document.getElementById('rProducto').value.trim() || '(producto)';
+      const talla = document.getElementById('rTalla').value.trim();
+      const precio = parseInt(document.getElementById('rPrecio').value) || 0;
+      const envio = parseInt(document.getElementById('rEnvio').value) || 0;
+      const direccion = document.getElementById('rDireccion').value.trim();
+      const total = precio + (resumenTipo === 'envio' ? envio : 0);
+
+      let msg = '📋 *Resumen de tu pedido*\n';
+      msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      msg += `📦 ${producto}\n`;
+      if (talla) msg += `👕 ${talla}\n`;
+      msg += `💰 Precio: ₡${precio.toLocaleString('es-CR')}\n`;
+      if (resumenTipo === 'envio') {
+        msg += `🚚 Envío: ₡${envio.toLocaleString('es-CR')}\n`;
+      }
+      msg += `💵 *Total a pagar: ₡${total.toLocaleString('es-CR')}*\n`;
+      msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+      if (resumenTipo === 'envio' && direccion) {
+        msg += `📍 *Datos de envío*\n${direccion}\n`;
+        msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      } else if (resumenTipo === 'retiro') {
+        msg += `🏪 *Retiro en tienda*\nHeredia centro, 100 mts sur de la esquina del Testy\n🕒 Lunes a Sáb 9am-7pm | Dom 10am-6pm\n`;
+        msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      }
+
+      msg += `\n💳 *Pago por SINPE Móvil*\n`;
+      msg += `📱 6326-2291\n`;
+      msg += `👤 Moda Exclusiva Agort Ltda\n\n`;
+      msg += `Por favor indicá tu nombre al realizar el SINPE y mandame la foto del comprobante por este medio 🧾`;
+
+      document.getElementById('resumenPreview').textContent = msg.replace(/\\n/g, '\n');
+    }
+
+    function sendResumen() {
+      if (!currentChat) return;
+      const producto = document.getElementById('rProducto').value.trim();
+      const talla = document.getElementById('rTalla').value.trim();
+      const precio = parseInt(document.getElementById('rPrecio').value) || 0;
+      const envio = parseInt(document.getElementById('rEnvio').value) || 0;
+      const direccion = document.getElementById('rDireccion').value.trim();
+      const total = precio + (resumenTipo === 'envio' ? envio : 0);
+
+      let msg = '📋 *Resumen de tu pedido*\n';
+      msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      msg += `📦 ${producto || '(producto)'}\n`;
+      if (talla) msg += `👕 ${talla}\n`;
+      msg += `💰 Precio: ₡${precio.toLocaleString('es-CR')}\n`;
+      if (resumenTipo === 'envio') msg += `🚚 Envío: ₡${envio.toLocaleString('es-CR')}\n`;
+      msg += `💵 *Total a pagar: ₡${total.toLocaleString('es-CR')}*\n`;
+      msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+      if (resumenTipo === 'envio' && direccion) {
+        msg += `📍 *Datos de envío*\n${direccion}\n`;
+        msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      } else if (resumenTipo === 'retiro') {
+        msg += `🏪 *Retiro en tienda*\nHeredia centro, 100 mts sur de la esquina del Testy\n🕒 Lunes a Sáb 9am-7pm | Dom 10am-6pm\n`;
+        msg += '━━━━━━━━━━━━━━━━━━━━\n';
+      }
+
+      msg += `\n💳 *Pago por SINPE Móvil*\n`;
+      msg += `📱 6326-2291\n`;
+      msg += `👤 Moda Exclusiva Agort Ltda\n\n`;
+      msg += `Por favor indicá tu nombre al realizar el SINPE y mandame la foto del comprobante por este medio 🧾`;
+
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: msg } });
+      closeResumenModal();
+      toast('📋 Resumen enviado al cliente', 'success');
+    }
 
     function saveQuickRepliesLocal() {
       localStorage.setItem('ticobot_qr', JSON.stringify(quickReplies));
@@ -378,9 +576,11 @@ if (!location.search.includes('v=')) {
     function renderQuickRepliesBar() {
       const bar = $('quickRepliesBar');
       if (!bar) return;
-      bar.innerHTML = quickReplies.map(qr =>
-        `<button class="qr-chip" onclick="applyQuickReply('${qr.code}')" title="${qr.text.slice(0,60)}...">⚡ ${qr.code}</button>`
-      ).join('') + `<button class="qr-chip-manage" onclick="openQrManager()">✏️</button>`;
+      bar.innerHTML = 
+        `<button class="qr-chip" style="background:#e8f5e9;border-color:#a5d6a7;color:#2e7d32;font-weight:700;" onclick="openResumenModal()" title="Generar resumen de pedido">📋 resumen</button>` +
+        quickReplies.map(qr =>
+          `<button class="qr-chip" onclick="applyQuickReply('${qr.code}')" title="${qr.text.slice(0,60)}...">⚡ ${qr.code}</button>`
+        ).join('') + `<button class="qr-chip-manage" onclick="openQrManager()">✏️</button>`;
     }
 
     function openQrManager() {
@@ -391,6 +591,7 @@ if (!location.search.includes('v=')) {
     function closeQrManager() {
       $('qrManagerOverlay').classList.remove('active');
     }
+
 
     function renderQrManagerItems() {
       const list = $('qrItemsList');
@@ -800,6 +1001,8 @@ if (!location.search.includes('v=')) {
         if(data.sales) allSales = data.sales;
         // Human mode chats
         humanModeChats = new Set(data.humanModeChats || []);
+        // Active sessions for resumen
+        activeSessions = data.activeSessions || {};
         renderChatList();
         if (currentChat) renderChat();
         
@@ -901,8 +1104,27 @@ if (!location.search.includes('v=')) {
 
       // Action result
       socket.on('action_result', r => {
+        if (r.success && r.sessionData) {
+          fillResumenModal(r.sessionData);
+          return;
+        }
         toast(r.success ? '✅ ' + r.message : '❌ ' + r.message, r.success ? 'success' : 'error');
         hideShipModal();
+      });
+
+      // Session data updates (for resumen modal pre-fill)
+      socket.on('session_updated', data => {
+        if (data.waId) {
+          activeSessions[data.waId] = {
+            producto: data.producto,
+            precio: data.precio,
+            talla_color: data.talla_color,
+            shipping_cost: data.shipping_cost,
+            envio_datos_raw: data.envio_datos_raw,
+            delivery_method: data.delivery_method,
+            client_zone: data.client_zone
+          };
+        }
       });
 
       // Human mode events
@@ -1355,6 +1577,14 @@ if (!location.search.includes('v=')) {
       const input = $('chatInput');
       const raw = input.value.trim();
       if (!raw || !currentChat) return;
+
+      // Atajo especial: resumen abre el modal editable
+      if (raw.toLowerCase() === 'resumen') {
+        input.value = '';
+        input.style.borderColor = 'transparent';
+        openResumenModal();
+        return;
+      }
       
       // Expandir shortcode si coincide exactamente
       const match = quickReplies.find(r => r.code === raw.toLowerCase());
