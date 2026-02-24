@@ -191,7 +191,7 @@
     .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
     /* ===== BOTTOM INPUT AREA ===== */
-    .chat-input-wrapper { background: var(--wa-input-bg); flex-shrink: 0; position: relative; z-index: 2; }
+    .chat-input-wrapper { background: var(--wa-input-bg); flex-shrink: 0; position: relative; z-index: 2; padding-bottom: env(safe-area-inset-bottom, 0); }
     
     /* Emoji picker */
     .emoji-panel { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.5rem 0.75rem; display: none; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow-y: auto; }
@@ -200,10 +200,11 @@
     .emoji-btn:hover { background: var(--wa-border); }
     
     /* Quick replies bar */
-    .quick-replies-bar { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.4rem 0.75rem; display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
-    .qr-chip { background: #fff; border: 2px solid #aaa; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.88rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all .15s; color: #111; font-family: inherit; }
+    .quick-replies-bar { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.4rem 0.75rem; display: flex; gap: 0.35rem; align-items: center; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .quick-replies-bar::-webkit-scrollbar { display: none; }
+    .qr-chip { background: #fff; border: 2px solid #aaa; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.88rem; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s; color: #111; font-family: inherit; }
     .qr-chip:hover { background: var(--wa-green); color: #fff; border-color: var(--wa-green); }
-    .qr-chip-manage { background: none; border: 2px dashed #888; color: #555; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
+    .qr-chip-manage { background: none; border: 2px dashed #888; color: #555; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.85rem; cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0; }
     .qr-chip-manage:hover { border-color: var(--wa-green-teal); color: var(--wa-green-teal); }
 
     /* Input row */
@@ -568,9 +569,11 @@ if (!location.search.includes('v=')) {
       { code: 'info-envios', text: '📦 Hacemos envíos a todo el país por medio de Correos de Costa Rica:\n\n• GAM: ₡2,500\n• Fuera del GAM: ₡3,000\n\n⏱️ El paquete tarda aproximadamente 8 días hábiles en llegar.\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones 🙌' },
       { code: 'datos-envio', text: 'Para coordinar el envío necesito los siguientes datos 📋\n\n• Nombre completo\n• Teléfono\n• Provincia\n• Cantón\n• Distrito\n• Dirección por señas\n\n(Ej: María López, 8888-1234, Heredia, Central, Mercedes, frente a la iglesia)' },
       { code: 'gracias', text: '¡Muchas gracias por tu compra! 🎉\n\nFue un placer atenderte. Cualquier consulta, aquí estamos con gusto 🙌\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones. ¡Pura vida! 🐄' },
-      { code: 'no-hay', text: 'De momento no contamos con ese producto 😔\n\nCualquier otra consulta estamos para servirte con gusto 🙌\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones.' }
+      { code: 'no-hay', text: 'De momento no contamos con ese producto 😔\n\nCualquier otra consulta estamos para servirte con gusto 🙌\n\n🌐 Visitanos en www.lavacacr.com para estar al día con nuevos ingresos y promociones.' },
+      { code: 'apartados', text: '✨ ¡Sí hacemos apartados! 🛍️\n\nPara apartar tu producto necesitás cancelar la tercera parte del costo y tenés 2 meses para retirarlo en tienda.\n\n⚠️ Los apartados NO SE CAMBIAN.\n\n📍 Visitanos en www.lavacacr.com para conocer todo nuestro catálogo 🐄' },
+      { code: 'cambios', text: '🔄 Política de Cambios y Garantía\n\nEs indispensable presentar la factura de compra.\n⏱️ Tenés 30 días desde la fecha de compra para hacer el cambio.\n\nSi es cambio por talla o estilo, el producto debe venir en perfecto estado:\n❌ NO USADO\n❌ SIN OLOR A PERFUME\n❌ SIN OLOR A DETERGENTE\n\n📍 Visitanos en www.lavacacr.com 🐄' }
     ];
-    const QR_VERSION = 3; // Incrementar para forzar recarga de defaults
+    const QR_VERSION = 4; // Incrementar para forzar recarga de defaults
     const savedQr = localStorage.getItem('ticobot_qr');
     const savedVersion = parseInt(localStorage.getItem('ticobot_qr_v') || '0');
     let quickReplies = (savedQr && savedVersion >= QR_VERSION) ? JSON.parse(savedQr) : DEFAULT_QUICK_REPLIES;
