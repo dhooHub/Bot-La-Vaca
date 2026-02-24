@@ -10,232 +10,290 @@
   <link rel="apple-touch-icon" href="/icon-192.png">
   <title>TICObot 🐄</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap');
     :root {
-      --primary: #1a1f25;
+      --wa-green: #25D366;
+      --wa-green-dark: #075E54;
+      --wa-green-teal: #128C7E;
+      --wa-bg: #efeae2;
+      --wa-sidebar-bg: #ffffff;
+      --wa-header: #202c33;
+      --wa-bubble-in: #ffffff;
+      --wa-bubble-out: #dcf8c6;
+      --wa-text: #111b21;
+      --wa-muted: #667781;
+      --wa-border: #e9edef;
+      --wa-input-bg: #f0f2f5;
+      --wa-hover: #f5f6f6;
+      --danger: #e53935;
+      --warning: #f57c00;
+      --sinpe-bg: #e3f2fd;
+      --sinpe-border: #1565c0;
+      /* alias para compatibilidad con JS que usa --primary-light */
       --primary-light: #25D366;
+      --primary: #202c33;
       --bg: #f0f2f5;
       --card: #fff;
-      --text: #1a1f25;
+      --text: #111b21;
       --text-muted: #667781;
-      --danger: #E74C3C;
       --success: #25D366;
-      --warning: #F39C12;
-      --action-bg: #fff3cd;
+      --action-bg: #fff8e1;
       --action-border: #ffc107;
-      --sinpe-bg: #e3f2fd;
-      --sinpe-border: #2196f3;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--wa-bg); color: var(--wa-text); }
+
+    /* ===== SCROLLBARS ===== */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 
     /* ===== LOGIN ===== */
-    #login { position: fixed; inset: 0; background: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
+    #login { position: fixed; inset: 0; background: var(--wa-header); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
     #login.hidden { display: none; }
-    .login-title { color: #fff; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .login-subtitle { color: rgba(255,255,255,0.6); margin-bottom: 2rem; }
+    .login-title { color: #fff; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
+    .login-subtitle { color: rgba(255,255,255,0.55); margin-bottom: 2rem; font-size: 1rem; }
     .pin-box { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
-    .pin-digit { width: 55px; height: 65px; font-size: 1.8rem; text-align: center; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; outline: none; }
-    .pin-digit:focus { border-color: var(--primary-light); }
-    .login-btn { background: var(--primary-light); color: #fff; border: none; padding: 1rem 3rem; font-size: 1.1rem; font-weight: 600; border-radius: 25px; cursor: pointer; }
-    .login-btn:disabled { opacity: 0.5; }
-    .login-error { color: #FF6B6B; margin-top: 1rem; }
+    .pin-digit { width: 56px; height: 66px; font-size: 1.9rem; text-align: center; border: 2px solid rgba(255,255,255,0.15); border-radius: 14px; background: rgba(255,255,255,0.07); color: #fff; outline: none; transition: border-color .2s; }
+    .pin-digit:focus { border-color: var(--wa-green); }
+    .login-btn { background: var(--wa-green); color: #fff; border: none; padding: 1rem 3rem; font-size: 1.1rem; font-weight: 700; border-radius: 30px; cursor: pointer; letter-spacing: 0.3px; transition: background .2s; }
+    .login-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .login-btn:not(:disabled):hover { background: #20c45a; }
+    .login-error { color: #ff6b6b; margin-top: 1rem; font-size: 0.9rem; }
 
     /* ===== MAIN LAYOUT ===== */
-    #app { display: none; height: 100vh; }
-    #app.active { display: flex; flex-direction: column; }
+    #app { display: none; height: 100vh; flex-direction: column; }
+    #app.active { display: flex; }
 
-    /* Header */
-    .header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; }
-    .header-left { display: flex; align-items: center; gap: 0.8rem; }
-    .header-title { font-size: 1.4rem; font-weight: 700; }
-    .conn-badge { padding: 0.3rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700; }
-    .conn-badge.on { background: var(--success); }
-    .conn-badge.off { background: var(--danger); cursor: pointer; }
+    /* ===== TOP HEADER BAR ===== */
+    .header { background: var(--wa-header); color: #fff; padding: 0 1rem; height: 56px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    .header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .header-title { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.3px; }
+    .conn-badge { padding: 0.25rem 0.6rem; border-radius: 10px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.3px; cursor: pointer; }
+    .conn-badge.on { background: var(--wa-green); }
+    .conn-badge.off { background: var(--danger); animation: pulse-notif 2s infinite; }
     .conn-badge.wait { background: var(--warning); }
-    .header-right { display: flex; align-items: center; gap: 0.6rem; }
-    .bot-toggle { padding: 0.4rem 0.8rem; border-radius: 12px; font-size: 0.9rem; font-weight: 600; border: none; cursor: pointer; }
-    .bot-toggle.active { background: var(--success); color: #fff; }
-    .bot-toggle.paused { background: var(--warning); color: #fff; }
-    .notif-btn { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 8px; font-size: 1.1rem; cursor: pointer; position: relative; }
-    .notif-btn.enabled { background: var(--success); }
-    .notif-btn:not(.enabled) { animation: pulse-notif 2s infinite; }
-    .notif-btn::after { content: ''; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; display: none; }
-    .notif-btn:not(.enabled)::after { display: block; animation: blink 1s infinite; }
-    @keyframes pulse-notif { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    
-    /* Indicador de acciones pendientes en header */
-    .pending-indicator { background: var(--danger); color: #fff; padding: 0.3rem 0.6rem; border-radius: 12px; font-size: 0.85rem; font-weight: 700; animation: blink 1s infinite; display: none; }
+    .pending-indicator { background: var(--danger); color: #fff; padding: 0.25rem 0.6rem; border-radius: 10px; font-size: 0.75rem; font-weight: 700; display: none; animation: blink 1.2s infinite; }
     .pending-indicator.active { display: inline-block; }
+    .header-right { display: flex; align-items: center; gap: 0.5rem; }
+    .notif-btn { background: rgba(255,255,255,0.12); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .2s; }
+    .notif-btn:hover { background: rgba(255,255,255,0.22); }
+    .notif-btn.enabled { background: var(--wa-green); }
+    .notif-btn:not(.enabled) { animation: pulse-notif 2.5s infinite; }
+    .bot-toggle { padding: 0.35rem 0.8rem; border-radius: 20px; font-size: 0.82rem; font-weight: 700; border: none; cursor: pointer; transition: all .2s; }
+    .bot-toggle.active { background: var(--wa-green); color: #fff; }
+    .bot-toggle.paused { background: var(--warning); color: #fff; }
+    @keyframes pulse-notif { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-    /* Main container */
-    .main-container { flex: 1; display: flex; overflow: hidden; }
+    /* ===== MAIN CONTAINER ===== */
+    .main-container { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
-    /* Sidebar - Lista de chats */
-    .sidebar { width: 320px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-    .sidebar-header { padding: 0.8rem; border-bottom: 1px solid #e0e0e0; }
-    .search-input { width: 100%; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
+    /* ===== SIDEBAR ===== */
+    .sidebar { width: 360px; min-width: 300px; background: var(--wa-sidebar-bg); border-right: 1px solid var(--wa-border); display: flex; flex-direction: column; flex-shrink: 0; }
+    
+    /* Sidebar top: search + tabs */
+    .sidebar-header { padding: 0.6rem 0.75rem 0; background: var(--wa-sidebar-bg); border-bottom: 1px solid var(--wa-border); }
+    .search-wrap { position: relative; margin-bottom: 0.6rem; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--wa-muted); font-size: 0.9rem; pointer-events: none; }
+    .search-input { width: 100%; padding: 0.6rem 1rem 0.6rem 2.4rem; border: none; border-radius: 8px; background: var(--wa-input-bg); font-size: 0.95rem; outline: none; color: var(--wa-text); font-family: inherit; }
+    .search-input::placeholder { color: var(--wa-muted); }
+    
+    /* Filter tabs */
+    .sidebar-tabs { display: flex; gap: 0; border-bottom: none; }
+    .sidebar-tab { flex: 1; padding: 0.55rem 0; font-size: 0.82rem; font-weight: 700; text-align: center; background: none; border: none; cursor: pointer; color: var(--wa-muted); border-bottom: 2px solid transparent; transition: all .2s; letter-spacing: 0.4px; text-transform: uppercase; }
+    .sidebar-tab.active { color: var(--wa-green-teal); border-bottom-color: var(--wa-green-teal); }
+
+    /* Chat list */
     .chat-list { flex: 1; overflow-y: auto; }
-    .chat-item { display: flex; align-items: center; gap: 0.8rem; padding: 1rem 1rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
-    .chat-item:hover { background: #f5f5f5; }
-    .chat-item.active { background: #e8f5e9; }
-    .chat-item.has-action { background: #fff8e1; }
-    .chat-item.human-mode { background: #fff3e0; border-left: 3px solid #f39c12; }
-    .chat-avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.05rem; position: relative; flex-shrink: 0; }
-    .chat-avatar .badge { position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; background: var(--danger); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: #fff; border: 2px solid #fff; }
+    .chat-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid var(--wa-border); transition: background .15s; position: relative; }
+    .chat-item:hover { background: var(--wa-hover); }
+    .chat-item.active { background: #f0f2f5; }
+    .chat-item.has-action { background: #fffde7; }
+    .chat-item.human-mode { border-left: 3px solid var(--warning); }
+    
+    /* Avatar círculo */
+    .chat-avatar { width: 49px; height: 49px; border-radius: 50%; background: var(--wa-green-teal); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; flex-shrink: 0; position: relative; overflow: visible; user-select: none; }
+    .chat-avatar .badge { position: absolute; bottom: -2px; right: -2px; min-width: 19px; height: 19px; background: var(--wa-green); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700; color: #fff; border: 2px solid #fff; padding: 0 3px; }
+    .chat-avatar .badge.alert { background: var(--danger); animation: blink 1s infinite; }
+    
+    /* Chat info */
     .chat-info { flex: 1; min-width: 0; }
-    .chat-name { font-weight: 600; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .chat-preview { font-size: 0.95rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .chat-meta { text-align: right; flex-shrink: 0; }
-    .chat-time { font-size: 0.85rem; color: var(--text-muted); }
-    .chat-action-icon { font-size: 1.1rem; margin-top: 0.2rem; }
+    .chat-name { font-weight: 600; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--wa-text); }
+    .chat-preview { font-size: 0.88rem; color: var(--wa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .chat-preview .bot-icon { font-size: 0.75rem; }
+    
+    /* Chat meta */
+    .chat-meta { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .chat-time { font-size: 0.75rem; color: var(--wa-muted); white-space: nowrap; }
+    .chat-unread { min-width: 20px; height: 20px; padding: 0 5px; background: var(--wa-green); border-radius: 10px; font-size: 0.72rem; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; }
+    .chat-action-icon { font-size: 1rem; }
 
-    /* Chat area */
-    .chat-area { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; }
+    /* ===== CHAT AREA ===== */
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--wa-bg); position: relative; overflow: hidden; min-width: 0; }
+    .chat-area::before { content: ''; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cbb4' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); pointer-events: none; opacity: 0.5; }
     .chat-area.empty { align-items: center; justify-content: center; }
-    .empty-chat { text-align: center; color: var(--text-muted); }
-    .empty-chat-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
-    .empty-chat-text { font-size: 1.1rem; }
+    .empty-chat { text-align: center; color: var(--wa-muted); background: rgba(255,255,255,0.8); border-radius: 16px; padding: 2.5rem 3rem; position: relative; }
+    .empty-chat-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.6; }
+    .empty-chat-text { font-size: 1rem; font-weight: 500; }
 
     /* Chat header */
-    .chat-header { background: #fff; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #e0e0e0; }
-    .chat-header-back { display: none; background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.3rem; }
-    .chat-header-avatar { width: 45px; height: 45px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; }
-    .chat-header-info { flex: 1; }
-    .chat-header-name { font-weight: 600; font-size: 1.15rem; }
-    .chat-header-status { font-size: 0.9rem; color: var(--text-muted); }
-    .chat-header-actions { display: flex; gap: 0.5rem; }
-    .chat-header-btn { background: var(--bg); border: none; padding: 0.5rem 0.7rem; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .chat-header { background: var(--wa-header); color: #fff; padding: 0 1rem; height: 56px; display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; position: relative; z-index: 2; }
+    .chat-header-back { background: none; border: none; color: rgba(255,255,255,0.7); font-size: 1.3rem; cursor: pointer; padding: 4px 6px; border-radius: 50%; display: none; transition: color .2s; }
+    .chat-header-back:hover { color: #fff; }
+    .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--wa-green-teal); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; color: #fff; flex-shrink: 0; cursor: pointer; }
+    .chat-header-info { flex: 1; min-width: 0; }
+    .chat-header-name { font-weight: 600; font-size: 1rem; }
+    .chat-header-status { font-size: 0.78rem; color: rgba(255,255,255,0.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-actions { display: flex; gap: 0.4rem; }
+    .chat-header-btn { background: rgba(255,255,255,0.12); border: none; color: #fff; padding: 0.35rem 0.75rem; border-radius: 18px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: background .2s; white-space: nowrap; }
+    .chat-header-btn:hover { background: rgba(255,255,255,0.22); }
 
-    /* Messages */
-    .messages-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
-    .message { max-width: 80%; padding: 0.6rem 0.9rem; border-radius: 10px; font-size: 1.05rem; position: relative; line-height: 1.4; }
-    .message.in { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
-    .message.out { background: #d9fdd3; align-self: flex-end; border-bottom-right-radius: 4px; }
-    .message-text { word-wrap: break-word; }
-    .message-time { font-size: 0.75rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
-    .message-image { max-width: 100%; max-height: 200px; border-radius: 8px; margin-bottom: 0.3rem; cursor: pointer; }
+    /* Human mode banner */
+    .human-banner { background: #fff3e0; border-bottom: 2px solid var(--warning); padding: 0.45rem 1rem; font-size: 0.88rem; color: #bf360c; text-align: center; flex-shrink: 0; position: relative; z-index: 2; }
 
-    /* Action cards inside chat */
-    .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
-    .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
-    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; }
-    .action-card-icon { font-size: 1.3rem; }
-    .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 1rem; margin-bottom: 0.8rem; }
-    .action-card-detail { margin-bottom: 0.3rem; }
-    .action-card-buttons { display: flex; gap: 0.5rem; }
-    .action-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
-    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .action-btn.primary { background: var(--success); color: #fff; }
+    /* Messages area */
+    .messages-container { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 2px; position: relative; z-index: 1; }
+
+    /* Bubbles */
+    .message { display: flex; flex-direction: column; max-width: 68%; margin-bottom: 2px; }
+    .message.in { align-self: flex-start; }
+    .message.out { align-self: flex-end; }
+    .message-bubble { padding: 0.55rem 0.85rem 0.3rem; border-radius: 8px; position: relative; box-shadow: 0 1px 0.5px rgba(11,20,26,.13); }
+    .message.in .message-bubble { background: var(--wa-bubble-in); border-radius: 0px 8px 8px 8px; }
+    .message.out .message-bubble { background: var(--wa-bubble-out); border-radius: 8px 0px 8px 8px; }
+    .message-text { font-size: 0.97rem; line-height: 1.45; color: var(--wa-text); white-space: pre-wrap; word-break: break-word; }
+    .message-text a { color: #1a73e8; text-decoration: underline; }
+    .message-time { font-size: 0.72rem; color: var(--wa-muted); text-align: right; margin-top: 2px; }
+    .message-image { max-width: 240px; max-height: 200px; border-radius: 6px; cursor: pointer; display: block; margin-bottom: 4px; object-fit: cover; }
+    
+    /* Date separator */
+    .date-separator { text-align: center; margin: 10px 0; }
+    .date-separator span { background: #d9fdd3; border-radius: 8px; padding: 3px 10px; font-size: 0.78rem; color: var(--wa-muted); font-weight: 600; box-shadow: 0 1px 0.5px rgba(0,0,0,0.1); }
+
+    /* Action cards */
+    .action-card { background: #fff; border-radius: 12px; border: 1px solid var(--wa-border); padding: 1rem; margin: 0.5rem auto; max-width: 380px; width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,0.08); align-self: center; }
+    .action-card.sinpe { border-color: var(--sinpe-border); background: var(--sinpe-bg); }
+    .action-card.tienda { border-color: #7b1fa2; background: #f3e5f5; }
+    .action-card.foto-externa { border-color: #e65100; background: #fff3e0; }
+    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 0.88rem; color: var(--wa-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+    .action-card-icon { font-size: 1.2rem; }
+    .action-card-image { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 0.75rem; cursor: pointer; }
+    .action-card-details { margin-bottom: 0.75rem; }
+    .action-card-detail { font-size: 0.9rem; padding: 3px 0; color: var(--wa-text); }
+    .action-card-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .action-btn { flex: 1; padding: 0.6rem 0.75rem; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: opacity .2s; min-width: 80px; font-family: inherit; }
+    .action-btn.primary { background: var(--wa-green); color: #fff; }
     .action-btn.danger { background: var(--danger); color: #fff; }
-    .action-btn.info { background: #2196f3; color: #fff; }
-    .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); font-size: 1rem; }
-    .action-card.tienda { background: #fff3e0; border-color: #ff9800; }
-    .action-card.foto-externa { background: #e8f5e9; border-color: #4caf50; }
-    .action-card-image { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 0.8rem; cursor: pointer; background: #f5f5f5; }
+    .action-btn.info { background: #1565c0; color: #fff; }
+    .action-btn:hover { opacity: 0.88; }
+    .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    /* Chat input */
-    .chat-input-area { background: #fff; padding: 0.7rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
-    .chat-input { flex: 1; padding: 0.8rem 1rem; border: 2px solid transparent; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; transition: border-color 0.2s; }
-    .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    /* ===== BOTTOM INPUT AREA ===== */
+    .chat-input-wrapper { background: var(--wa-input-bg); flex-shrink: 0; position: relative; z-index: 2; }
+    
+    /* Emoji picker */
+    .emoji-panel { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.5rem 0.75rem; display: none; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow-y: auto; }
+    .emoji-panel.open { display: flex; }
+    .emoji-btn { background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 3px; border-radius: 6px; line-height: 1; transition: background .15s; }
+    .emoji-btn:hover { background: var(--wa-border); }
+    
+    /* Quick replies bar */
+    .quick-replies-bar { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.4rem 0.75rem; display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; }
+    .qr-chip { background: var(--wa-input-bg); border: 1px solid var(--wa-border); border-radius: 16px; padding: 0.3rem 0.65rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all .15s; color: var(--wa-text); font-family: inherit; }
+    .qr-chip:hover { background: var(--wa-green); color: #fff; border-color: var(--wa-green); }
+    .qr-chip-manage { background: none; border: 1px dashed #bbb; color: var(--wa-muted); border-radius: 16px; padding: 0.3rem 0.65rem; font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+    .qr-chip-manage:hover { border-color: var(--wa-green-teal); color: var(--wa-green-teal); }
 
-    /* Resumen Modal */
-    .resumen-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none; align-items: flex-end; justify-content: center; z-index: 400; }
-    .resumen-modal-overlay.active { display: flex; }
-    .resumen-modal-box { background: #fff; border-radius: 20px 20px 0 0; padding: 1.5rem; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
-    .resumen-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-    .resumen-tipo-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.2rem; }
-    .resumen-tab { flex: 1; padding: 0.6rem; border: 2px solid #e0e0e0; border-radius: 10px; background: var(--bg); font-size: 0.95rem; font-weight: 600; cursor: pointer; text-align: center; }
-    .resumen-tab.active { border-color: var(--primary-light); background: #e8f5e9; color: #1b5e20; }
-    .resumen-field { margin-bottom: 0.9rem; }
-    .resumen-field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .resumen-field input, .resumen-field textarea { width: 100%; padding: 0.7rem 0.9rem; border: 1.5px solid #e0e0e0; border-radius: 10px; font-size: 0.95rem; outline: none; transition: border-color 0.2s; background: #fafafa; }
-    .resumen-field input:focus, .resumen-field textarea:focus { border-color: var(--primary-light); background: #fff; }
-    .resumen-field textarea { resize: vertical; min-height: 70px; }
-    .resumen-preview { background: #f0f9f0; border: 1.5px solid #a5d6a7; border-radius: 10px; padding: 0.9rem; font-size: 0.88rem; white-space: pre-wrap; margin-bottom: 1rem; color: #1a1a1a; line-height: 1.5; max-height: 200px; overflow-y: auto; }
-    .resumen-preview-label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem; }
-    .resumen-actions { display: flex; gap: 0.5rem; }
-    .resumen-send-btn { flex: 2; padding: 0.9rem; background: var(--primary-light); color: #fff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; }
-    .resumen-cancel-btn { flex: 1; padding: 0.9rem; background: var(--bg); border: none; border-radius: 12px; font-size: 0.95rem; cursor: pointer; }
-    .resumen-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    /* Input row */
+    .chat-input-area { display: flex; align-items: flex-end; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--wa-input-bg); border-top: 1px solid var(--wa-border); }
+    .input-icon-btn { background: none; border: none; color: var(--wa-muted); font-size: 1.35rem; cursor: pointer; padding: 6px; border-radius: 50%; flex-shrink: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: color .2s, background .2s; }
+    .input-icon-btn:hover { color: var(--wa-green-teal); background: rgba(0,0,0,0.06); }
+    .chat-input { flex: 1; background: #fff; border: none; border-radius: 22px; padding: 0.6rem 1rem; font-size: 0.97rem; outline: none; resize: none; max-height: 120px; line-height: 1.4; font-family: inherit; color: var(--wa-text); box-shadow: 0 1px 2px rgba(0,0,0,0.07); }
+    .chat-input::placeholder { color: var(--wa-muted); }
+    .chat-send-btn { background: var(--wa-green-teal); border: none; color: #fff; width: 42px; height: 42px; border-radius: 50%; font-size: 1.15rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .2s; }
+    .chat-send-btn:hover { background: var(--wa-green-dark); }
+    
+    /* Hidden file input */
+    #fileAttachInput { display: none; }
 
-    /* Quick Replies */
-    .quick-replies-bar { background: #fff; border-top: 1px solid #e0e0e0; padding: 0.4rem 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
-    .qr-chip { background: var(--bg); border: 1px solid #ddd; border-radius: 16px; padding: 0.3rem 0.7rem; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-    .qr-chip:hover { background: var(--primary-light); color: #fff; border-color: var(--primary-light); }
-    .qr-chip-manage { background: none; border: 1px dashed #bbb; color: #999; border-radius: 16px; padding: 0.3rem 0.7rem; font-size: 0.82rem; cursor: pointer; }
-    .qr-chip-manage:hover { border-color: var(--primary-light); color: var(--primary-light); }
-    .qr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 300; }
-    .qr-modal-overlay.active { display: flex; }
-    .qr-modal-box { background: #fff; border-radius: 16px; padding: 1.5rem; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
-    .qr-modal-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.3rem; }
-    .qr-modal-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
-    .qr-item { display: grid; grid-template-columns: 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
-    .qr-item-code { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; font-weight: 700; font-family: monospace; }
-    .qr-item-text { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.88rem; resize: vertical; min-height: 55px; }
-    .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
-    .qr-add-btn { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; margin-bottom: 1rem; font-weight: 600; }
-    .qr-save-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 0.8rem; width: 100%; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
-
-    /* Resumen Modal */
-    .resumen-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; }
-    .resumen-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    .resumen-tab { flex: 1; padding: 0.6rem; border: 2px solid #ddd; border-radius: 10px; background: none; font-size: 0.95rem; cursor: pointer; font-weight: 600; }
-    .resumen-tab.active { border-color: var(--primary-light); background: #e8f5e9; color: #2e7d32; }
-    .resumen-field { margin-bottom: 0.8rem; }
-    .resumen-field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; }
-    .resumen-field input, .resumen-field textarea { width: 100%; padding: 0.7rem; border: 1px solid #ddd; border-radius: 10px; font-size: 1rem; outline: none; }
-    .resumen-field input:focus, .resumen-field textarea:focus { border-color: var(--primary-light); }
-    .resumen-field textarea { resize: vertical; min-height: 80px; }
-    .resumen-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.8rem; }
-    .resumen-preview { background: #f0f9f0; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.8rem; margin-bottom: 1rem; font-size: 0.88rem; white-space: pre-wrap; line-height: 1.5; max-height: 220px; overflow-y: auto; }
-    .resumen-preview-label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem; }
-    .resumen-send-btn { background: var(--success); color: #fff; border: none; border-radius: 12px; padding: 1rem; width: 100%; font-size: 1.05rem; font-weight: 700; cursor: pointer; margin-bottom: 0.5rem; }
-    .resumen-cancel-btn { background: var(--bg); border: none; border-radius: 12px; padding: 0.8rem; width: 100%; font-size: 0.95rem; cursor: pointer; }
-
-    /* QR Section */
-    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
+    /* ===== MODALS ===== */
+    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 200; }
     .qr-overlay.active { display: flex; }
-    .qr-modal { background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 350px; }
-    .qr-modal img { width: 220px; height: 220px; margin: 1rem 0; }
-    .qr-instructions { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
-    .qr-close { margin-top: 1rem; background: var(--danger); color: #fff; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; cursor: pointer; }
+    .qr-modal { background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 360px; width: 95%; }
+    .qr-modal h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
+    .qr-modal img { width: 230px; height: 230px; margin: 1rem 0; }
+    .qr-instructions { color: var(--wa-muted); font-size: 0.9rem; line-height: 1.5; }
+    .qr-close { margin-top: 1rem; background: var(--danger); color: #fff; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; cursor: pointer; font-weight: 700; }
 
-    /* Shipping Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 200; }
     .modal-overlay.active { display: flex; }
-    .modal { background: #fff; padding: 1.5rem; border-radius: 16px; width: 90%; max-width: 400px; }
-    .modal-title { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
-    .modal-info { background: var(--bg); padding: 0.8rem; border-radius: 10px; margin-bottom: 1rem; }
+    .modal { background: #fff; padding: 1.5rem; border-radius: 16px; width: 92%; max-width: 400px; }
+    .modal-title { font-size: 1.15rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
+    .modal-info { background: var(--wa-input-bg); padding: 0.8rem; border-radius: 10px; margin-bottom: 1rem; }
     .modal-info-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.9rem; }
-    .modal-input { width: 100%; padding: 1rem; font-size: 1.3rem; font-weight: 700; border: 2px solid var(--bg); border-radius: 12px; text-align: center; outline: none; }
-    .modal-input:focus { border-color: var(--primary-light); }
-    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0; }
-    .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-    .quick-price:hover { background: var(--primary-light); color: #fff; }
+    .modal-input { width: 100%; padding: 0.9rem; font-size: 1.3rem; font-weight: 700; border: 2px solid var(--wa-border); border-radius: 12px; text-align: center; outline: none; font-family: inherit; }
+    .modal-input:focus { border-color: var(--wa-green); }
+    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 0.75rem 0; }
+    .quick-price { padding: 0.55rem; background: var(--wa-input-bg); border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.88rem; transition: all .15s; font-family: inherit; }
+    .quick-price:hover { background: var(--wa-green); color: #fff; }
     .modal-buttons { display: flex; gap: 0.5rem; }
-    .modal-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
-    .modal-btn.cancel { background: var(--bg); }
-    .modal-btn.confirm { background: var(--primary-light); color: #fff; }
+    .modal-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.95rem; font-family: inherit; }
+    .modal-btn.cancel { background: var(--wa-input-bg); color: var(--wa-text); }
+    .modal-btn.confirm { background: var(--wa-green); color: #fff; }
     .modal-btn.danger { background: var(--danger); color: #fff; margin-top: 0.5rem; width: 100%; }
 
+    .resumen-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: flex-end; justify-content: center; z-index: 300; }
+    .resumen-modal-overlay.active { display: flex; }
+    .resumen-modal-box { background: #fff; border-radius: 20px 20px 0 0; padding: 1.5rem; width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; }
+    .resumen-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; }
+    .resumen-tipo-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.2rem; }
+    .resumen-tab { flex: 1; padding: 0.6rem; border: 2px solid var(--wa-border); border-radius: 10px; background: var(--wa-input-bg); font-size: 0.9rem; font-weight: 700; cursor: pointer; text-align: center; font-family: inherit; }
+    .resumen-tab.active { border-color: var(--wa-green); background: #e8f5e9; color: #1b5e20; }
+    .resumen-field { margin-bottom: 0.9rem; }
+    .resumen-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--wa-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .resumen-field input, .resumen-field textarea { width: 100%; padding: 0.7rem 0.9rem; border: 1.5px solid var(--wa-border); border-radius: 10px; font-size: 0.95rem; outline: none; transition: border-color .2s; background: #fafafa; font-family: inherit; }
+    .resumen-field input:focus, .resumen-field textarea:focus { border-color: var(--wa-green); background: #fff; }
+    .resumen-field textarea { resize: vertical; min-height: 70px; }
+    .resumen-preview { background: #f0fdf4; border: 1.5px solid #a7f3d0; border-radius: 10px; padding: 0.9rem; font-size: 0.88rem; white-space: pre-wrap; margin-bottom: 1rem; color: #111; line-height: 1.5; max-height: 200px; overflow-y: auto; }
+    .resumen-preview-label { font-size: 0.76rem; font-weight: 700; color: var(--wa-muted); text-transform: uppercase; margin-bottom: 0.4rem; letter-spacing: 0.04em; }
+    .resumen-actions { display: flex; gap: 0.5rem; }
+    .resumen-send-btn { flex: 2; padding: 0.9rem; background: var(--wa-green); color: #fff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .resumen-cancel-btn { flex: 1; padding: 0.9rem; background: var(--wa-input-bg); border: none; border-radius: 12px; font-size: 0.95rem; cursor: pointer; font-family: inherit; }
+    .resumen-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+    /* Quick Replies Manager */
+    .qr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 300; }
+    .qr-modal-overlay.active { display: flex; }
+    .qr-modal-box { background: #fff; border-radius: 16px; padding: 1.5rem; width: 96%; max-width: 520px; max-height: 88vh; overflow-y: auto; }
+    .qr-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .qr-modal-sub { font-size: 0.85rem; color: var(--wa-muted); margin-bottom: 1rem; }
+    .qr-item { display: grid; grid-template-columns: 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
+    .qr-item-code { padding: 0.5rem; border: 1px solid var(--wa-border); border-radius: 8px; font-size: 0.9rem; font-weight: 700; font-family: monospace; }
+    .qr-item-text { padding: 0.5rem; border: 1px solid var(--wa-border); border-radius: 8px; font-size: 0.88rem; resize: vertical; min-height: 55px; font-family: inherit; }
+    .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
+    .qr-add-btn { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; margin-bottom: 1rem; font-weight: 700; font-family: inherit; }
+    .qr-save-btn { background: var(--wa-green-dark); color: #fff; border: none; border-radius: 10px; padding: 0.8rem; width: 100%; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 0.5rem; font-family: inherit; }
+
     /* Toast */
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: #fff; padding: 0.8rem 1.5rem; border-radius: 25px; opacity: 0; transition: all 0.3s; z-index: 300; }
+    .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(60px); background: #303030; color: #fff; padding: 0.7rem 1.4rem; border-radius: 24px; opacity: 0; transition: all .3s; z-index: 400; font-size: 0.9rem; white-space: nowrap; }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-    .toast.success { background: var(--success); }
+    .toast.success { background: var(--wa-green-dark); }
     .toast.error { background: var(--danger); }
 
-    /* Responsive */
+    /* Sales modal */
+    #salesModal .modal-inner { background: #fff; border-radius: 14px; padding: 1.5rem; max-width: 520px; width: 95%; max-height: 88vh; overflow-y: auto; position: relative; }
+
+    /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
-      .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
+      .sidebar { width: 100%; min-width: unset; position: absolute; inset: 0; z-index: 10; top: 56px; bottom: 0; }
       .sidebar.hidden { display: none; }
       .chat-area { position: absolute; inset: 0; z-index: 20; display: none; }
       .chat-area.active { display: flex; }
-      .chat-header-back { display: block; }
+      .chat-header-back { display: flex !important; }
       .main-container { position: relative; }
     }
-  
-    
 
   </style>
 </head>
@@ -264,7 +322,7 @@
         <span class="pending-indicator" id="pendingIndicator">0 PENDIENTES</span>
       </div>
       <div class="header-right">
-        <button class="notif-btn" onclick="showSales()" title="Ventas" style="font-size:18px">💰</button>
+        <button class="notif-btn" onclick="showSales()" title="Ventas">💰</button>
         <button class="notif-btn" id="notifBtn" onclick="requestNotifications()" title="Activar notificaciones">🔔</button>
         <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
       </div>
@@ -275,11 +333,16 @@
       <!-- Sidebar -->
       <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-          <input type="text" class="search-input" id="searchInput" placeholder="🔍 Buscar chat...">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="Buscar chat...">
+          </div>
+          <div class="sidebar-tabs">
+            <button class="sidebar-tab active" id="tabTodos" onclick="setTabFilter('todos')">Todos</button>
+            <button class="sidebar-tab" id="tabNoLeidos" onclick="setTabFilter('noleidos')">No leídos</button>
+          </div>
         </div>
-        <div class="chat-list" id="chatList">
-          <!-- Chats se renderizan aquí -->
-        </div>
+        <div class="chat-list" id="chatList"></div>
       </div>
 
       <!-- Chat Area -->
@@ -336,13 +399,16 @@
 
   <!-- Sales Modal -->
   <div class="modal-overlay" id="salesModal">
-    <div style="background:#fff; border-radius:12px; padding:20px; max-width:500px; width:95%; max-height:85vh; overflow-y:auto; position:relative;">
-      <button onclick="hideSales()" style="position:absolute;top:10px;right:15px;background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
-      <h2 style="margin:0 0 5px;font-size:20px;">💰 Registro de Ventas</h2>
-      <div id="salesSummary" style="background:#f0f9f0;padding:12px;border-radius:8px;margin-bottom:15px;"></div>
+    <div class="modal-inner" style="background:#fff; border-radius:14px; padding:1.5rem; max-width:520px; width:95%; max-height:88vh; overflow-y:auto; position:relative;">
+      <button onclick="hideSales()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#667781;">✕</button>
+      <h2 style="margin:0 0 6px;font-size:1.15rem;font-weight:700;">💰 Registro de Ventas</h2>
+      <div id="salesSummary" style="background:#f0fdf4;padding:12px;border-radius:10px;margin-bottom:14px;"></div>
       <div id="salesList" style="font-size:14px;"></div>
     </div>
   </div>
+
+  <!-- Hidden file input for attachments -->
+  <input type="file" id="fileAttachInput" accept="image/*,video/*,.pdf,.doc,.docx" onchange="handleFileAttach(this)">
 
   <!-- Resumen Modal -->
   <div class="resumen-modal-overlay" id="resumenModal">
@@ -568,8 +634,11 @@ if (!location.search.includes('v=')) {
       if (input) {
         input.value = qr.text;
         input.focus();
-        // Expandir textarea si es necesario
         input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        // Close emoji panel
+        const ep = $('emojiPanel');
+        if (ep) ep.classList.remove('open');
       }
     }
 
@@ -1160,6 +1229,15 @@ if (!location.search.includes('v=')) {
       $('qrOverlay').classList.remove('active');
     }
 
+    // ===== TAB FILTER =====
+    let currentTabFilter = 'todos';
+    function setTabFilter(filter) {
+      currentTabFilter = filter;
+      document.getElementById('tabTodos').classList.toggle('active', filter === 'todos');
+      document.getElementById('tabNoLeidos').classList.toggle('active', filter === 'noleidos');
+      renderChatList();
+    }
+
     // ===== RENDER CHAT LIST =====
     function renderChatList() {
       const list = $('chatList');
@@ -1175,7 +1253,7 @@ if (!location.search.includes('v=')) {
         indicator.classList.remove('active');
       }
       
-      // Sort by last message time, pending first
+      // Sort: pending first, then by last message time
       const sorted = Object.keys(chats).sort((a, b) => {
         const ap = chats[a].pending ? 1 : 0;
         const bp = chats[b].pending ? 1 : 0;
@@ -1185,11 +1263,20 @@ if (!location.search.includes('v=')) {
         return new Date(bLast?.timestamp || 0) - new Date(aLast?.timestamp || 0);
       });
 
-      list.innerHTML = sorted.filter(waId => {
-        if (!filter) return true;
+      const filtered = sorted.filter(waId => {
         const c = contacts[waId];
-        return waId.includes(filter) || (c?.name || '').toLowerCase().includes(filter);
-      }).map(waId => {
+        const nameMatch = waId.includes(filter) || (c?.name || '').toLowerCase().includes(filter);
+        if (!nameMatch) return false;
+        if (currentTabFilter === 'noleidos') {
+          const chat = chats[waId];
+          const unread = chat.unread_count || 0;
+          const hasPending = !!chat.pending;
+          return unread > 0 || hasPending;
+        }
+        return true;
+      });
+
+      list.innerHTML = filtered.map(waId => {
         const chat = chats[waId];
         const last = chat.messages[chat.messages.length - 1];
         const contact = contacts[waId];
@@ -1197,30 +1284,40 @@ if (!location.search.includes('v=')) {
         const hasPending = !!chat.pending;
         const isHumanMode = humanModeChats.has(waId);
         const isSinpe = chat.pending?.tipo === 'sinpe';
-        const actionIcon = isHumanMode ? '👤' : isSinpe ? '💰' : hasPending ? '🔔' : '';
+        const unread = chat.unread_count || (hasPending ? 1 : 0);
+        
+        const colorIdx = waId.charCodeAt(waId.length-1) % 5;
+        const avatarColors = ['#075E54','#128C7E','#2c6e49','#1565c0','#6a1b9a'];
+        const avatarBg = avatarColors[colorIdx];
+        const initials = name.slice(0,2).toUpperCase();
+        const isBot = last?.direction === 'out';
+        const previewIcon = isBot ? '🤖 ' : '';
+        const previewText = last?.text?.slice(0,42) || (last?.imageUrl ? '📷 Imagen' : '');
+
+        let rightBadge = '';
+        if (unread > 0) {
+          const badgeCls = hasPending ? 'alert' : '';
+          const badgeLabel = hasPending ? (isSinpe ? '💰' : (isHumanMode ? '👤' : '!')) : unread;
+          rightBadge = `<span class="chat-unread ${badgeCls}">${badgeLabel}</span>`;
+        }
         
         return `
           <div class="chat-item ${currentChat === waId ? 'active' : ''} ${hasPending ? 'has-action' : ''} ${isHumanMode ? 'human-mode' : ''}" onclick="openChat('${waId}')">
-            <div class="chat-avatar">
-              ${waId.slice(-2).toUpperCase()}
-              ${(hasPending || isHumanMode) ? `<span class="badge">${actionIcon || '!'}</span>` : ''}
-            </div>
+            <div class="chat-avatar" style="background:${avatarBg}">${initials}</div>
             <div class="chat-info">
               <div class="chat-name">${escapeHtml(name)}</div>
-              <div class="chat-preview">${escapeHtml(last?.text?.slice(0, 35) || '')}</div>
+              <div class="chat-preview"><span class="bot-icon">${previewIcon}</span>${escapeHtml(previewText)}</div>
             </div>
             <div class="chat-meta">
               <div class="chat-time">${timeAgo(last?.timestamp)}</div>
-              ${hasPending ? `<div class="chat-action-icon">${actionIcon}</div>` : ''}
+              ${rightBadge}
             </div>
           </div>
         `;
-      }).join('');
+      }).join('') || `<div style="text-align:center;padding:2rem;color:var(--wa-muted);font-size:0.9rem;">Sin chats</div>`;
     }
 
     $('searchInput').oninput = renderChatList;
-
-    // ===== OPEN/RENDER CHAT =====
    function openChat(waId) {
   currentChat = waId;
   renderChatList();
@@ -1248,39 +1345,54 @@ if (!location.search.includes('v=')) {
       const contact = contacts[currentChat];
       const name = contact?.name || formatPhone(currentChat);
       const isHuman = humanModeChats.has(currentChat);
+      const colorIdx = currentChat.charCodeAt(currentChat.length-1) % 5;
+      const avatarColors = ['#075E54','#128C7E','#2c6e49','#1565c0','#6a1b9a'];
+      const avatarBg = avatarColors[colorIdx];
       
       $('chatArea').innerHTML = `
         <div class="chat-header">
           <button class="chat-header-back" onclick="closeChat()">←</button>
-          <div class="chat-header-avatar" style="${isHuman ? 'background:#f39c12' : ''}">${currentChat.slice(-2).toUpperCase()}</div>
+          <div class="chat-header-avatar" style="background:${avatarBg}">${name.slice(0,2).toUpperCase()}</div>
           <div class="chat-header-info">
             <div class="chat-header-name">${escapeHtml(name)}</div>
             <div class="chat-header-status">${isHuman ? '👤 Modo humano activo' : '🤖 Bot activo · ' + formatPhone(currentChat)}</div>
           </div>
           <div class="chat-header-actions">
             ${isHuman 
-              ? `<button class="chat-header-btn" style="background:#e8f5e9;color:#2e7d32;font-size:0.85rem;font-weight:600;" onclick="liberarChat()">🤖 Dar al bot</button>`
-              : `<button class="chat-header-btn" style="background:#fff3e0;color:#e65100;font-size:0.85rem;font-weight:600;" onclick="tomarChat()">👤 Tomar chat</button>`
+              ? `<button class="chat-header-btn" onclick="liberarChat()">🤖 Dar al bot</button>`
+              : `<button class="chat-header-btn" onclick="tomarChat()">👤 Tomar chat</button>`
             }
             <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
           </div>
         </div>
-        ${isHuman ? `<div style="background:#fff3e0;border-bottom:2px solid #f39c12;padding:0.5rem 1rem;font-size:0.9rem;color:#e65100;text-align:center;">👤 <strong>Modo humano</strong> — el bot no responde en este chat. Vos controlás.</div>` : ''}
+        ${isHuman ? `<div class="human-banner">👤 <strong>Modo humano</strong> — el bot no responde en este chat. Vos controlás.</div>` : ''}
         <div class="messages-container" id="messagesContainer">
           ${renderMessages(chat)}
         </div>
-        <div id="quickRepliesBar" class="quick-replies-bar"></div>
-        <div class="chat-input-area">
-          <input type="text" class="chat-input" id="chatInput" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual...'}" oninput="handleInputChange(this)">
-          <button class="chat-send-btn" onclick="sendMessage()">➤</button>
+        <div class="chat-input-wrapper">
+          <div id="emojiPanel" class="emoji-panel"></div>
+          <div id="quickRepliesBar" class="quick-replies-bar"></div>
+          <div class="chat-input-area">
+            <button class="input-icon-btn" onclick="toggleEmojiPanel()" title="Emojis">😊</button>
+            <button class="input-icon-btn" onclick="document.getElementById('fileAttachInput').click()" title="Adjuntar archivo">📎</button>
+            <textarea class="chat-input" id="chatInput" rows="1" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual...'}" oninput="handleInputChange(this)" onkeydown="handleKeyDown(event)"></textarea>
+            <button class="chat-send-btn" onclick="sendMessage()" title="Enviar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          </div>
         </div>
       `;
       
-      // Enter to send
-      $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
-      
       // Render quick replies bar
       renderQuickRepliesBar();
+      renderEmojiPanel();
+      
+      // Auto-resize textarea
+      const textarea = $('chatInput');
+      textarea.addEventListener('input', () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+      });
       
       // Scroll to bottom
       const container = $('messagesContainer');
@@ -1307,58 +1419,61 @@ if (!location.search.includes('v=')) {
 
     function renderMessages(chat) {
       let html = '';
+      let lastDate = '';
       
-      // Render messages
       chat.messages.forEach(m => {
-        const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-        // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
+        const msgDate = new Date(m.timestamp);
+        const dateStr = msgDate.toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const timeStr = msgDate.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+        
+        // Date separator
+        if (dateStr !== lastDate) {
+          lastDate = dateStr;
+          const today = new Date().toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' });
+          const yesterday = new Date(Date.now()-86400000).toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' });
+          const label = dateStr === today ? 'HOY' : dateStr === yesterday ? 'AYER' : dateStr.toUpperCase();
+          html += `<div class="date-separator"><span>${label}</span></div>`;
+        }
+        
         const hasImg = m.imageUrl && m.imageUrl.length > 100;
         const imgSrc = hasImg ? (m.imageUrl.startsWith('data:') ? m.imageUrl : `data:image/jpeg;base64,${m.imageUrl}`) : null;
-        html += `
-          <div class="message ${m.direction}">
+        
+        html += `<div class="message ${m.direction}">
+          <div class="message-bubble">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
             ${m.text ? `<div class="message-text">${linkify(m.text)}</div>` : ''}
-            <div class="message-time">${time}</div>
+            <div class="message-time">${timeStr}</div>
           </div>
-        `;
+        </div>`;
       });
       
-      // Render pending action card if exists
+      // Pending action card
       if (chat.pending) {
         const p = chat.pending;
-        console.log('🎴 Rendering action card:', p.waId, 'foto_url:', p.foto_url ? 'YES (' + p.foto_url.substring(0, 30) + '...)' : 'NO');
         const isSinpe = p.tipo === 'sinpe' || p.type === 'sinpe';
         const isTienda = p.tipo === 'tienda' || p.type === 'tienda';
         const isMulti = p.tipo === 'multi' || p.type === 'multi';
         const isFotoExterna = p.foto_externa;
         
         if (isMulti) {
-          // ====== TARJETA MULTI-PRODUCTO ======
           const prods = p.products || [];
           let multiHtml = `
             <div class="action-card" id="actionCard" style="background:#f0f4ff;border-color:#3b82f6;">
-              <div class="action-card-header">
-                <span class="action-card-icon">📋</span>
-                <span>LISTA DE PRODUCTOS (${prods.length})</span>
-              </div>
-              <div style="font-size:0.85rem;margin-bottom:10px;">
-          `;
+              <div class="action-card-header"><span class="action-card-icon">📋</span><span>LISTA DE PRODUCTOS (${prods.length})</span></div>
+              <div style="font-size:0.85rem;margin-bottom:10px;">`;
           prods.forEach((prod, i) => {
-            multiHtml += `
-              <div style="display:flex;align-items:center;gap:8px;padding:8px;margin:4px 0;background:#fff;border-radius:8px;border:1px solid #e0e0e0;">
-                <span style="font-weight:bold;font-size:1.1rem;min-width:24px;color:#3b82f6;">${i+1}.</span>
-                <input type="checkbox" id="mp_${i}" data-idx="${i}" checked style="width:20px;height:20px;cursor:pointer;">
-                ${prod.foto_url ? `<img src="${prod.foto_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="viewImage(this.src)" onerror="this.style.display='none'">` : ''}
-                <div style="flex:1;">
-                  <div style="font-weight:600;">${prod.producto_url ? `<a href="${prod.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(prod.producto || 'Producto')} 🔗</a>` : escapeHtml(prod.producto || 'Producto')}</div>
-                  <div style="font-size:0.8rem;color:#666;">${prod.codigo || ''} ${prod.talla ? '· ' + prod.talla : ''} ${prod.color ? '· ' + prod.color : ''}</div>
-                </div>
-                <input type="number" id="mpPrecio_${i}" value="${prod.precio || 0}" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:right;" placeholder="Precio">
+            multiHtml += `<div style="display:flex;align-items:center;gap:8px;padding:8px;margin:4px 0;background:#fff;border-radius:8px;border:1px solid #e0e0e0;">
+              <span style="font-weight:bold;font-size:1.1rem;min-width:24px;color:#3b82f6;">${i+1}.</span>
+              <input type="checkbox" id="mp_${i}" data-idx="${i}" checked style="width:20px;height:20px;cursor:pointer;">
+              ${prod.foto_url ? `<img src="${prod.foto_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="viewImage(this.src)" onerror="this.style.display='none'">` : ''}
+              <div style="flex:1;">
+                <div style="font-weight:600;">${prod.producto_url ? `<a href="${prod.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(prod.producto || 'Producto')} 🔗</a>` : escapeHtml(prod.producto || 'Producto')}</div>
+                <div style="font-size:0.8rem;color:#666;">${prod.codigo || ''} ${prod.talla ? '· ' + prod.talla : ''} ${prod.color ? '· ' + prod.color : ''}</div>
               </div>
-            `;
+              <input type="number" id="mpPrecio_${i}" value="${prod.precio || 0}" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:right;" placeholder="Precio">
+            </div>`;
           });
-          multiHtml += `
-              </div>
+          multiHtml += `</div>
               <div class="action-card-buttons" style="flex-direction:column;gap:8px;">
                 <div style="display:flex;gap:8px;">
                   <button class="action-btn primary" onclick="confirmMulti('${p.waId}')">✅ Sí Hay Todos</button>
@@ -1369,25 +1484,16 @@ if (!location.search.includes('v=')) {
                   <input type="text" id="multiParcial_${p.waId}" placeholder="Ej: 1,3" style="width:80px;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center;">
                 </div>
               </div>
-            </div>
-          `;
+            </div>`;
           html += multiHtml;
         } else {
-        // ====== TARJETA NORMAL (producto individual) ======
-        let cardClass = isSinpe ? 'sinpe' : isTienda ? 'tienda' : isFotoExterna ? 'foto-externa' : '';
-        let icon = isSinpe ? '💰' : isTienda ? '🏪' : isFotoExterna ? '📷' : '🔔';
-        let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : isFotoExterna ? 'PRODUCTO DE FOTO' : 'CONFIRMAR DISPONIBILIDAD';
-        
-        // Debug: ver si llega foto_url
-        console.log('📷 Pending foto_url:', p.foto_url ? p.foto_url.substring(0, 50) + '...' : 'NULL');
-        
-        html += `
-          <div class="action-card ${cardClass}" id="actionCard">
-            <div class="action-card-header">
-              <span class="action-card-icon">${icon}</span>
-              <span>${title}</span>
-            </div>
-            ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : '<!-- No foto_url -->'}
+          let cardClass = isSinpe ? 'sinpe' : isTienda ? 'tienda' : isFotoExterna ? 'foto-externa' : '';
+          let icon = isSinpe ? '💰' : isTienda ? '🏪' : isFotoExterna ? '📷' : '🔔';
+          let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : isFotoExterna ? 'PRODUCTO DE FOTO' : 'CONFIRMAR DISPONIBILIDAD';
+          
+          html += `<div class="action-card ${cardClass}" id="actionCard">
+            <div class="action-card-header"><span class="action-card-icon">${icon}</span><span>${title}</span></div>
+            ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="this.style.display='none'" alt="Foto producto">` : ''}
             <div class="action-card-details">
               <div class="action-card-detail">📦 <strong>${p.producto_url ? `<a href="${p.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(p.producto || 'Producto')} 🔗</a>` : escapeHtml(p.producto || 'Producto')}</strong></div>
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
@@ -1418,9 +1524,8 @@ if (!location.search.includes('v=')) {
                 <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
               `}
             </div>
-          </div>
-        `;
-        } // end else (tarjeta normal)
+          </div>`;
+        }
       }
       
       return html;
@@ -1581,7 +1686,8 @@ if (!location.search.includes('v=')) {
       // Atajo especial: resumen abre el modal editable
       if (raw.toLowerCase() === 'resumen') {
         input.value = '';
-        input.style.borderColor = 'transparent';
+        input.style.height = 'auto';
+        input.style.outline = 'none';
         openResumenModal();
         return;
       }
@@ -1592,15 +1698,63 @@ if (!location.search.includes('v=')) {
       
       socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
       input.value = '';
-      input.style.borderColor = 'transparent';
+      input.style.height = 'auto';
+      input.style.outline = 'none';
+      // Close emoji panel if open
+      const ep = $('emojiPanel');
+      if (ep) ep.classList.remove('open');
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
     }
 
     function handleInputChange(input) {
       const val = input.value.toLowerCase().trim();
       const match = quickReplies.find(r => r.code === val);
-      // Hint visual: borde verde si coincide con un shortcode
-      input.style.borderColor = match ? '#25D366' : 'transparent';
+      input.style.outline = match ? '2px solid var(--wa-green)' : 'none';
       input.title = match ? '⚡ Atajo detectado: se enviará este mensaje' : '';
+      // Auto-resize
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+
+    // ===== EMOJI PANEL =====
+    const FREQUENT_EMOJIS = ['😊','😄','😂','🙌','👍','❤️','🎉','😍','🙏','👀','✅','❌','💰','📦','🚚','📷','📋','⚡','🤝','😅','🥰','💯','🔥','⭐','🎊','🛍️','👗','💃','🌟','😎'];
+    
+    function renderEmojiPanel() {
+      const panel = $('emojiPanel');
+      if (!panel) return;
+      panel.innerHTML = FREQUENT_EMOJIS.map(e => 
+        `<button class="emoji-btn" onclick="insertEmoji('${e}')">${e}</button>`
+      ).join('');
+    }
+    
+    function toggleEmojiPanel() {
+      const panel = $('emojiPanel');
+      if (!panel) return;
+      panel.classList.toggle('open');
+    }
+    
+    function insertEmoji(emoji) {
+      const input = $('chatInput');
+      if (!input) return;
+      const pos = input.selectionStart || input.value.length;
+      input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+      input.focus();
+      input.selectionStart = input.selectionEnd = pos + emoji.length;
+    }
+
+    // ===== FILE ATTACH =====
+    function handleFileAttach(input) {
+      const file = input.files[0];
+      if (!file || !currentChat) return;
+      // Currently just notifies — full upload would need backend support
+      toast(`📎 ${file.name} — Función de adjuntar próximamente`, '');
+      input.value = '';
     }
 
     function deleteChat() {
