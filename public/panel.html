@@ -288,12 +288,15 @@
 
     /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
-      .sidebar { width: 100%; min-width: unset; position: absolute; inset: 0; z-index: 10; top: 56px; bottom: 0; }
+      #app { height: 100dvh; }
+      .main-container { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+      .sidebar { width: 100%; min-width: unset; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; }
       .sidebar.hidden { display: none; }
-      .chat-area { position: absolute; inset: 0; z-index: 20; display: none; flex-direction: column; overflow: hidden; }
+      .chat-area { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; display: none; flex-direction: column; overflow: hidden; }
       .chat-area.active { display: flex; }
+      .chat-area .messages-container { flex: 1; min-height: 0; overflow-y: auto; }
+      .chat-area .chat-input-wrapper { flex-shrink: 0; }
       .chat-header-back { display: flex !important; }
-      .main-container { position: relative; }
     }
 
   </style>
@@ -794,12 +797,12 @@ if (!location.search.includes('v=')) {
       const now = new Date();
       const diffDays = Math.floor((now - date) / 86400000);
       if (diffDays === 0) {
-        // Hoy: mostrar hora HH:MM
-        return date.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false });
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+               .toLowerCase().replace(' ', '');
       }
       if (diffDays === 1) return 'Ayer';
-      if (diffDays < 7) return date.toLocaleDateString('es-CR', { weekday: 'short' });
-      return date.toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit' });
+      if (diffDays < 7) return ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][date.getDay()];
+      return (date.getMonth()+1) + '/' + date.getDate();
     }
     function escapeHtml(t) {
       return String(t || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1124,8 +1127,18 @@ if (!location.search.includes('v=')) {
         // Process history into chats
         chats = {};
         (data.history || []).forEach(m => {
-          if (!chats[m.waId]) chats[m.waId] = { messages: [], pending: null };
+          if (!chats[m.waId]) chats[m.waId] = { messages: [], pending: null, unread_count: 0 };
           chats[m.waId].messages.push(m);
+        });
+        // Calcular no leídos: mensajes entrantes desde el último mensaje saliente
+        Object.keys(chats).forEach(waId => {
+          const msgs = chats[waId].messages;
+          let count = 0;
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].direction === 'out') break;
+            if (msgs[i].direction === 'in') count++;
+          }
+          chats[waId].unread_count = count;
         });
         // Process pending
         (data.pending || []).forEach(p => {
