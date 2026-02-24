@@ -495,6 +495,8 @@ async function loadLikesStats() {
     _ownerLikesData = { all: d.all, nameMap: nameMap, maxCount: d.maxCount || 0 };
     function renderLikeList(el, obj, isTop) {
       var entries = Object.entries(obj);
+      // Sort descending for top, ascending for bottom
+      entries.sort(function(a, b) { return isTop ? b[1] - a[1] : a[1] - b[1]; });
       if (isTop && entries.length === 0) {
         el.innerHTML = '<div style="color:#9ca3af;font-size:0.82rem;padding:8px;">Aún no hay likes — aparecerán cuando las clientas comiencen a dar ❤️</div>';
         return;
