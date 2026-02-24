@@ -843,7 +843,7 @@ if (!location.search.includes('v=')) {
             </div>
             <div class="chat-info">
               <div class="chat-name">${escapeHtml(name)}</div>
-              <div class="chat-preview">${escapeHtml(last?.text?.slice(0, 35) || '')}</div>
+              <div class="chat-preview">${last?.imageUrl && (!last?.text || last?.text === '(foto)' || last?.text === '(mensaje)') ? '📷 Foto' : escapeHtml(last?.text?.slice(0, 35) || '')}</div>
             </div>
             <div class="chat-meta">
               <div class="chat-time">${timeAgo(last?.timestamp)}</div>
@@ -921,13 +921,24 @@ if (!location.search.includes('v=')) {
       // Render messages
       chat.messages.forEach(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-        // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
-        const hasImg = m.imageUrl && m.imageUrl.length > 100;
-        const imgSrc = hasImg ? (m.imageUrl.startsWith('data:') ? m.imageUrl : `data:image/jpeg;base64,${m.imageUrl}`) : null;
+        // Detectar si hay imagen: puede ser URL de servidor (/images/...), data: URI, o base64 puro largo
+        let imgSrc = null;
+        if (m.imageUrl) {
+          if (m.imageUrl.startsWith('/images/') || m.imageUrl.startsWith('http')) {
+            imgSrc = m.imageUrl; // URL de servidor - usar directo
+          } else if (m.imageUrl.startsWith('data:')) {
+            imgSrc = m.imageUrl; // data URI
+          } else if (m.imageUrl.length > 100) {
+            imgSrc = `data:image/jpeg;base64,${m.imageUrl}`; // base64 puro
+          }
+        }
+        const hasImg = !!imgSrc;
+        // Preview en la lista de chats: si el mensaje es solo foto sin texto
+        const displayText = m.text && m.text !== '(foto)' && m.text !== '(mensaje)' ? m.text : (hasImg ? '📷 Foto' : m.text);
         html += `
           <div class="message ${m.direction}">
-            ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
-            ${m.text ? `<div class="message-text">${linkify(m.text)}</div>` : ''}
+            ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage('${imgSrc}')" onerror="this.style.display='none'" alt="Imagen">` : ''}
+            ${displayText ? `<div class="message-text">${linkify(displayText)}</div>` : ''}
             <div class="message-time">${time}</div>
           </div>
         `;
