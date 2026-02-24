@@ -125,7 +125,7 @@
     .chat-preview .bot-icon { font-size: 0.75rem; }
     
     /* Chat meta */
-    .chat-meta { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .chat-meta { text-align: right; flex-shrink: 0; min-width: 44px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
     .chat-time { font-size: 0.78rem; color: #555; white-space: nowrap; font-weight: 600; }
     .chat-unread { min-width: 20px; height: 20px; padding: 0 5px; background: var(--wa-green); border-radius: 10px; font-size: 0.72rem; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; }
     .chat-action-icon { font-size: 1rem; }
@@ -790,11 +790,16 @@ if (!location.search.includes('v=')) {
     }
     function timeAgo(d) {
       if (!d) return '';
-      const s = Math.floor((Date.now() - new Date(d)) / 1000);
-      if (s < 60) return 'ahora';
-      if (s < 3600) return Math.floor(s/60) + 'm';
-      if (s < 86400) return Math.floor(s/3600) + 'h';
-      return Math.floor(s/86400) + 'd';
+      const date = new Date(d);
+      const now = new Date();
+      const diffDays = Math.floor((now - date) / 86400000);
+      if (diffDays === 0) {
+        // Hoy: mostrar hora HH:MM
+        return date.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      }
+      if (diffDays === 1) return 'Ayer';
+      if (diffDays < 7) return date.toLocaleDateString('es-CR', { weekday: 'short' });
+      return date.toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit' });
     }
     function escapeHtml(t) {
       return String(t || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1167,8 +1172,12 @@ if (!location.search.includes('v=')) {
       // New message - NO notificar (solo actualizar UI)
       socket.on('new_message', msg => {
         console.log('📩 new_message:', msg.waId);
-        if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null };
+        if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null, unread_count: 0 };
         chats[msg.waId].messages.push(msg);
+        // Incrementar no leídos solo si es mensaje entrante y el chat no está abierto
+        if (msg.direction === 'in' && currentChat !== msg.waId) {
+          chats[msg.waId].unread_count = (chats[msg.waId].unread_count || 0) + 1;
+        }
         forceUpdate();
       });
 
@@ -1388,6 +1397,8 @@ if (!location.search.includes('v=')) {
     $('searchInput').oninput = renderChatList;
    function openChat(waId) {
   currentChat = waId;
+  // Resetear no leídos al abrir
+  if (chats[waId]) chats[waId].unread_count = 0;
   renderChatList();
   renderChat();
   
