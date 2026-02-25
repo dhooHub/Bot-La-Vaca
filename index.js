@@ -27,15 +27,21 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS para permitir peticiones desde lavacacr.com
+// CORS para permitir peticiones desde lavacacr.com y panel
 app.use((req, res, next) => {
-  const allowedOrigins = ['https://lavacacr.com', 'https://www.lavacacr.com', 'http://localhost:3000'];
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+  // Permitir cualquier subdominio de lavacacr.com, localhost, y onrender.com
+  const allowed = !origin || 
+    /https?:\/\/(www\.)?lavacacr\.com/.test(origin) ||
+    /https?:\/\/localhost/.test(origin) ||
+    /https?:\/\/.*\.onrender\.com/.test(origin);
+  if (allowed) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Pwd');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Pwd, X-Admin-Token');
   res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -3510,13 +3516,25 @@ app.get("/api/admin/contacts", adminAuth, (req, res) => {
 });
 
 app.post("/api/admin/contacts", adminAuth, express.json(), (req, res) => {
-  const { waId, name, phone, notes } = req.body;
+  const { waId, name, phone, notes, botDisabled } = req.body;
   if (!waId) return res.status(400).json({ error: "waId requerido" });
   const id = normalizePhone(waId);
   const existing = profiles.get(id) || { waId: id, purchases: 0, created_at: new Date().toISOString() };
   if (name !== undefined) existing.name = name;
   if (phone !== undefined) existing.phone = phone;
   if (notes !== undefined) existing.notes = notes;
+  if (botDisabled !== undefined) {
+    existing.botDisabled = botDisabled;
+    // Sincronizar humanMode en sesión activa
+    const s = sessions.get(id);
+    if (s) {
+      s.humanMode = botDisabled;
+      s.humanModeManual = botDisabled;
+      if (botDisabled) { s.humanModeAt = s.humanModeAt || Date.now(); s.humanModeLastActivity = Date.now(); }
+      else { s.humanModeAt = null; s.humanModeLastActivity = null; }
+      io.emit("human_mode_changed", { waId: id, humanMode: botDisabled, manual: botDisabled });
+    }
+  }
   profiles.set(id, existing);
   saveDataToDisk();
   res.json({ success: true, contact: existing });
