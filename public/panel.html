@@ -758,8 +758,8 @@ if (!location.search.includes('v=')) {
     function renderQrManagerItems() {
       const list = $('qrItemsList');
       list.innerHTML = quickReplies.map((qr, i) => `
-        <div class="qr-item" id="qrItem_${i}" draggable="true" ondragstart="qrDragStart(event,${i})" ondragover="qrDragOver(event,${i})" ondrop="qrDrop(event,${i})" ondragend="qrDragEnd()" style="cursor:grab;">
-          <span style="display:flex;align-items:center;justify-content:center;color:#aaa;font-size:1.2rem;cursor:grab;user-select:none;padding:0 4px;">☰</span>
+        <div class="qr-item" id="qrItem_${i}">
+          <span class="qr-handle" data-idx="${i}" ontouchstart="qrTouchStart(event,${i})" ontouchmove="qrTouchMove(event)" ontouchend="qrTouchEnd(event)" style="display:flex;align-items:center;justify-content:center;color:#aaa;font-size:1.2rem;cursor:grab;user-select:none;padding:0 6px;touch-action:none;">☰</span>
           <input class="qr-item-code" type="text" value="${qr.code}" placeholder="código" id="qrCode_${i}">
           <textarea class="qr-item-text" id="qrText_${i}" placeholder="Mensaje completo...">${qr.text}</textarea>
           <button class="qr-item-del" onclick="deleteQrItem(${i})">✕</button>
@@ -768,34 +768,56 @@ if (!location.search.includes('v=')) {
     }
 
     let qrDragIdx = null;
-    function qrDragStart(e, i) {
+    let qrDragEl = null;
+    let qrPlaceholderIdx = null;
+
+    function qrTouchStart(e, i) {
+      e.stopPropagation();
       qrDragIdx = i;
-      e.dataTransfer.effectAllowed = 'move';
-      setTimeout(() => { const el = $('qrItem_' + i); if(el) el.style.opacity = '0.4'; }, 0);
+      qrPlaceholderIdx = i;
+      qrDragEl = $('qrItem_' + i);
+      qrDragEl.style.opacity = '0.5';
+      qrDragEl.style.background = '#e8f5e9';
     }
-    function qrDragOver(e, i) {
+
+    function qrTouchMove(e) {
+      if (qrDragIdx === null) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      document.querySelectorAll('.qr-item').forEach(el => el.style.borderTop = '');
-      const el = $('qrItem_' + i);
-      if (el && i !== qrDragIdx) el.style.borderTop = '2px solid var(--wa-green)';
+      const touch = e.touches[0];
+      const els = document.querySelectorAll('.qr-item');
+      let targetIdx = null;
+      els.forEach((el, idx) => {
+        const rect = el.getBoundingClientRect();
+        if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) targetIdx = idx;
+      });
+      if (targetIdx !== null && targetIdx !== qrPlaceholderIdx) {
+        els.forEach(el => el.style.borderTop = '');
+        const targetEl = $('qrItem_' + targetIdx);
+        if (targetEl) targetEl.style.borderTop = '2px solid var(--wa-green)';
+        qrPlaceholderIdx = targetIdx;
+      }
     }
-    function qrDrop(e, i) {
-      e.preventDefault();
-      if (qrDragIdx === null || qrDragIdx === i) return;
-      // Leer valores actuales del DOM antes de reordenar
-      quickReplies = quickReplies.map((_, idx) => ({
-        code: (document.getElementById('qrCode_' + idx)?.value || '').trim(),
-        text: document.getElementById('qrText_' + idx)?.value || ''
-      }));
-      const moved = quickReplies.splice(qrDragIdx, 1)[0];
-      quickReplies.splice(i, 0, moved);
+
+    function qrTouchEnd(e) {
+      if (qrDragIdx === null) return;
+      document.querySelectorAll('.qr-item').forEach(el => {
+        el.style.borderTop = '';
+        el.style.opacity = '';
+        el.style.background = '';
+      });
+      if (qrPlaceholderIdx !== null && qrPlaceholderIdx !== qrDragIdx) {
+        // Leer valores actuales del DOM
+        quickReplies = quickReplies.map((_, idx) => ({
+          code: (document.getElementById('qrCode_' + idx)?.value || '').trim(),
+          text: document.getElementById('qrText_' + idx)?.value || ''
+        }));
+        const moved = quickReplies.splice(qrDragIdx, 1)[0];
+        quickReplies.splice(qrPlaceholderIdx, 0, moved);
+        renderQrManagerItems();
+      }
       qrDragIdx = null;
-      renderQrManagerItems();
-    }
-    function qrDragEnd() {
-      document.querySelectorAll('.qr-item').forEach(el => { el.style.opacity = ''; el.style.borderTop = ''; });
-      qrDragIdx = null;
+      qrDragEl = null;
+      qrPlaceholderIdx = null;
     }
 
     function addQrItem() {
