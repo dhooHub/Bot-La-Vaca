@@ -270,7 +270,7 @@
     .qr-modal-box { background: #fff; border-radius: 16px; padding: 1.5rem; width: 96%; max-width: 520px; max-height: 88vh; overflow-y: auto; }
     .qr-modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
     .qr-modal-sub { font-size: 0.85rem; color: var(--wa-muted); margin-bottom: 1rem; }
-    .qr-item { display: grid; grid-template-columns: 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
+    .qr-item { display: grid; grid-template-columns: 24px 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
     .qr-item-code { padding: 0.5rem; border: 1px solid var(--wa-border); border-radius: 8px; font-size: 0.9rem; font-weight: 700; font-family: monospace; }
     .qr-item-text { padding: 0.5rem; border: 1px solid var(--wa-border); border-radius: 8px; font-size: 0.88rem; resize: vertical; min-height: 55px; font-family: inherit; }
     .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
@@ -757,12 +757,44 @@ if (!location.search.includes('v=')) {
     function renderQrManagerItems() {
       const list = $('qrItemsList');
       list.innerHTML = quickReplies.map((qr, i) => `
-        <div class="qr-item" id="qrItem_${i}">
+        <div class="qr-item" id="qrItem_${i}" draggable="true" ondragstart="qrDragStart(event,${i})" ondragover="qrDragOver(event,${i})" ondrop="qrDrop(event,${i})" ondragend="qrDragEnd()" style="cursor:grab;">
+          <span style="display:flex;align-items:center;justify-content:center;color:#aaa;font-size:1.2rem;cursor:grab;user-select:none;padding:0 4px;">☰</span>
           <input class="qr-item-code" type="text" value="${qr.code}" placeholder="código" id="qrCode_${i}">
           <textarea class="qr-item-text" id="qrText_${i}" placeholder="Mensaje completo...">${qr.text}</textarea>
           <button class="qr-item-del" onclick="deleteQrItem(${i})">✕</button>
         </div>
       `).join('');
+    }
+
+    let qrDragIdx = null;
+    function qrDragStart(e, i) {
+      qrDragIdx = i;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => { const el = $('qrItem_' + i); if(el) el.style.opacity = '0.4'; }, 0);
+    }
+    function qrDragOver(e, i) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.qr-item').forEach(el => el.style.borderTop = '');
+      const el = $('qrItem_' + i);
+      if (el && i !== qrDragIdx) el.style.borderTop = '2px solid var(--wa-green)';
+    }
+    function qrDrop(e, i) {
+      e.preventDefault();
+      if (qrDragIdx === null || qrDragIdx === i) return;
+      // Leer valores actuales del DOM antes de reordenar
+      quickReplies = quickReplies.map((_, idx) => ({
+        code: (document.getElementById('qrCode_' + idx)?.value || '').trim(),
+        text: document.getElementById('qrText_' + idx)?.value || ''
+      }));
+      const moved = quickReplies.splice(qrDragIdx, 1)[0];
+      quickReplies.splice(i, 0, moved);
+      qrDragIdx = null;
+      renderQrManagerItems();
+    }
+    function qrDragEnd() {
+      document.querySelectorAll('.qr-item').forEach(el => { el.style.opacity = ''; el.style.borderTop = ''; });
+      qrDragIdx = null;
     }
 
     function addQrItem() {
