@@ -1128,6 +1128,8 @@ if (!location.search.includes('v=')) {
         $('login').classList.add('hidden');
         $('app').classList.add('active');
         toast('✅ Conectado', 'success');
+        // Pedir atajos del servidor explícitamente
+        socket.emit('get_quick_replies');
         // Check notification permission
         if (Notification.permission === 'granted') {
           notificationsEnabled = true;
