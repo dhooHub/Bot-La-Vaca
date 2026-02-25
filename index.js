@@ -186,6 +186,7 @@ function categoriaActiva(tipo) {
 let chatHistory = [];
 const MAX_CHAT_HISTORY = 500;
 const account = { metrics: { chats_total:0, quotes_sent:0, intent_yes:0, intent_no:0, delivery_envio:0, delivery_recoger:0, sinpe_confirmed:0, sales_completed:0, total_revenue:0, estados_sent:0, mensajes_enviados:0, ia_calls:0 } };
+let quickReplies = [];
 
 function hasPhysicalLocation() { return STORE_TYPE === "fisica_con_envios" || STORE_TYPE === "fisica_solo_recoger"; }
 function offersShipping() { return STORE_TYPE === "virtual" || STORE_TYPE === "fisica_con_envios"; }
@@ -696,11 +697,11 @@ function saveDataToDisk() {
       delete copy.foto_base64; // No guardar imágenes en disco
       return copy;
     });
-    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave,salesLog,alertsLog},null,2)); 
+    fs.writeFileSync(path.join(DATA_FOLDER,"ticobot_data.json"),JSON.stringify({account,botPaused,profiles:Array.from(profiles.values()),sessions:sessionsToSave,salesLog,alertsLog,quickReplies},null,2)); 
     saveHistory(); 
   } catch(e){console.log("⚠️ Error guardando:",e.message);} 
 }
-function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
+function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; if(data.quickReplies)quickReplies=data.quickReplies; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas, ${quickReplies.length} atajos)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
 // ============ FRASES ============
@@ -1050,12 +1051,7 @@ async function sendPushoverAlert(tipo, datos) {
       user: PUSHOVER_USER_KEY,
       title,
       message,
-      url: chatLink,
-      url_title: "Abrir Panel",
-      priority: 2,          // Emergencia: requiere acknowledge explícito
-      retry: 60,            // Reintentar cada 60s
-      expire: 600,          // Hasta 10 min
-      callback: callbackUrl, // Pushover llama aquí cuando se hace acknowledge
+      priority: 1,          // Alta prioridad: suena aunque esté en silencio, sin acknowledge
       sound: "cashregister"
     };
     
@@ -1664,14 +1660,11 @@ async function handleIncomingMessage(msg) {
           pendingQuotes.set(waId, quote);
           console.log(`📷 *** EMITIENDO new_pending (con detalles) ***`);
           io.emit("new_pending", quote);
-          // Enviar notificación
           sendPushoverAlert("PRODUCTO_FOTO", quote);
-          
-          saveDataToDisk();
-          
-          // humanMode ya activado en addPendingQuote
+          await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
           session.humanMode = true;
           io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
+          saveDataToDisk();
           return;
         } else {
           // CASO 1 y 2: Foto sola o Foto + texto sin detalles → Preguntar
@@ -1720,9 +1713,8 @@ async function handleIncomingMessage(msg) {
     console.log(`📷 Sockets conectados: ${io.engine.clientsCount}`);
     io.emit("new_pending", quote);
     console.log(`📷 *** EMITIDO! ***`);
-    // Enviar notificación
     sendPushoverAlert("PRODUCTO_FOTO", quote);
-    // Pasar directo a humano
+    await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
     session.humanMode = true;
     io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
     saveDataToDisk();
@@ -1825,6 +1817,7 @@ async function handleIncomingMessage(msg) {
     if(detalles.length>0)resumenProducto+=`\n👕 ${detalles.join(", ")}`;
     if(detalles.length>0){
       session.talla_color=detalles.join(", "); session.state="ESPERANDO_CONFIRMACION_VENDEDOR";
+      await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
       addPendingQuote(session); return;
     }
     session.state="ESPERANDO_TALLA";
@@ -2532,6 +2525,28 @@ async function handleIncomingMessage(msg) {
 async function executeAction(clientWaId, actionType, data = {}) {
   const session = getSession(clientWaId);
 
+  if (actionType === "DISMISS") {
+    // Eliminar pending del servidor
+    pendingQuotes.delete(clientWaId);
+    io.emit("pending_resolved", { waId: clientWaId });
+    // Cancelar alerta de Pushover si hay receipt pendiente
+    const alert = alertsLog.filter(a => a.waId === normalizePhone(clientWaId) && a.estado === "pendiente").pop();
+    if (alert?.receipt && PUSHOVER_APP_TOKEN) {
+      try {
+        await fetch(`https://api.pushover.net/1/receipts/${alert.receipt}/cancel.json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: PUSHOVER_APP_TOKEN })
+        });
+        alert.estado = "atendida";
+        alert.fecha_atendida = new Date().toISOString();
+        console.log(`✅ Pushover cancelado: ${alert.receipt}`);
+      } catch(e) { console.log(`⚠️ Error cancelando Pushover: ${e.message}`); }
+    }
+    saveDataToDisk();
+    return { success: true, message: "Visto" };
+  }
+
   if (actionType === "SI_HAY") {
     session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
     pendingQuotes.delete(clientWaId);
@@ -2852,7 +2867,7 @@ io.on("connection", (socket) => {
           };
         }
       }
-      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()), humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id), activeSessions });
+      socket.emit("init_data", { pending: Array.from(pendingQuotes.values()), pendingZones, history: fullHistory.slice(-500), contacts: Array.from(profiles.values()), metrics: account.metrics, sales: salesLog.slice(-50), crmClients: Array.from(crmClients.values()), humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id), activeSessions, quickReplies });
     } else socket.emit("auth_error", "PIN incorrecto");
   });
   socket.use((packet, next) => { if (packet[0] === "auth") return next(); if (!authenticated) return next(new Error("No auth")); next(); });
@@ -2908,6 +2923,8 @@ io.on("connection", (socket) => {
     socket.emit("purge_result", { success: true, sessionsDeleted, salesDeleted, historyDeleted });
   });
   socket.on("get_metrics", () => { socket.emit("metrics", { metrics: account.metrics }); });
+  socket.on("get_quick_replies", () => { socket.emit("quick_replies", { quickReplies }); });
+  socket.on("save_quick_replies", (data) => { if (!Array.isArray(data.quickReplies)) return; quickReplies = data.quickReplies; saveDataToDisk(); io.emit("quick_replies", { quickReplies }); });
   socket.on("search_history", (filters) => { const results = searchHistory(filters); socket.emit("history_results", { count: results.length, messages: results }); });
 });
 
