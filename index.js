@@ -810,7 +810,7 @@ function resetSession(session) {
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
 }
 
-function getProfile(waId) { const id=normalizePhone(waId); if(!profiles.has(id))profiles.set(id,{waId:id,name:"",blocked:false,purchases:0,created_at:new Date().toISOString()}); return profiles.get(id); }
+function getProfile(waId) { const id=normalizePhone(waId); if(!profiles.has(id))profiles.set(id,{waId:id,name:"",blocked:false,botDisabled:false,purchases:0,created_at:new Date().toISOString()}); return profiles.get(id); }
 
 // ============ MINI CRM ============
 function getCrmClient(waId) {
@@ -1569,6 +1569,15 @@ async function handleIncomingMessage(msg) {
 
   if(profile.blocked)return;
   if(botPaused){console.log("⏸️ Bot pausado");return;}
+
+  // ====== CONTACTO CON BOT DESACTIVADO → siempre modo humano ======
+  if(profile.botDisabled && !session.humanMode){
+    session.humanMode = true;
+    session.humanModeManual = true; // Manual — no expira por inactividad
+    session.humanModeAt = session.humanModeAt || Date.now();
+    session.humanModeLastActivity = Date.now();
+    io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true, manual: true });
+  }
   
   // ====== MODO HUMANO POR CHAT ======
   if(session.humanMode){
@@ -2922,6 +2931,22 @@ io.on("connection", (socket) => {
   socket.on("post_status", async (data) => { let result; if (data.textOnly && data.text) result = await postStatusText(data.text); else if (data.image) result = await postStatus(Buffer.from(data.image, "base64"), data.caption || ""); else result = { success: false, message: "Sin contenido" }; socket.emit("status_result", result); });
   socket.on("get_contacts", () => { socket.emit("contacts_list", { contacts: Array.from(profiles.values()) }); });
   socket.on("toggle_block", (data) => { if (!data.waId) return; const p = getProfile(data.waId); p.blocked = data.block; saveDataToDisk(); io.emit("contact_updated", { contact: p }); });
+  socket.on("toggle_bot_disabled", (data) => {
+    if (!data.waId) return;
+    const p = getProfile(data.waId);
+    p.botDisabled = data.botDisabled;
+    // Si se desactiva el bot para este contacto, activar humanMode en su sesión
+    const s = sessions.get(normalizePhone(data.waId));
+    if (s) {
+      s.humanMode = data.botDisabled;
+      s.humanModeManual = data.botDisabled;
+      if (data.botDisabled) { s.humanModeAt = Date.now(); s.humanModeLastActivity = Date.now(); }
+      else { s.humanModeAt = null; s.humanModeLastActivity = null; }
+      io.emit("human_mode_changed", { waId: normalizePhone(data.waId), humanMode: data.botDisabled, manual: data.botDisabled });
+    }
+    saveDataToDisk();
+    io.emit("contact_updated", { contact: p });
+  });
   socket.on("add_contact", (data) => { if (!data.waId) return; const p = getProfile(data.waId); if (data.name) p.name = data.name; saveDataToDisk(); io.emit("contact_added", { contact: p }); });
   socket.on("update_contact", (data) => { if (!data.waId) return; const p = getProfile(data.waId); if (data.name !== undefined) p.name = data.name; if (data.blocked !== undefined) p.blocked = data.blocked; saveDataToDisk(); io.emit("contact_updated", { contact: p }); });
   socket.on("delete_contact", (data) => { if (!data.waId) return; profiles.delete(data.waId); saveDataToDisk(); io.emit("contact_deleted", { waId: data.waId }); });
