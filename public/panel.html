@@ -566,6 +566,7 @@ if (!location.search.includes('v=')) {
     let allSales = [];
     let chats = {}, pending = {}, contacts = {};
     let humanModeChats = new Set(); // Chats en modo humano
+    let humanModeData = {}; // { waId: { manual, humanModeAt, humanModeLastActivity } }
     let activeSessions = {}; // Datos de sesión activa por waId
     let notificationsEnabled = false;
 
@@ -1247,6 +1248,19 @@ if (!location.search.includes('v=')) {
         humanModeChats = new Set(data.humanModeChats || []);
         // Active sessions for resumen
         activeSessions = data.activeSessions || {};
+        // humanModeData desde sesiones activas
+        humanModeData = {};
+        if (data.activeSessions) {
+          Object.entries(data.activeSessions).forEach(([waId, s]) => {
+            if (s.humanMode) {
+              humanModeData[waId] = {
+                manual: s.humanModeManual || false,
+                humanModeAt: s.humanModeAt || 0,
+                humanModeLastActivity: s.humanModeLastActivity || 0
+              };
+            }
+          });
+        }
         // Atajos del servidor (sincronizados)
         if (data.quickReplies && data.quickReplies.length > 0) {
           quickReplies = data.quickReplies;
@@ -1384,8 +1398,17 @@ if (!location.search.includes('v=')) {
       socket.on('human_mode_changed', data => {
         if (data.humanMode) {
           humanModeChats.add(data.waId);
+          humanModeData[data.waId] = {
+            manual: data.manual || false,
+            humanModeAt: data.humanModeAt || Date.now(),
+            humanModeLastActivity: data.humanModeLastActivity || Date.now()
+          };
         } else {
           humanModeChats.delete(data.waId);
+          delete humanModeData[data.waId];
+          if (data.autoRelease && currentChat === data.waId) {
+            toast('🤖 Bot retomó el chat por inactividad', 'success');
+          }
         }
         renderChatList();
         if (currentChat === data.waId) renderChat();
@@ -1502,6 +1525,11 @@ if (!location.search.includes('v=')) {
     }
 
     $('searchInput').oninput = renderChatList;
+
+    // Refrescar timer de modo humano cada minuto
+    setInterval(() => {
+      if (currentChat && humanModeChats.has(currentChat)) renderChat();
+    }, 60 * 1000);
    function openChat(waId) {
   currentChat = waId;
   // Resetear no leídos al abrir
@@ -1541,7 +1569,13 @@ if (!location.search.includes('v=')) {
           <div class="chat-header-avatar" style="background:${avatarBg}">${name.slice(0,2).toUpperCase()}</div>
           <div class="chat-header-info">
             <div class="chat-header-name">${escapeHtml(name)}</div>
-            <div class="chat-header-status">${isHuman ? '👤 Modo humano activo' : '🤖 Bot activo · ' + formatPhone(currentChat)}</div>
+            <div class="chat-header-status">${isHuman ? (() => {
+              const hd = humanModeData[currentChat] || {};
+              const isManual = hd.manual;
+              const lastActivity = hd.humanModeLastActivity || hd.humanModeAt || 0;
+              const minutesLeft = lastActivity ? Math.max(0, 30 - Math.floor((Date.now() - lastActivity) / 60000)) : 30;
+              return isManual ? '👤 Modo humano manual' : `👤 Humano · bot en ${minutesLeft} min`;
+            })() : '🤖 Bot activo · ' + formatPhone(currentChat)}</div>
           </div>
           <div class="chat-header-actions">
             ${isHuman 
@@ -1551,7 +1585,17 @@ if (!location.search.includes('v=')) {
             <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
           </div>
         </div>
-        ${isHuman ? `<div class="human-banner">👤 <strong>Modo humano</strong> — el bot no responde en este chat. Vos controlás.</div>` : ''}
+        ${isHuman ? (() => {
+          const hd = humanModeData[currentChat] || {};
+          const isManual = hd.manual;
+          const lastActivity = hd.humanModeLastActivity || hd.humanModeAt || 0;
+          const minutesLeft = lastActivity ? Math.max(0, 30 - Math.floor((Date.now() - lastActivity) / 60000)) : 30;
+          if (isManual) {
+            return `<div class="human-banner" style="background:#e3f2fd;color:#1565c0;">👤 <strong>Modo humano manual</strong> — bot no responde. <span style="opacity:0.7">Presioná "Dar al bot" para liberar.</span></div>`;
+          } else {
+            return `<div class="human-banner">👤 <strong>Modo humano</strong> — bot retoma en <strong>${minutesLeft} min</strong> de inactividad.</div>`;
+          }
+        })() : ''}
         <div class="messages-container" id="messagesContainer">
           ${renderMessages(chat)}
         </div>
@@ -1866,6 +1910,10 @@ if (!location.search.includes('v=')) {
       const input = $('chatInput');
       const raw = input.value.trim();
       if (!raw || !currentChat) return;
+      // Resetear timer de inactividad
+      if (humanModeData[currentChat]) {
+        humanModeData[currentChat].humanModeLastActivity = Date.now();
+      }
 
       // Atajo especial: resumen abre el modal editable
       if (raw.toLowerCase() === 'resumen') {
