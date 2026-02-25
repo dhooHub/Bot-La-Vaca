@@ -97,9 +97,11 @@ const USER_PASSWORD = process.env.USER_PASSWORD || "usuario2026";
 const adminTokens = new Map(); // Tokens de sesión temporales
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const HOURS_START = 9;
-const HOURS_END_HOUR = 23;
-const HOURS_END_MIN = 59;
+// Horario tienda: Lun-Sáb 9am-7pm, Dom 10am-6pm
+const HOURS_WEEKDAY_START = 9;
+const HOURS_WEEKDAY_END = 19;   // 7pm
+const HOURS_SUNDAY_START = 10;
+const HOURS_SUNDAY_END = 18;    // 6pm
 const HOURS_DAY = "9am - 6:50pm";
 const DELAY_MIN = 5;
 const DELAY_MAX = 20;
@@ -197,7 +199,14 @@ function fromJid(jid) { return jid?jid.replace(/@.*/,""):""; }
 function formatPhone(waId) { const d=normalizePhone(waId); if(d.length===11&&d.startsWith("506"))return`${d.slice(0,3)} ${d.slice(3,7)}-${d.slice(7)}`; return waId; }
 function getCostaRicaTime() { const now=new Date(); const utc=now.getTime()+(now.getTimezoneOffset()*60000); const cr=new Date(utc-(6*60*60*1000)); return{hour:cr.getHours(),minute:cr.getMinutes(),day:cr.getDay(),date:cr}; }
 function getCostaRicaDayName() { const dias = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"]; return dias[getCostaRicaTime().day]; }
-function isStoreOpen() { const{hour,minute}=getCostaRicaTime(); if(hour<HOURS_START)return false; if(hour>HOURS_END_HOUR)return false; if(hour===HOURS_END_HOUR&&minute>=HOURS_END_MIN)return false; return true; }
+function isStoreOpen() {
+  const{hour,day}=getCostaRicaTime();
+  if(day===0){ // Domingo
+    return hour>=HOURS_SUNDAY_START && hour<HOURS_SUNDAY_END;
+  }
+  // Lunes(1) a Sábado(6)
+  return hour>=HOURS_WEEKDAY_START && hour<HOURS_WEEKDAY_END;
+}
 function norm(s="") { return String(s).toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
 
 // ✅ Corrector inteligente de typos (Levenshtein + duplicados)
