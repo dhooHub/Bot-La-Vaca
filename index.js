@@ -103,7 +103,7 @@ const HOURS_END_MIN = 59;
 const HOURS_DAY = "9am - 6:50pm";
 const DELAY_MIN = 5;
 const DELAY_MAX = 20;
-const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
+const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 horas — nueva conversación al día siguiente
 const STORE_TYPE = (process.env.STORE_TYPE || "fisica_con_envios").toLowerCase();
 const STORE_ADDRESS = process.env.STORE_ADDRESS || "Heredia centro, 100 mts sur de la esquina del Testy";
 const MAPS_URL = process.env.MAPS_URL || "";
@@ -701,7 +701,16 @@ function saveDataToDisk() {
     saveHistory(); 
   } catch(e){console.log("⚠️ Error guardando:",e.message);} 
 }
-function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; if(data.quickReplies)quickReplies=data.quickReplies; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas, ${quickReplies.length} atajos)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
+function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>{
+    // Restaurar humanMode si el estado lo requiere (por si el servidor reinició)
+    if(s.state==="ESPERANDO_CONFIRMACION_VENDEDOR" && !s.humanMode) {
+      s.humanMode = true;
+      s.humanModeManual = false;
+      s.humanModeAt = s.humanModeAt || Date.now();
+      s.humanModeLastActivity = s.humanModeLastActivity || Date.now();
+    }
+    sessions.set(s.waId,s);
+  }); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; if(data.quickReplies)quickReplies=data.quickReplies; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas, ${quickReplies.length} atajos)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
 // ====== AUTO-RELEASE: Volver a bot tras 30 min de inactividad del empleado ======
@@ -795,7 +804,7 @@ function saveLidMap() { try{fs.writeFileSync(LID_MAP_FILE,JSON.stringify(Object.
 loadLidMap();
 
 function resetSession(session) {
-  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.producto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; 
+  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.producto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; session.humanMode=false; session.humanModeManual=false; session.humanModeAt=null; session.humanModeLastActivity=null; 
   session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
   session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
@@ -2060,9 +2069,11 @@ async function handleIncomingMessage(msg) {
   }
 
   // ============ IA: Detectar interrupciones en medio del flujo ============
+  // Si está en modo humano (ESPERANDO_CONFIRMACION_VENDEDOR) → bot no interviene
+  if(session.state==="ESPERANDO_CONFIRMACION_VENDEDOR"){return;}
   // ⚠️ NO clasificar si estamos esperando SINPE (imagen o texto de pago deben ir directo al handler)
   if(session.state!=="NEW"&&session.state!=="PREGUNTANDO_ALGO_MAS"){
-    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA","ESPERANDO_CONFIRMACION_VENDEDOR"];
+    const estadosConRespuesta=["ESPERANDO_DETALLES_FOTO","ESPERANDO_TALLA"]; // ESPERANDO_CONFIRMACION_VENDEDOR = modo humano, bot no interviene
     if(estadosConRespuesta.includes(session.state)){
       const stateDesc=getStateDescription(session.state);
       const classification=await classifyMessage(text,session.state,stateDesc);
