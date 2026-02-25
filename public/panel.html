@@ -1443,6 +1443,8 @@ if (!location.search.includes('v=')) {
       // Contacts
       socket.on('contacts_list', data => {
         (data.contacts || []).forEach(c => contacts[c.waId] = c);
+        allContactsList = Object.values(contacts).filter(c=>c.waId);
+        if ($('contactsModal').classList.contains('active')) renderContactsModal();
       });
     }
 
@@ -2148,7 +2150,8 @@ if (!location.search.includes('v=')) {
     // ===== CONTACTS MODAL =====
     let allContactsList = [];
     function showContacts() {
-      // Refresh from socket contacts object
+      // Pedir lista fresca al servidor
+      socket.emit('get_contacts');
       allContactsList = Object.values(contacts||{}).filter(c=>c.waId);
       renderContactsModal();
       $('contactsModal').classList.add('active');
