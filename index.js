@@ -813,7 +813,7 @@ function saveLidMap() { try{fs.writeFileSync(LID_MAP_FILE,JSON.stringify(Object.
 loadLidMap();
 
 function resetSession(session) {
-  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.producto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; session.humanMode=false; session.humanModeManual=false; session.humanModeAt=null; session.humanModeLastActivity=null; 
+  session.state="NEW"; session.producto=null; session.precio=null; session.codigo=null; session.foto_url=null; session.producto_url=null; session.talla_color=null; session.shipping_cost=null; session.client_zone=null; session.delivery_method=null; session.sinpe_reference=null; session.humanMode=false; session.humanModeManual=false; session.humanModeAt=null; session.humanModeLastActivity=null; session.pendingDismissed=false; 
   session.envio_nombre=null; session.envio_telefono=null; session.envio_direccion=null;
   session.foto_externa=false; session.foto_base64=null; session.foto_url_guardada=null;
   session.saludo_enviado=false; session.catalogo_enviado=false; session.nocturno_sent_at=null; pendingQuotes.delete(session.waId);
@@ -1076,6 +1076,9 @@ async function sendPushoverAlert(tipo, datos) {
     } else if (tipo === "FUERA_LOGICA") {
       title = "⚠️ NECESITA ATENCIÓN";
       message = `👤 ${datos.name || phoneFormatted}\n💬 "${datos.mensaje || "?"}"\n📍 Estado: ${datos.estado || "?"}\n\n🤖 El bot no supo qué responder`;
+    } else if (tipo === "HUMANO_MENSAJE") {
+      title = `💬 ${datos.name || phoneFormatted}`;
+      message = `${datos.mensaje || "(mensaje)"}\n👤 ${phoneFormatted}`;
     }
     
     if (!title) return;
@@ -1328,7 +1331,7 @@ async function connectWhatsApp() {
             restored++;
           }
           // Re-emitir confirmaciones de vendedor pendientes
-          if(s.state === "ESPERANDO_CONFIRMACION_VENDEDOR" && !pendingQuotes.has(wId)){
+          if(s.state === "ESPERANDO_CONFIRMACION_VENDEDOR" && !pendingQuotes.has(wId) && !s.pendingDismissed){
             const quote = {waId:wId, phone, name:profile.name||"", producto:s.producto||"Producto", precio:s.precio, codigo:s.codigo, foto_url:s.foto_url||s.foto_url_guardada, talla_color:s.talla_color, foto_externa:s.foto_externa, created_at:new Date().toISOString()};
             pendingQuotes.set(wId, quote);
             io.emit("new_pending", quote);
@@ -1593,6 +1596,15 @@ async function handleIncomingMessage(msg) {
     console.log(`👤 Modo humano activo para ${displayPhone} - bot no responde`);
     // Notificar al panel que llegó mensaje nuevo (para que alerte al operador)
     io.emit("human_mode_message", { waId: normalizePhone(waId), phone: displayPhone, text: text||(hasImage?"(foto)":"(mensaje)"), timestamp: new Date().toISOString() });
+    // Si el contacto es "solo humano" → Pushover por cada mensaje
+    if(profile.botDisabled){
+      sendPushoverAlert("HUMANO_MENSAJE", {
+        waId,
+        phone: profile.phone || waId,
+        name: profile.name || "",
+        mensaje: text||(hasImage?"(foto)":"(mensaje)")
+      });
+    }
     return;
   }
 
@@ -2577,8 +2589,9 @@ async function executeAction(clientWaId, actionType, data = {}) {
   const session = getSession(clientWaId);
 
   if (actionType === "DISMISS") {
-    // Eliminar pending del servidor
+    // Eliminar pending del servidor y marcar como visto para no recrear al reiniciar
     pendingQuotes.delete(clientWaId);
+    session.pendingDismissed = true;
     io.emit("pending_resolved", { waId: clientWaId });
     // Cancelar alerta de Pushover si hay receipt pendiente
     const alert = alertsLog.filter(a => a.waId === normalizePhone(clientWaId) && a.estado === "pendiente").pop();
