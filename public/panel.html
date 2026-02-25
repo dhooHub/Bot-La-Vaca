@@ -469,6 +469,17 @@
       <div style="margin-bottom:8px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Nombre</label><input id="editCtN" type="text" placeholder="Nombre completo" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
       <div style="margin-bottom:8px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Teléfono</label><input id="editCtTel" type="tel" placeholder="50688881234" inputmode="numeric" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
       <div style="margin-bottom:12px;"><label style="font-size:.7rem;font-weight:700;color:#667781;text-transform:uppercase;">Notas</label><input id="editCtNt" type="text" placeholder="Notas" style="width:100%;padding:.55rem .75rem;border:1.5px solid #e9edef;border-radius:10px;font-size:.9rem;font-family:inherit;background:#fafafa;margin-top:3px;"></div>
+      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fff8e1;border-radius:10px;border:1px solid #ffe082;">
+        <div>
+          <div style="font-size:.85rem;font-weight:700;color:#f57f17;">🤖 Bot desactivado</div>
+          <div style="font-size:.75rem;color:#888;">Solo modo humano para este contacto</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">
+          <input type="checkbox" id="editCtBotDisabled" style="opacity:0;width:0;height:0;">
+          <span id="editCtBotDisabledSlider" style="position:absolute;inset:0;background:#ccc;border-radius:24px;transition:.3s;"></span>
+          <span id="editCtBotDisabledThumb" style="position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.3s;"></span>
+        </label>
+      </div>
       <div style="display:flex;gap:8px;">
         <button onclick="closeAddContact()" style="flex:1;padding:.75rem;background:#f0f2f5;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">Cancelar</button>
         <button onclick="saveContactModal()" style="flex:2;padding:.75rem;background:#25D366;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Guardar</button>
@@ -2157,7 +2168,7 @@ if (!location.search.includes('v=')) {
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #f0f2f5;">
           <div style="width:38px;height:38px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;">${ini}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:.9rem;">${escapeHtml(c.name||'—')}</div>
+            <div style="font-weight:600;font-size:.9rem;">${escapeHtml(c.name||'—')} ${c.botDisabled ? '<span style="font-size:.7rem;background:#fff8e1;color:#f57f17;border:1px solid #ffe082;border-radius:8px;padding:1px 6px;">🤖 sin bot</span>' : ''}</div>
             <div style="font-size:.75rem;color:#667781;">${formatPhone(c.waId||c.phone||'')} · ${purchases} compras</div>
             ${c.notes?`<div style="font-size:.72rem;color:#999;">${escapeHtml(c.notes)}</div>`:''}
           </div>
@@ -2175,7 +2186,16 @@ if (!location.search.includes('v=')) {
       $('editCtN').value = c?.name||'';
       $('editCtTel').value = c?.waId||c?.phone||'';
       $('editCtNt').value = c?.notes||'';
+      // botDisabled toggle
+      const cb = $('editCtBotDisabled');
+      cb.checked = c?.botDisabled || false;
+      updateBotDisabledSlider(cb.checked);
+      cb.onchange = () => updateBotDisabledSlider(cb.checked);
       $('addContactModal').classList.add('active');
+    }
+    function updateBotDisabledSlider(on) {
+      $('editCtBotDisabledSlider').style.background = on ? '#f57f17' : '#ccc';
+      $('editCtBotDisabledThumb').style.left = on ? '23px' : '3px';
     }
     function closeAddContact(){ $('addContactModal').classList.remove('active'); if (currentChat) renderChat(); }
     async function saveContactModal() {
@@ -2188,6 +2208,10 @@ if (!location.search.includes('v=')) {
         const r = await fetch('/api/admin/contacts'+authSep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({waId,name:$('editCtN')?.value?.trim()||'',phone:tel,notes:$('editCtNt')?.value?.trim()||''})});
         if(r.ok){
           closeAddContact();
+          // Toggle botDisabled via socket
+          const botDisabled = $('editCtBotDisabled')?.checked || false;
+          const savedWaId = editId||tel;
+          socket.emit('toggle_bot_disabled', { waId: savedWaId, botDisabled });
           // Refresh contacts from API
           const cr = await fetch('/api/admin/contacts'+authSep);
           if(cr.ok){ const cd=await cr.json(); cd.contacts.forEach(c=>{ contacts[c.waId]=c; }); }
