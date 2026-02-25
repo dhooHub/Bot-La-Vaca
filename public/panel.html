@@ -482,7 +482,10 @@
   <!-- Resumen Modal -->
   <div class="resumen-modal-overlay" id="resumenModal">
     <div class="resumen-modal-box">
-      <div class="resumen-modal-title">📋 Resumen de Pedido</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+        <div class="resumen-modal-title" style="margin:0;">📋 Resumen de Pedido</div>
+        <button onclick="closeResumenModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#667781;line-height:1;padding:2px 6px;">✕</button>
+      </div>
 
       <!-- Tabs envío / retiro -->
       <div class="resumen-tipo-tabs">
@@ -614,6 +617,9 @@ if (!location.search.includes('v=')) {
 
     function closeResumenModal() {
       document.getElementById('resumenModal').classList.remove('active');
+      if (currentChat) renderChat();
+    }
+
     }
 
     function setResumenTipo(tipo) {
@@ -733,6 +739,7 @@ if (!location.search.includes('v=')) {
 
     function closeQrManager() {
       $('qrManagerOverlay').classList.remove('active');
+      if (currentChat) renderChat();
     }
 
 
@@ -1933,7 +1940,7 @@ if (!location.search.includes('v=')) {
       modal.classList.add('active');
     }
     
-    function hideSales() { $('salesModal').classList.remove('active'); }
+    function hideSales() { $('salesModal').classList.remove('active'); if (currentChat) renderChat(); }
 
     // Toggle sale form
     let nsfMetodo = 'envio';
@@ -1984,7 +1991,7 @@ if (!location.search.includes('v=')) {
       renderContactsModal();
       $('contactsModal').classList.add('active');
     }
-    function hideContacts(){ $('contactsModal').classList.remove('active'); }
+    function hideContacts(){ $('contactsModal').classList.remove('active'); if (currentChat) renderChat(); }
     function renderContactsModal() {
       const sr = ($('ctSearchInput')?.value||'').toLowerCase();
       let list = allContactsList.filter(c => !sr||(c.name||'').toLowerCase().includes(sr)||(c.waId||'').includes(sr));
@@ -2019,7 +2026,7 @@ if (!location.search.includes('v=')) {
       $('editCtNt').value = c?.notes||'';
       $('addContactModal').classList.add('active');
     }
-    function closeAddContact(){ $('addContactModal').classList.remove('active'); }
+    function closeAddContact(){ $('addContactModal').classList.remove('active'); if (currentChat) renderChat(); }
     async function saveContactModal() {
       const tel = ($('editCtTel')?.value||'').replace(/\D/g,'');
       if(!tel){ showToast('⚠️ Teléfono requerido'); return; }
