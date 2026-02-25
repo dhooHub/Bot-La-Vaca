@@ -27,16 +27,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS para permitir peticiones desde lavacacr.com y panel
+// CORS para permitir peticiones desde cualquier origen
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  // Permitir cualquier subdominio de lavacacr.com, localhost, y onrender.com
-  const allowed = !origin || 
-    /https?:\/\/(www\.)?lavacacr\.com/.test(origin) ||
-    /https?:\/\/localhost/.test(origin) ||
-    /https?:\/\/.*\.onrender\.com/.test(origin);
-  if (allowed) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
   } else {
     res.header('Access-Control-Allow-Origin', '*');
   }
