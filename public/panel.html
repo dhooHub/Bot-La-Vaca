@@ -204,8 +204,8 @@
     .quick-replies-bar::-webkit-scrollbar { display: none; }
     .qr-chip { background: #fff; border: 2px solid #aaa; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.88rem; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s; color: #111; font-family: inherit; }
     .qr-chip:hover { background: var(--wa-green); color: #fff; border-color: var(--wa-green); }
-    .qr-chip-manage { background: none; border: 2px dashed #888; color: #555; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.85rem; cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0; }
-    .qr-chip-manage:hover { border-color: var(--wa-green-teal); color: var(--wa-green-teal); }
+    .input-clear-btn { background: none; border: none; color: #aaa; font-size: 1.1rem; cursor: pointer; padding: 4px 2px; flex-shrink: 0; display: none; line-height: 1; }
+    .input-clear-btn.visible { display: flex; align-items: center; }
 
     /* Input row */
     .chat-input-area { display: flex; align-items: flex-end; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--wa-input-bg); border-top: 1px solid var(--wa-border); }
@@ -714,10 +714,23 @@ if (!location.search.includes('v=')) {
         input.focus();
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-        // Close emoji panel
         const ep = $('emojiPanel');
         if (ep) ep.classList.remove('open');
+        // Mostrar botón limpiar
+        const cb = $('inputClearBtn');
+        if (cb) cb.classList.add('visible');
       }
+    }
+
+    function clearChatInput() {
+      const input = $('chatInput');
+      if (input) {
+        input.value = '';
+        input.style.height = 'auto';
+        input.focus();
+      }
+      const cb = $('inputClearBtn');
+      if (cb) cb.classList.remove('visible');
     }
 
     function renderQuickRepliesBar() {
@@ -1476,6 +1489,7 @@ if (!location.search.includes('v=')) {
             <button class="input-icon-btn" onclick="toggleEmojiPanel()" title="Emojis">😊</button>
             <button class="input-icon-btn" onclick="document.getElementById('fileAttachInput').click()" title="Adjuntar archivo">📎</button>
             <textarea class="chat-input" id="chatInput" rows="1" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual...'}" oninput="handleInputChange(this)" onkeydown="handleKeyDown(event)"></textarea>
+            <button class="input-clear-btn" id="inputClearBtn" onclick="clearChatInput()" title="Limpiar">✕</button>
             <button class="chat-send-btn" onclick="sendMessage()" title="Enviar">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
@@ -1800,6 +1814,8 @@ if (!location.search.includes('v=')) {
       input.value = '';
       input.style.height = 'auto';
       input.style.outline = 'none';
+      const cb = $('inputClearBtn');
+      if (cb) cb.classList.remove('visible');
       // Close emoji panel if open
       const ep = $('emojiPanel');
       if (ep) ep.classList.remove('open');
@@ -1820,6 +1836,9 @@ if (!location.search.includes('v=')) {
       // Auto-resize
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      // Mostrar/ocultar botón limpiar
+      const cb = $('inputClearBtn');
+      if (cb) cb.classList.toggle('visible', input.value.length > 0);
     }
 
     // ===== EMOJI PANEL =====
