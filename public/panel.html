@@ -191,7 +191,7 @@
     .action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
     /* ===== BOTTOM INPUT AREA ===== */
-    .chat-input-wrapper { background: var(--wa-input-bg); flex-shrink: 0; position: relative; z-index: 2; padding-bottom: env(safe-area-inset-bottom, 0); }
+    .chat-input-wrapper { background: var(--wa-input-bg); flex-shrink: 0; position: relative; z-index: 2; padding-bottom: env(safe-area-inset-bottom, 0); padding-top: 4px; }
     
     /* Emoji picker */
     .emoji-panel { background: #fff; border-top: 1px solid var(--wa-border); padding: 0.5rem 0.75rem; display: none; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow-y: auto; }
@@ -204,8 +204,8 @@
     .quick-replies-bar::-webkit-scrollbar { display: none; }
     .qr-chip { background: #fff; border: 2px solid #aaa; border-radius: 16px; padding: 0.35rem 0.75rem; font-size: 0.88rem; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s; color: #111; font-family: inherit; }
     .qr-chip:hover { background: var(--wa-green); color: #fff; border-color: var(--wa-green); }
-    .input-clear-btn { background: none; border: none; color: #aaa; font-size: 1.1rem; cursor: pointer; padding: 4px 2px; flex-shrink: 0; display: none; line-height: 1; }
-    .input-clear-btn.visible { display: flex; align-items: center; }
+    .input-clear-btn { position: absolute; top: -26px; left: 8px; background: rgba(0,0,0,0.15); border: none; color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; padding: 3px 8px; border-radius: 10px; display: none; line-height: 1.4; z-index: 10; }
+    .input-clear-btn.visible { display: flex; align-items: center; gap: 3px; }
 
     /* Input row */
     .chat-input-area { display: flex; align-items: flex-end; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--wa-input-bg); border-top: 1px solid var(--wa-border); }
@@ -1483,13 +1483,13 @@ if (!location.search.includes('v=')) {
           ${renderMessages(chat)}
         </div>
         <div class="chat-input-wrapper">
+          <button class="input-clear-btn" id="inputClearBtn" onclick="clearChatInput()" title="Limpiar">✕ borrar</button>
           <div id="emojiPanel" class="emoji-panel"></div>
           <div id="quickRepliesBar" class="quick-replies-bar"></div>
           <div class="chat-input-area">
             <button class="input-icon-btn" onclick="toggleEmojiPanel()" title="Emojis">😊</button>
             <button class="input-icon-btn" onclick="document.getElementById('fileAttachInput').click()" title="Adjuntar archivo">📎</button>
             <textarea class="chat-input" id="chatInput" rows="1" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual...'}" oninput="handleInputChange(this)" onkeydown="handleKeyDown(event)"></textarea>
-            <button class="input-clear-btn" id="inputClearBtn" onclick="clearChatInput()" title="Limpiar">✕</button>
             <button class="chat-send-btn" onclick="sendMessage()" title="Enviar">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
