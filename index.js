@@ -993,7 +993,7 @@ async function sendPushoverAlert(tipo, datos) {
   try {
     const phone = datos.phone || datos.waId || "Desconocido";
     const phoneFormatted = formatPhone(phone);
-    const chatLink = `${PANEL_URL}/?chat=${normalizePhone(phone)}`;
+    const chatLink = `${PANEL_URL}/panel.html?chat=${normalizePhone(phone)}`;
     
     // Crear registro de alerta ANTES de enviar
     const alertId = `A-${Date.now().toString(36).toUpperCase()}`;
