@@ -1622,8 +1622,7 @@ if (!location.search.includes('v=')) {
           multiHtml += `</div>
               <div class="action-card-buttons" style="flex-direction:column;gap:8px;">
                 <div style="display:flex;gap:8px;">
-                  <button class="action-btn primary" onclick="confirmMulti('${p.waId}')">✅ Sí Hay Todos</button>
-                  <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
+                  <button class="action-btn primary" onclick="confirmMulti('${p.waId}')">✅ Confirmar disponibles</button>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <button class="action-btn" style="background:#f59e0b;flex:1;" onclick="confirmMultiParcial('${p.waId}')">⚠️ Solo Hay</button>
@@ -1635,7 +1634,7 @@ if (!location.search.includes('v=')) {
         } else {
           let cardClass = isSinpe ? 'sinpe' : isTienda ? 'tienda' : isFotoExterna ? 'foto-externa' : '';
           let icon = isSinpe ? '💰' : isTienda ? '🏪' : isFotoExterna ? '📷' : '🔔';
-          let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : isFotoExterna ? 'PRODUCTO DE FOTO' : 'CONFIRMAR DISPONIBILIDAD';
+          let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : isFotoExterna ? 'PRODUCTO DE FOTO' : 'CLIENTE INTERESADO';
           
           html += `<div class="action-card ${cardClass}" id="actionCard">
             <div class="action-card-header"><span class="action-card-icon">${icon}</span><span>${title}</span></div>
@@ -1666,8 +1665,7 @@ if (!location.search.includes('v=')) {
               ` : isTienda ? `
                 <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
               ` : `
-                <button class="action-btn primary" onclick="confirmAction('SI_HAY')">✅ Sí Hay</button>
-                <button class="action-btn danger" onclick="confirmAction('NO_HAY')">❌ No Hay</button>
+                <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
               `}
             </div>
           </div>`;
@@ -1706,8 +1704,6 @@ if (!location.search.includes('v=')) {
       
       // Mensaje de confirmación según tipo
       const mensajes = {
-        'SI_HAY': '¿Presionaste SÍ HAY, estás seguro?',
-        'NO_HAY': '¿Presionaste NO HAY, estás seguro?',
         'PAGADO': '¿Presionaste PAGO CONFIRMADO, estás seguro?',
         'SINPE_ERROR': '¿Presionaste ERROR COMPROBANTE, estás seguro?'
       };
