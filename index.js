@@ -704,6 +704,25 @@ function saveDataToDisk() {
 function loadDataFromDisk() { try { const file=path.join(DATA_FOLDER,"ticobot_data.json"); if(!fs.existsSync(file))return; const data=JSON.parse(fs.readFileSync(file,"utf-8")); if(data.account)Object.assign(account,data.account); if(data.profiles)data.profiles.forEach(p=>profiles.set(p.waId,p)); if(data.sessions)data.sessions.forEach(s=>sessions.set(s.waId,s)); if(data.botPaused!==undefined)botPaused=data.botPaused; if(data.salesLog)salesLog=data.salesLog; if(data.alertsLog)alertsLog=data.alertsLog; if(data.quickReplies)quickReplies=data.quickReplies; console.log(`📂 Datos cargados (${salesLog.length} ventas, ${alertsLog.length} alertas, ${quickReplies.length} atajos)`); } catch(e){console.log("⚠️ Error cargando:",e.message);} }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
 
+// ====== AUTO-RELEASE: Volver a bot tras 30 min de inactividad del empleado ======
+const HUMAN_MODE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+setInterval(() => {
+  const now = Date.now();
+  for (const [waId, session] of sessions.entries()) {
+    if (!session.humanMode) continue;
+    if (session.humanModeManual) continue; // Tomado manualmente — no liberar automático
+    const lastActivity = session.humanModeLastActivity || session.humanModeAt || 0;
+    if (now - lastActivity >= HUMAN_MODE_TIMEOUT_MS) {
+      session.humanMode = false;
+      session.humanModeAt = null;
+      session.humanModeLastActivity = null;
+      console.log(`🤖 Auto-release: ${waId} vuelve al bot por inactividad`);
+      io.emit("human_mode_changed", { waId, humanMode: false, autoRelease: true });
+      saveDataToDisk();
+    }
+  }
+}, 60 * 1000); // Revisar cada minuto
+
 // ============ FRASES ============
 const FRASES = {
   revisando: ["Dame un toque, voy a revisar si lo tenemos disponible 👍","Dejame chequearlo, ya te confirmo 👌","Un momento, voy a fijarme si queda en stock 🙌","Ya te confirmo disponibilidad, dame un ratito 😊","Voy a revisar de una vez 👍","Permíteme un momento, lo verifico 🙌","Dame chance, ya lo busco 😊","Un segundito, reviso si lo tenemos 👌","Ya miro y te cuento 🙌","Dejame ver si queda, ya te digo 👍"],
@@ -1114,6 +1133,9 @@ function addPendingQuote(session) {
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
   // Pasar directo a humano — empleado responde sin confirmar stock
   session.humanMode = true;
+  session.humanModeManual = false; // Auto — se libera solo tras 30 min de inactividad
+  session.humanModeAt = Date.now();
+  session.humanModeLastActivity = Date.now();
   io.emit("human_mode_changed", { waId: normalizePhone(session.waId), humanMode: true });
   // Actualizar sesión en panel para pre-llenar resumen
   io.emit("session_updated", { waId: session.waId, producto: session.producto, precio: session.precio, talla_color: session.talla_color, shipping_cost: session.shipping_cost || null, envio_datos_raw: session.envio_datos_raw || null, delivery_method: session.delivery_method || null, client_zone: session.client_zone || null });
@@ -2785,23 +2807,30 @@ async function executeAction(clientWaId, actionType, data = {}) {
     const texto = String(data.texto || "").trim();
     if (!texto) return { success: false, message: "Vacío" };
     await sendTextDirect(clientWaId, texto);
+    // Resetear timer de inactividad
+    session.humanModeLastActivity = Date.now();
     return { success: true, message: "Enviado" };
   }
 
   if (actionType === "TOMAR_CHAT") {
     session.humanMode = true;
+    session.humanModeManual = true; // Manual — no se libera automáticamente
+    session.humanModeAt = Date.now();
+    session.humanModeLastActivity = Date.now();
     saveDataToDisk();
-    console.log(`👤 Chat tomado por humano: ${clientWaId}`);
+    console.log(`👤 Chat tomado manualmente: ${clientWaId}`);
     io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: true });
-    // Enviar datos de sesión actualizados para pre-llenar el modal de resumen
     emitSessionUpdate(normalizePhone(clientWaId), session);
     return { success: true, message: "Chat tomado. Bot pausado para este cliente." };
   }
 
   if (actionType === "LIBERAR_CHAT") {
     session.humanMode = false;
+    session.humanModeManual = false;
+    session.humanModeAt = null;
+    session.humanModeLastActivity = null;
     saveDataToDisk();
-    console.log(`🤖 Chat liberado al bot: ${clientWaId}`);
+    console.log(`🤖 Chat liberado manualmente al bot: ${clientWaId}`);
     io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: false });
     return { success: true, message: "Chat liberado. Bot retoma el control." };
   }
@@ -2855,7 +2884,7 @@ io.on("connection", (socket) => {
       // Serializar sesiones activas con datos relevantes para el resumen
       const activeSessions = {};
       for (const [wId, s] of sessions.entries()) {
-        if (s.producto || s.precio || s.talla_color || s.shipping_cost || s.envio_datos_raw) {
+        if (s.producto || s.precio || s.talla_color || s.shipping_cost || s.envio_datos_raw || s.humanMode) {
           activeSessions[wId] = {
             producto: s.producto || null,
             precio: s.precio || null,
@@ -2863,7 +2892,11 @@ io.on("connection", (socket) => {
             shipping_cost: s.shipping_cost || null,
             envio_datos_raw: s.envio_datos_raw || null,
             delivery_method: s.delivery_method || null,
-            client_zone: s.client_zone || null
+            client_zone: s.client_zone || null,
+            humanMode: s.humanMode || false,
+            humanModeManual: s.humanModeManual || false,
+            humanModeAt: s.humanModeAt || null,
+            humanModeLastActivity: s.humanModeLastActivity || null
           };
         }
       }
