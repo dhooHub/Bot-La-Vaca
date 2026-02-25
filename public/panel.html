@@ -530,7 +530,10 @@
   <!-- Quick Replies Manager Modal -->
   <div class="qr-modal-overlay" id="qrManagerOverlay">
     <div class="qr-modal-box">
-      <div class="qr-modal-title">⚡ Respuestas Rápidas</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="qr-modal-title" style="margin:0;">⚡ Respuestas Rápidas</div>
+        <button onclick="closeQrManager()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#667781;line-height:1;padding:2px 6px;">✕</button>
+      </div>
       <p class="qr-modal-sub">Escribí un código corto (ej: <strong>envio</strong>) y el mensaje completo que se enviará al cliente.</p>
       <div id="qrItemsList"></div>
       <button class="qr-add-btn" onclick="addQrItem()">+ Agregar respuesta</button>
