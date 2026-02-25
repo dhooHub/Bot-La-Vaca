@@ -566,6 +566,9 @@ if (!location.search.includes('v=')) {
     let allSales = [];
     let chats = {}, pending = {}, contacts = {};
     let humanModeChats = new Set(); // Chats en modo humano
+    // Timestamps de último mensaje visto por chat (persiste en localStorage)
+    let readTimestamps = JSON.parse(localStorage.getItem('ticobot_read') || '{}');
+    function saveReadTimestamps() { localStorage.setItem('ticobot_read', JSON.stringify(readTimestamps)); }
     let humanModeData = {}; // { waId: { manual, humanModeAt, humanModeLastActivity } }
     let activeSessions = {}; // Datos de sesión activa por waId
     let notificationsEnabled = false;
@@ -1221,12 +1224,17 @@ if (!location.search.includes('v=')) {
           chats[m.waId].messages.push(m);
         });
         // Calcular no leídos: mensajes entrantes desde el último mensaje saliente
+        // Respetando readTimestamps (chats ya vistos)
         Object.keys(chats).forEach(waId => {
           const msgs = chats[waId].messages;
+          const lastRead = readTimestamps[waId];
           let count = 0;
           for (let i = msgs.length - 1; i >= 0; i--) {
-            if (msgs[i].direction === 'out') break;
-            if (msgs[i].direction === 'in') count++;
+            const msg = msgs[i];
+            // Si hay timestamp guardado y este mensaje es anterior o igual → ya fue visto
+            if (lastRead && (msg.timestamp || msg.created_at) <= lastRead) break;
+            if (msg.direction === 'out') break;
+            if (msg.direction === 'in') count++;
           }
           chats[waId].unread_count = count;
         });
@@ -1532,8 +1540,16 @@ if (!location.search.includes('v=')) {
     }, 60 * 1000);
    function openChat(waId) {
   currentChat = waId;
-  // Resetear no leídos al abrir
-  if (chats[waId]) chats[waId].unread_count = 0;
+  // Resetear no leídos al abrir y guardar timestamp
+  if (chats[waId]) {
+    chats[waId].unread_count = 0;
+    const msgs = chats[waId].messages;
+    if (msgs.length > 0) {
+      const lastMsg = msgs[msgs.length - 1];
+      readTimestamps[waId] = lastMsg.timestamp || lastMsg.created_at || new Date().toISOString();
+      saveReadTimestamps();
+    }
+  }
   renderChatList();
   renderChat();
   
