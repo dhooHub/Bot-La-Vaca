@@ -1014,11 +1014,11 @@ async function sendPushoverAlert(tipo, datos) {
     let message = "";
     
     if (tipo === "PRODUCTO_FOTO") {
-      title = "📷 Nueva consulta - Foto";
-      message = `👕 ${datos.talla_color || "Sin especificar"}\n👤 ${phoneFormatted}`;
+      title = "📷 Cliente interesado - Foto";
+      message = `👤 ${phoneFormatted}\n👕 ${datos.talla_color || "Sin especificar"}\n\n💬 Respondé directo en el panel`;
     } else if (tipo === "PRODUCTO_CATALOGO") {
-      title = "📦 Nueva consulta - Catálogo";
-      message = `📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "-"}\n👤 ${phoneFormatted}`;
+      title = "🛍️ Cliente interesado";
+      message = `👤 ${phoneFormatted}\n📦 ${datos.producto || "Producto"}\n💰 ₡${(datos.precio || 0).toLocaleString()}\n👕 ${datos.talla_color || "-"}\n\n💬 Respondé directo en el panel`;
     } else if (tipo === "SINPE") {
       title = "💰 CLIENTE PAGÓ - REVISAR";
       const ses = sessions.get(normalizePhone(datos.waId || phone)) || {};
@@ -1116,6 +1116,9 @@ function addPendingQuote(session) {
   const profile=getProfile(session.waId);
   const quote = { waId:session.waId, phone:profile.phone||session.waId, name:profile.name||"", lid:profile.lid||null, producto:session.producto, precio:session.precio, codigo:session.codigo, foto_url:session.foto_url, talla_color:session.talla_color, producto_url:session.producto_url||null, created_at:new Date().toISOString() };
   pendingQuotes.set(session.waId,quote); io.emit("new_pending",quote);
+  // Pasar directo a humano — empleado responde sin confirmar stock
+  session.humanMode = true;
+  io.emit("human_mode_changed", { waId: normalizePhone(session.waId), humanMode: true });
   // Actualizar sesión en panel para pre-llenar resumen
   io.emit("session_updated", { waId: session.waId, producto: session.producto, precio: session.precio, talla_color: session.talla_color, shipping_cost: session.shipping_cost || null, envio_datos_raw: session.envio_datos_raw || null, delivery_method: session.delivery_method || null, client_zone: session.client_zone || null });
   // Enviar notificación
@@ -1666,10 +1669,9 @@ async function handleIncomingMessage(msg) {
           
           saveDataToDisk();
           
-          await sendTextWithTyping(waId, 
-            `¡Hola! Pura vida 🙌\n\n` +
-            `Perfecto, déjame revisar si tenemos disponible. Un momento... 👕`
-          );
+          // humanMode ya activado en addPendingQuote
+          session.humanMode = true;
+          io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
           return;
         } else {
           // CASO 1 y 2: Foto sola o Foto + texto sin detalles → Preguntar
@@ -1720,10 +1722,10 @@ async function handleIncomingMessage(msg) {
     console.log(`📷 *** EMITIDO! ***`);
     // Enviar notificación
     sendPushoverAlert("PRODUCTO_FOTO", quote);
-    
+    // Pasar directo a humano
+    session.humanMode = true;
+    io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
     saveDataToDisk();
-    
-    await sendTextWithTyping(waId, frase("revisando", waId));
     return;
   }
 
@@ -1823,7 +1825,6 @@ async function handleIncomingMessage(msg) {
     if(detalles.length>0)resumenProducto+=`\n👕 ${detalles.join(", ")}`;
     if(detalles.length>0){
       session.talla_color=detalles.join(", "); session.state="ESPERANDO_CONFIRMACION_VENDEDOR";
-      await sendTextWithTyping(waId,`${frase("saludo_interes",waId)}\n\n${resumenProducto}`);
       addPendingQuote(session); return;
     }
     session.state="ESPERANDO_TALLA";
@@ -2140,10 +2141,10 @@ async function handleIncomingMessage(msg) {
 
   if(session.state==="ESPERANDO_TALLA"){
     session.talla_color=text.trim(); session.state="ESPERANDO_CONFIRMACION_VENDEDOR";
-    await sendTextWithTyping(waId,frase("revisando",waId)); addPendingQuote(session); return;
+    addPendingQuote(session); return;
   }
 
-  if(session.state==="ESPERANDO_CONFIRMACION_VENDEDOR"){await sendTextWithTyping(waId,frase("espera_vendedor",waId));return;}
+  if(session.state==="ESPERANDO_CONFIRMACION_VENDEDOR"){return;} // empleado responde directo
 
   // ====== MULTI: Esperando a que dueño confirme disponibilidad ======
   if(session.state==="MULTI_ESPERANDO_DISPONIBILIDAD"){
