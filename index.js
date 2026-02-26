@@ -311,7 +311,7 @@ async function loadCatalog() {
 
 
 // ============ BUSCAR PRECIOS EN CATÁLOGO POR TIPO DE PRODUCTO ============
-function buscarPreciosPorTipo(query) {
+function buscarPreciosPorTipo(query, rootFiltro = null) {
   const lower = fixTypos(query).toLowerCase();
   
   // Mapeo de palabras a subcategorías del catálogo
@@ -340,7 +340,23 @@ function buscarPreciosPorTipo(query) {
   };
   
   // Palabras clave de estilo/descripción que se buscan en el nombre del producto
-  const estilos = ['plus', 'skinny', 'recto', 'campana', 'ancho', 'slim', 'straight', 'tejida', 'tejido', 'crop', 'largo', 'corto', 'corta', 'manga larga', 'manga corta'];
+  // Descriptores ordenados de más específico a menos
+  const estilos = [
+    // Estilos compuestos primero
+    'pretina ancha', 'tiro alto', 'tiro bajo', 'tiro medio', 'manga larga', 'manga corta',
+    'azul oscuro', 'azul claro', 'verde oscuro', 'verde claro',
+    // Estilos de corte/fit
+    'pretina', 'plus', 'skinny', 'recto', 'campana', 'ancho', 'slim', 'straight',
+    'tejida', 'tejido', 'crop', 'palazzo', 'culotte', 'mom', 'wide', 'barrel', 'boyfriend',
+    // Acabados
+    'rasgado', 'bordado', 'floreado', 'estampado', 'liso', 'elastizado', 'bolsillo',
+    'largo', 'corta', 'corto',
+    // Colores
+    'negro', 'negra', 'blanco', 'blanca', 'azul', 'rojo', 'roja', 'verde',
+    'amarillo', 'amarilla', 'rosado', 'rosada', 'rosa', 'morado', 'morada',
+    'gris', 'beige', 'cafe', 'naranja', 'celeste', 'lila', 'fucsia',
+    'coral', 'vino', 'crema', 'dorado', 'plateado', 'turquesa'
+  ];
   
   // Buscar qué categoría menciona
   let categoriaId = null;
@@ -356,6 +372,11 @@ function buscarPreciosPorTipo(query) {
   if (!categoriaId) return null;
   
   // FILTRO 1: Por categoría (subcategoría)
+  // Nota: el catálogo online solo tiene productos para damas.
+  // Si se pide otro género, se retorna encontrados=0 para derivar a humano.
+  if (rootFiltro && rootFiltro !== 'damas') {
+    return { categoria: categoriaId, rootCategoria: rootFiltro, display: categoriaId, encontrados: 0, rootSolicitado: rootFiltro };
+  }
   const todosCategoria = catalogProducts.filter(p => 
     p.categoria && p.categoria.toLowerCase() === categoriaId && !p.agotado
   );
@@ -421,7 +442,7 @@ function buscarPreciosPorTipo(query) {
   const maxDescuento = conDescuento.length > 0 ? Math.max(...conDescuento.map(p => p.descuento)) : 0;
   
   // Root para el link
-  const rootId = mapeoRoot[categoriaId] || 'damas';
+  const rootId = rootOverride || mapeoRoot[categoriaId] || 'damas';
   
   // Construir display descriptivo
   let displayFinal = categoriaDisplay;
@@ -1926,112 +1947,247 @@ async function handleIncomingMessage(msg) {
       `Dame un momento que te paso con un compañer@ para ayudarte.`
     );
     session.humanMode = true;
-    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
-    io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
+  // ✅ Detectar preguntas por tipo de producto (precio, disponibilidad, estilo, descripción)
+  // ====== BÚSQUEDA POR TIPO DE PRODUCTO ======
+  // Detectar si menciona alguna categoría de producto
+  const regexProducto = /jeans?|pantalon(?:es)?|short(?:s)?|chaqueta(?:s)?|jacket(?:s)?|blusa(?:s)?|vestido(?:s)?|falda(?:s)?|camisa(?:s)?|camiseta(?:s)?|sueter|sweater|saco(?:s)?|accesorio(?:s)?|conjunto(?:s)?|ropa/i;
+  const _matchProducto = regexProducto.test(lower);
+  const _matchPrecio = /(?:qu[ée]|cu[aá]nto|precio|valen?|cuestan?).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?)/i.test(lower);
+  const _matchPrecio2 = /(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?).*(?:qu[ée]|precio|valen?|cuestan?)/i.test(lower);
+  const _matchDisp = /(?:tienen|hay|venden|manejan|ofrecen|busco|quiero|necesito).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|camisas?|camisetas?)/i.test(lower);
+  const COLORES_REGEX = /negro|negra|blanco|blanca|azul|rojo|roja|verde|amarill[ao]|rosad[ao]|\brosa\b|morad[ao]|gris|beige|caf[eé]|naranja|celeste|lila|fucsia|coral|vino|crema|dorad[ao]|platead[ao]|turquesa/i;
+  const _matchEstilo = (/(?:plus|skinny|recto|campana|ancho|slim|straight|tejida?|crop|pretina|elasticada|rasgad|boyfriend|mom|wide|palazzo|tiro|manga|\d{1,2}\/\d{1,2})/.test(lower) || COLORES_REGEX.test(lower)) && _matchProducto;
+
+  console.log(`🔍 CATEGORIA-CHECK: lower="${lower}" state="${session.state}" prod=${_matchProducto} disp=${_matchDisp} estilo=${_matchEstilo}`);
+
+  if ((_matchProducto || _matchPrecio || _matchPrecio2 || _matchDisp || _matchEstilo) &&
+      (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || session.state === "ESPERANDO_RESPUESTA_CATALOGO")) {
+
+    await loadCatalog();
+
+    // ── Detectar género mencionado ──
+    const mencionaDama   = /\b(dama|damas|mujer|mujeres|femenino|ella|ellas)\b/i.test(lower);
+    const mencionaCabal  = /\b(caballero|caballeros|hombre|hombres|masculino|él|el|varón|varon)\b/i.test(lower);
+    const mencionaNino   = /\b(ni[ñn][oa]|ni[ñn]os|ni[ñn]as|infantil|niñez)\b/i.test(lower);
+    const generoEspecificado = mencionaDama || mencionaCabal || mencionaNino;
+
+    // ── Mapeo categoría → géneros posibles ──
+    // Si la categoría puede ser para más de un género, preguntar siempre
+    const mapeoGeneros = {
+      'jeans':      ['damas', 'caballeros', 'ninos'],
+      'pantalones': ['damas', 'caballeros', 'ninos'],
+      'shorts':     ['damas', 'caballeros', 'ninos'],
+      'chaquetas':  ['damas', 'caballeros', 'ninos'],
+      'camisas':    ['damas', 'caballeros', 'ninos'],
+      'camisetas':  ['damas', 'caballeros', 'ninos'],
+      'blusas':     ['damas', 'ninas'],
+      'vestidos':   ['damas', 'ninas'],
+      'faldas':     ['damas', 'ninas'],
+      'conjuntos':  ['damas', 'ninas'],
+      'accesorios': ['damas'],
+    };
+
+    // ── Detectar categoría del mensaje ──
+    const mapeoCategoria = {
+      'jean': 'jeans', 'jeans': 'jeans',
+      'pantalon': 'pantalones', 'pantalones': 'pantalones',
+      'short': 'shorts', 'shorts': 'shorts',
+      'chaqueta': 'chaquetas', 'chaquetas': 'chaquetas',
+      'jacket': 'chaquetas', 'jackets': 'chaquetas',
+      'blusa': 'blusas', 'blusas': 'blusas',
+      'vestido': 'vestidos', 'vestidos': 'vestidos',
+      'falda': 'faldas', 'faldas': 'faldas',
+      'camisa': 'camisas', 'camisas': 'camisas',
+      'camiseta': 'camisetas', 'camisetas': 'camisetas',
+      'sueter': 'chaquetas', 'sweater': 'chaquetas', 'saco': 'chaquetas',
+      'conjunto': 'conjuntos', 'conjuntos': 'conjuntos',
+      'accesorio': 'accesorios', 'accesorios': 'accesorios',
+    };
+
+    let categoriaDetectada = null;
+    for (const [palabra, cat] of Object.entries(mapeoCategoria)) {
+      if (lower.includes(palabra)) { categoriaDetectada = cat; break; }
+    }
+
+    // ── Determinar root según género ──
+    function getRootByGenero(cat, genero) {
+      if (genero === 'damas')     return 'damas';
+      if (genero === 'caballeros') return 'caballeros';
+      if (genero === 'ninos')     return 'ninos';
+      return 'damas'; // fallback
+    }
+
+    const saludo = /hola|buenas|buenos|hey/i.test(lower) ? '¡Hola! Pura vida 🙌\n\n' : '';
+
+    // ── Si no especificó género y la categoría tiene múltiples géneros → PREGUNTAR ──
+    const generosPosCat = categoriaDetectada ? (mapeoGeneros[categoriaDetectada] || ['damas']) : ['damas'];
+    const debePreguntar = !generoEspecificado && generosPosCat.length > 1 && session.state !== "ESPERANDO_RESPUESTA_CATALOGO";
+
+    if (debePreguntar) {
+      // Construir pregunta según géneros posibles
+      let opcionesGenero = generosPosCat.map(g => {
+        if (g === 'damas') return 'damas';
+        if (g === 'caballeros') return 'caballeros';
+        if (g === 'ninos') return 'niños/niñas';
+      }).join(', ');
+      // Quitar última coma y poner "o"
+      const partes = generosPosCat.map(g => g === 'ninos' ? 'niños/niñas' : g);
+      const preguntaGenero = partes.length === 2 
+        ? `${partes[0]} o ${partes[1]}`
+        : `${partes.slice(0,-1).join(', ')} o ${partes[partes.length-1]}`;
+
+      await sendTextWithTyping(waId,
+        `${saludo}¡Claro que tenemos ${categoriaDetectada || 'eso'}! 😊\n\n¿Buscás para ${preguntaGenero}?`
+      );
+      session.saludo_enviado = true;
+      session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+      session.ultimaCategoriaBuscada = categoriaDetectada;
+      session.generosPosCat = generosPosCat;
+      saveDataToDisk();
+      return;
+    }
+
+    // ── Determinar root final ──
+    let rootFinal = 'damas';
+    if (mencionaCabal) rootFinal = 'caballeros';
+    else if (mencionaNino) rootFinal = 'ninos';
+    else if (session.state === "ESPERANDO_RESPUESTA_CATALOGO" && session.ultimaCategoriaBuscada) {
+      // Respuesta al género preguntado
+      if (/\b(dama|damas|mujer|mujeres|femenino|para\s*ella)\b/i.test(lower)) rootFinal = 'damas';
+      else if (/\b(caballero|hombre|masculino|para\s*él|para\s*el)\b/i.test(lower)) rootFinal = 'caballeros';
+      else if (/\b(ni[ñn][oa]|niños|infantil)\b/i.test(lower)) rootFinal = 'ninos';
+      categoriaDetectada = categoriaDetectada || session.ultimaCategoriaBuscada;
+    }
+
+    if (!categoriaDetectada) {
+      // No detectamos categoría → IA
+      const aiResp = await askAI(text);
+      if (aiResp) { await sendTextWithTyping(waId, aiResp); }
+      return;
+    }
+
+    const resultado = buscarPreciosPorTipo(text, rootFinal);
+
+    // ── Sin productos en catálogo online → mensaje contextual + humano ──
+    if (!resultado || resultado.encontrados === 0) {
+      session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+      const quote = {
+        waId, phone: profile.phone || waId, name: profile.name || "",
+        producto: `❓ Busca: ${categoriaDetectada} para ${rootFinal} — ${text.trim()}`,
+        precio: null, codigo: null, foto_url: null, talla_color: null,
+        consulta_producto: true, created_at: new Date().toISOString()
+      };
+      pendingQuotes.set(waId, quote);
+      io.emit("new_pending", quote);
+      sendPushoverAlert("PRODUCTO_CATALOGO", quote);
+
+      // No hay en catálogo → avisar y pasar a humano
+      await sendTextWithTyping(waId, `Dame un momento, ya te ayudo 🙌`);
+      session.humanMode = true;
+      io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
+      return;
+    }
+
+    const linkBase = `${CATALOG_URL}/catalogo.html?root=${rootFinal}&cat=${resultado.categoria}`;
+
+    // ── Buscar descripción específica en nombres ──
+    const stopWords = /^(hola|tienen|hay|jean|jeans|blusa|blusas|vestido|vestidos|falda|faldas|pantalon|pantalones|short|shorts|chaqueta|para|dama|mujer|caballero|hombre|nino|niño|quiero|busco|me|interesa|de|que|con|los|las|un|una|si|no|y|o|también|tambien|a|es)$/i;
+    const palabrasClave = lower.replace(/[¿?!¡]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.test(w));
+    const especificacion = resultado.estiloDetectado;
+
+    let productosConMatch = [];
+    if (especificacion) {
+      productosConMatch = resultado.productos.filter(p => p.nombre.toLowerCase().includes(especificacion.toLowerCase()));
+    }
+    if (productosConMatch.length === 0 && palabrasClave.length > 0) {
+      productosConMatch = resultado.productos.filter(p =>
+        palabrasClave.some(w => p.nombre.toLowerCase().includes(w))
+      );
+    }
+
+    const descripcionBuscada = especificacion || palabrasClave.filter(w => !/^\d/.test(w) && w.length > 3).join(' ');
+    const hayMatch = productosConMatch.length > 0;
+
+    if (descripcionBuscada && hayMatch) {
+      const precios = productosConMatch.map(p => p.descuento > 0 ? Math.round(p.precio * (1-p.descuento/100)) : p.precio);
+      const minP = Math.min(...precios), maxP = Math.max(...precios);
+      const conDesc = productosConMatch.filter(p => p.descuento > 0);
+      let msg = `${saludo}¡Sí! Tenemos ${resultado.categoria} con ${descripcionBuscada} 🎉\n\n`;
+      msg += minP === maxP ? `💰 ₡${minP.toLocaleString()}\n\n` : `💰 Desde ₡${minP.toLocaleString()} hasta ₡${maxP.toLocaleString()}\n\n`;
+      if (conDesc.length > 0) msg += `🔥 ${conDesc.length > 1 ? 'Varios' : 'Uno'} con descuento hasta ${Math.max(...conDesc.map(p=>p.descuento))}% OFF\n\n`;
+      msg += `Revisalos acá 👇\n${linkBase}`;
+      await sendTextWithTyping(waId, msg);
+    } else if (descripcionBuscada && !hayMatch) {
+      let msg = `${saludo}¡Tenemos ${resultado.categoria}! 😊 Desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()}.\n\n`;
+      msg += `No estoy seguro si tenemos con ${descripcionBuscada}, pero podés revisar todos los estilos disponibles acá 👇\n${linkBase}`;
+      await sendTextWithTyping(waId, msg);
+    } else {
+      let msg = `${saludo}¡Claro! Tenemos ${resultado.display || resultado.categoria} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
+      if (resultado.conDescuento > 0) msg += `\n\n🔥 Varias opciones con descuento, hasta ${resultado.maxDescuento}% OFF`;
+      msg += `\n\nRevisalos acá 👇\n${linkBase}`;
+      await sendTextWithTyping(waId, msg);
+    }
+
+    session.ultimaCategoriaBuscada = resultado.categoria;
+    session.saludo_enviado = true;
+    session.state = "ESPERANDO_RESPUESTA_CATALOGO";
     saveDataToDisk();
     return;
   }
 
-  
-  // ✅ Detectar preguntas por PRECIO o DISPONIBILIDAD de tipo de producto (sin foto)
-  const preguntaPrecio = /(?:qu[ée]|cu[aá]l|cu[aá]nto|precio|valen?|cuestan?|cuesta).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)/i;
-  const preguntaPrecio2 = /(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:qu[ée]|precio|valen?|cuestan?)/i;
-  const preguntaDisponibilidad = /(?:tienen|hay|venden|manejan|ofrecen).*(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?)|(?:jeans?|blusas?|vestidos?|faldas?|pantalon(?:es)?|shorts?|chaquetas?|sueter|sweater|sacos?|accesorios?).*(?:para\s*(?:mujer|dama|mujeres|damas))/i;
-  // Detectar preguntas con estilo o talla: "talla plus tiene", "jeans skinny", "jean 5/6", "plus tienen"
-  const preguntaEstiloTalla = /(?:talla\s*)?(?:plus|skinny|recto|campana|ancho|slim|tejida|crop|manga\s*larga|manga\s*corta|\d{1,2}\/\d{1,2}).*(?:tienen|tiene|hay|venden|manejan)|(?:jeans?|blusas?|vestidos?|faldas?).*(?:plus|skinny|recto|campana|ancho|slim|tejida|crop|\d{1,2}\/\d{1,2})|(?:jeans?|blusas?|vestidos?|faldas?)\s+(?:talla\s*)?\d{1,2}\/\d{1,2}/i;
-  
-  // 🔍 DEBUG: Ver si los regex matchean
-  const _matchPrecio = preguntaPrecio.test(lower);
-  const _matchPrecio2 = preguntaPrecio2.test(lower);
-  const _matchDisp = preguntaDisponibilidad.test(lower);
-  const _matchEstilo = preguntaEstiloTalla.test(lower);
-  console.log(`🔍 CATEGORIA-CHECK: lower="${lower}" state="${session.state}" matchPrecio=${_matchPrecio} matchPrecio2=${_matchPrecio2} matchDisp=${_matchDisp} matchEstilo=${_matchEstilo}`);
-  
-  if ((_matchPrecio || _matchPrecio2 || _matchDisp || _matchEstilo) && (session.state === "NEW" || session.state === "PREGUNTANDO_ALGO_MAS" || session.state === "ESPERANDO_RESPUESTA_CATALOGO")) {
-    const resultado = buscarPreciosPorTipo(text);
-    console.log(`🔍 CATEGORIA-RESULTADO: ${JSON.stringify(resultado ? {cat: resultado.categoria, encontrados: resultado.encontrados, catalogSize: catalogProducts.length} : 'null')}`);
-    
-    if (resultado) {
-      session.ultimaCategoriaBuscada = resultado.categoria;
-      session.saludo_enviado = true;
-      saveDataToDisk();
-      
-      if (resultado.encontrados === 0) {
-        // No hay productos de esa categoría → pasar a compañer@ 
-        session.saludo_enviado = true;
+  // ✅ Capturar respuesta de género cuando bot preguntó ¿para damas/caballeros/niños?
+  if (session.state === "ESPERANDO_RESPUESTA_CATALOGO" && session.ultimaCategoriaBuscada && session.generosPosCat) {
+    const esRespDama   = /\b(dama|damas|mujer|mujeres|femenino|ella|ellas)\b/i.test(lower);
+    const esRespCabal  = /\b(caballero|caballeros|hombre|hombres|masculino|varon|varón)\b/i.test(lower);
+    const esRespNino   = /\b(ni[ñn][oa]|ni[ñn]os|ni[ñn]as|infantil|kids?)\b/i.test(lower);
+    const esRespGenero = esRespDama || esRespCabal || esRespNino;
+
+    if (esRespGenero) {
+      const catResp  = session.ultimaCategoriaBuscada;
+      const rootResp = esRespCabal ? 'caballeros' : esRespNino ? 'ninos' : 'damas';
+      const saludo   = /hola|buenas|buenos|hey/i.test(lower) ? '¡Hola! Pura vida 🙌\n\n' : '';
+
+      await loadCatalog();
+      const resultadoResp = buscarPreciosPorTipo(catResp, rootResp);
+
+      if (!resultadoResp || resultadoResp.encontrados === 0) {
+        // No hay en catálogo → avisar y pasar a humano
+        const labelGenero = rootResp === 'caballeros' ? 'caballeros' : rootResp === 'ninos' ? 'niños/niñas' : 'damas';
+        await sendTextWithTyping(waId,
+          `Dame un momento, ya te ayudo 🙌`
+        );
         session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
-        saveDataToDisk();
-        
+        session.humanMode = true;
+        session.generosPosCat = null;
         const quote = {
-          waId,
-          phone: profile.phone || waId,
-          name: profile.name || "",
-          producto: `❓ Busca: ${resultado.display || text.trim()}`,
-          precio: null,
-          codigo: null,
-          foto_url: null,
-          talla_color: null,
-          consulta_producto: true,
-          created_at: new Date().toISOString()
+          waId, phone: profile.phone || waId, name: profile.name || "",
+          producto: `❓ Busca: ${catResp} para ${labelGenero}`,
+          precio: null, codigo: null, foto_url: null, talla_color: null,
+          consulta_producto: true, created_at: new Date().toISOString()
         };
         pendingQuotes.set(waId, quote);
         io.emit("new_pending", quote);
         sendPushoverAlert("PRODUCTO_CATALOGO", quote);
-        
-        await sendTextWithTyping(waId,
-          `¡Hola! Pura vida 🙌 Dame un momento, te paso con un compañer@ y ya te respondemos 😊`
-        );
-        return;
-      }
-      
-      let linkCatalogo = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
-      if (resultado.tallaDetectada && resultado.tallaDisponible) {
-        linkCatalogo += `&talla=${encodeURIComponent(resultado.tallaDetectada)}`;
-      }
-      
-      // Caso especial: pidió estilo o talla y NO hay disponible
-      if (resultado.tallaDetectada && !resultado.tallaDisponible) {
-        let msgNoTalla = `No tenemos ${resultado.display} en talla ${resultado.tallaDetectada} disponible en este momento 😔`;
-        msgNoTalla += `\n\nPero podés revisar todos los ${resultado.display} disponibles acá 👇\n${linkCatalogo}`;
-        await sendTextWithTyping(waId, msgNoTalla);
-        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+        io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
         saveDataToDisk();
         return;
       }
-      
-      if (resultado.encontrados === 1) {
-        // Solo 1 producto - mostrar directo con link
-        const p = resultado.productos[0];
-        const precioFinal = p.descuento > 0 ? Math.round(p.precio * (1 - p.descuento / 100)) : p.precio;
-        const descuentoText = p.descuento > 0 ? ` (${p.descuento}% OFF)` : '';
-        let msg1 = `¡Sí! Tenemos ${p.nombre} a ₡${precioFinal.toLocaleString()}${descuentoText} 👕`;
-        msg1 += `\n\nRevisalo acá 👇\n${linkCatalogo}`;
-        await sendTextWithTyping(waId, msg1);
-        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
-      } else {
-        // Múltiples productos - mostrar rango y link
-        let mensaje = `¡Claro! Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
-        
-        if (resultado.tallaDetectada) {
-          mensaje = `¡Sí! Tenemos ${resultado.display} en talla ${resultado.tallaDetectada}, varios estilos disponibles 🛍️`;
-        }
-        
-        if (resultado.conDescuento > 0) {
-          mensaje += `\n\n🔥 Además tenemos varias opciones de ${resultado.display} con descuento, hasta ${resultado.maxDescuento}% OFF`;
-        }
-        
-        mensaje += `\n\nRevisalas acá 👇\n${linkCatalogo}`;
-        
-        await sendTextWithTyping(waId, mensaje);
-        session.state = "ESPERANDO_RESPUESTA_CATALOGO";
-      }
+
+      const linkResp = `${CATALOG_URL}/catalogo.html?root=${rootResp}&cat=${resultadoResp.categoria}`;
+      let msg = `¡Claro! Tenemos ${catResp} desde ₡${resultadoResp.minPrecio.toLocaleString()} hasta ₡${resultadoResp.maxPrecio.toLocaleString()} 🛍️`;
+      if (resultadoResp.conDescuento > 0) msg += `\n\n🔥 Varias opciones con descuento, hasta ${resultadoResp.maxDescuento}% OFF`;
+      msg += `\n\nRevisalos acá 👇\n${linkResp}`;
+      await sendTextWithTyping(waId, msg);
+      session.ultimaCategoriaBuscada = catResp;
+      session.generosPosCat = null;
+      session.state = "ESPERANDO_RESPUESTA_CATALOGO";
+      session.saludo_enviado = true;
       saveDataToDisk();
       return;
     }
   }
-  
+
   // ✅ Detectar talla suelta con contexto de categoría anterior
-  // Ej: después de preguntar por jeans, escribe "y talla 5/6" o "5/6" o "y en M"
   if (session.ultimaCategoriaBuscada && (session.state === "ESPERANDO_RESPUESTA_CATALOGO" || session.state === "NEW")) {
     const regexTallaSuelta = /^(?:y\s+)?(?:talla\s+)?(\d{1,2}\/\d{1,2})\s*(?:tienen|hay|tiene)?$/i;
     const regexTallaLetraSuelta = /^(?:y\s+)?(?:talla\s+)?(?:en\s+)?\b(xxl|2xl|3xl|xl|xs|s|m|l)\b\s*(?:tienen|hay|tiene)?$/i;
