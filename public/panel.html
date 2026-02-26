@@ -292,6 +292,46 @@
     </div>
   </div>
 
+  <!-- Quick Replies Manager Modal -->
+  <div class="qr-modal-overlay" id="qrManagerOverlay">
+    <div class="qr-modal-box">
+      <div class="qr-modal-title">⚡ Respuestas Rápidas</div>
+      <p class="qr-modal-sub">Escribí un código corto (ej: <strong>envio</strong>) y el mensaje que se insertará.</p>
+      <div id="qrItemsList"></div>
+      <button class="qr-add-btn" onclick="addQrItem()">+ Agregar respuesta</button>
+      <button class="qr-save-btn" onclick="saveQuickReplies()">💾 Guardar</button>
+      <button onclick="closeQrManager()" style="width:100%;margin-top:0.5rem;padding:0.7rem;border:none;border-radius:10px;background:var(--bg);cursor:pointer;font-size:0.95rem;">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Emoji Picker -->
+  <div class="emoji-picker" id="emojiPicker">
+    <button class="emoji-btn-item" onclick="insertEmoji('😊')">😊</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🙌')">🙌</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('👍')">👍</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('❤️')">❤️</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🎉')">🎉</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('😔')">😔</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('✅')">✅</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('❌')">❌</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('📦')">📦</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🚚')">🚚</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('💳')">💳</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('📍')">📍</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🕐')">🕐</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('📷')">📷</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('💰')">💰</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🐄')">🐄</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('👗')">👗</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('👕')">👕</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🤗')">🤗</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('😅')">😅</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🙏')">🙏</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('💪')">💪</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('⭐')">⭐</button>
+    <button class="emoji-btn-item" onclick="insertEmoji('🌟')">🌟</button>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
@@ -315,6 +355,126 @@ if (!location.search.includes('v=')) {
     let notificationsEnabled = false;
     let swRegistration = null;
     let alertInterval = null; // Para repetir sonido
+
+    // ===== QUICK REPLIES =====
+    const DEFAULT_QUICK_REPLIES = [
+      { code: 'envio', text: 'Si hacemos envios a todo el pais por Correos de CR\n\nEl costo es:\n- GAM: 2,500\n- Fuera del GAM: 3,000\n\nEl envio demora aproximadamente 8 dias habiles' },
+      { code: 'datos', text: 'Para hacerte el envio necesito los siguientes datos\n\nNombre completo\nTelefono\nProvincia\nCanton\nDistrito\nOtras senas' },
+      { code: 'sinpe', text: 'El pago es por SINPE Movil\n\nNumero: XXXX-XXXX\nNombre: La Vaca CR\n\nUna vez que hagas el SINPE, mandame la foto del comprobante' },
+      { code: 'horario', text: 'Nuestro horario es:\nLunes a Sabado: 9am - 7pm\nDomingos: 10am - 6pm\n\nEstamos en Heredia centro' },
+      { code: 'gracias', text: 'Muchas gracias por tu compra! Fue un placer atenderte. Cualquier consulta, aqui estamos. Pura vida!' }
+    ];
+    let quickReplies = [];
+
+    function loadQuickReplies(serverQR) {
+      if (serverQR && serverQR.length > 0) {
+        quickReplies = serverQR;
+      } else {
+        try { quickReplies = JSON.parse(localStorage.getItem('ticobot_qr')) || DEFAULT_QUICK_REPLIES; }
+        catch(e) { quickReplies = DEFAULT_QUICK_REPLIES; }
+      }
+    }
+
+    function applyQuickReply(code) {
+      const qr = quickReplies.find(r => r.code === code);
+      if (!qr) return;
+      const preview = document.getElementById('qrPreview');
+      const previewText = document.getElementById('qrPreviewText');
+      if (preview && previewText) {
+        previewText.textContent = qr.text;
+        preview.classList.add('active');
+        preview.dataset.code = code;
+      }
+    }
+
+    function confirmQuickReply() {
+      const preview = document.getElementById('qrPreview');
+      if (!preview) return;
+      const qr = quickReplies.find(r => r.code === preview.dataset.code);
+      if (qr) {
+        const input = document.getElementById('chatInput');
+        if (input) { input.value = qr.text; input.focus(); }
+      }
+      preview.classList.remove('active');
+    }
+
+    function dismissQuickReply() {
+      const preview = document.getElementById('qrPreview');
+      if (preview) preview.classList.remove('active');
+    }
+
+    function renderQuickRepliesBar() {
+      const bar = document.getElementById('quickRepliesBar');
+      if (!bar) return;
+      bar.innerHTML = quickReplies.map(qr =>
+        '<button class="qr-chip" onclick="applyQuickReply(\'' + qr.code + '\')">&#x26A1; ' + qr.code + '</button>'
+      ).join('') + '<button class="qr-chip-manage" onclick="openQrManager()">&#x270F;&#xFE0F; editar</button>';
+    }
+
+    function openQrManager() {
+      renderQrManagerItems();
+      document.getElementById('qrManagerOverlay').classList.add('active');
+    }
+
+    function closeQrManager() {
+      document.getElementById('qrManagerOverlay').classList.remove('active');
+    }
+
+    function renderQrManagerItems() {
+      const list = document.getElementById('qrItemsList');
+      if (!list) return;
+      list.innerHTML = quickReplies.map((qr, i) =>
+        '<div class="qr-item">' +
+        '<input class="qr-item-code" type="text" value="' + qr.code + '" id="qrCode_' + i + '">' +
+        '<textarea class="qr-item-text" id="qrText_' + i + '">' + qr.text + '</textarea>' +
+        '<button class="qr-item-del" onclick="deleteQrItem(' + i + ')">&#x2715;</button>' +
+        '</div>'
+      ).join('');
+    }
+
+    function addQrItem() {
+      quickReplies.push({ code: 'nuevo', text: '' });
+      renderQrManagerItems();
+      const last = document.getElementById('qrCode_' + (quickReplies.length - 1));
+      if (last) { last.focus(); last.select(); }
+    }
+
+    function deleteQrItem(i) {
+      quickReplies.splice(i, 1);
+      renderQrManagerItems();
+    }
+
+    function saveQuickReplies() {
+      const saved = [];
+      for (let i = 0; i < quickReplies.length; i++) {
+        const code = (document.getElementById('qrCode_' + i) || {}).value || '';
+        const text = (document.getElementById('qrText_' + i) || {}).value || '';
+        if (code.trim() && text.trim()) saved.push({ code: code.trim().toLowerCase(), text: text.trim() });
+      }
+      quickReplies = saved;
+      try { localStorage.setItem('ticobot_qr', JSON.stringify(quickReplies)); } catch(e) {}
+      if (socket) socket.emit('save_quick_replies', { quickReplies });
+      closeQrManager();
+      renderQuickRepliesBar();
+      toast('Respuestas guardadas', 'success');
+    }
+
+    // ===== EMOJI =====
+    function toggleEmoji() {
+      const picker = document.getElementById('emojiPicker');
+      if (picker) picker.classList.toggle('active');
+    }
+
+    function insertEmoji(emoji) {
+      const input = document.getElementById('chatInput');
+      if (!input) return;
+      const pos = input.selectionStart !== undefined ? input.selectionStart : input.value.length;
+      input.value = input.value.slice(0, pos) + emoji + input.value.slice(pos);
+      input.focus();
+      input.selectionStart = input.selectionEnd = pos + emoji.length;
+      const picker = document.getElementById('emojiPicker');
+      if (picker) picker.classList.remove('active');
+    }
 
     const $ = id => document.getElementById(id);
     const $$ = sel => document.querySelectorAll(sel);
@@ -683,6 +843,7 @@ if (!location.search.includes('v=')) {
         if(data.sales) allSales = data.sales;
         // Human mode chats
         humanModeChats = new Set(data.humanModeChats || []);
+        loadQuickReplies(data.quickReplies || []);
         renderChatList();
         if (currentChat) renderChat();
         
@@ -930,7 +1091,14 @@ if (!location.search.includes('v=')) {
           ${isHuman ? `<div style="background:#fff3e0;border:2px solid #f39c12;border-radius:8px;padding:0.5rem 1rem;font-size:0.85rem;color:#e65100;text-align:center;margin-bottom:0.5rem;">👤 <strong>Modo humano</strong> — el bot no responde en este chat.</div>` : ''}
           ${renderMessages(chat)}
         </div>
+        <div id="quickRepliesBar" class="quick-replies-bar"></div>
+        <div class="qr-preview" id="qrPreview">
+          <span class="qr-preview-text" id="qrPreviewText"></span>
+          <button class="qr-preview-close" onclick="dismissQuickReply()" title="Descartar">✕</button>
+          <button onclick="confirmQuickReply()" style="background:var(--primary-light);color:#fff;border:none;border-radius:8px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.85rem;flex-shrink:0;">Usar ✓</button>
+        </div>
         <div class="chat-input-area">
+          <button class="emoji-toggle-btn" onclick="toggleEmoji()" style="width:38px;height:38px;border-radius:50%;background:var(--bg);border:none;font-size:1.3rem;cursor:pointer;flex-shrink:0;">😊</button>
           <input type="text" class="chat-input" id="chatInput" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual (no activa modo humano)...'}">
           <button class="chat-send-btn" onclick="sendMessage()">➤</button>
         </div>
@@ -938,6 +1106,9 @@ if (!location.search.includes('v=')) {
       
       // Enter to send
       $('chatInput').onkeypress = e => { if (e.key === 'Enter') sendMessage(); };
+      
+      // Quick replies bar
+      renderQuickRepliesBar();
       
       // Scroll to bottom
       const container = $('messagesContainer');
