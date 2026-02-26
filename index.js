@@ -27,20 +27,19 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS para permitir peticiones desde cualquier origen
+// CORS
 app.use((req, res, next) => {
+  const allowedOrigins = ['https://lavacacr.com', 'https://www.lavacacr.com', 'http://localhost:3000'];
   const origin = req.headers.origin;
-  if (origin) {
+  if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   } else {
     res.header('Access-Control-Allow-Origin', '*');
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Pwd, X-Admin-Token');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Pwd');
   res.header('Access-Control-Allow-Credentials', 'true');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 const server = http.createServer(app);
