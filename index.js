@@ -1948,6 +1948,11 @@ async function handleIncomingMessage(msg) {
       `Dame un momento que te paso con un compañer@ para ayudarte.`
     );
     session.humanMode = true;
+    io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
+    saveDataToDisk();
+    return;
+  }
+
   // ✅ Detectar preguntas por tipo de producto (precio, disponibilidad, estilo, descripción)
   // ====== BÚSQUEDA POR TIPO DE PRODUCTO ======
   // Detectar si menciona alguna categoría de producto
