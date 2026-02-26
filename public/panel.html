@@ -176,8 +176,9 @@
       .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
       .sidebar.hidden { display: none; }
       .chat-area { position: absolute; inset: 0; z-index: 20; display: none; overflow: hidden; }
-      .chat-area.active { display: flex; flex-direction: column; }
-      .messages-container { max-height: calc(100vh - 220px); }
+      .chat-area.active { display: flex; flex-direction: column; height: 100%; }
+      .messages-container { flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important; overflow-y: auto; }
+      .chat-input-area { flex-shrink: 0 !important; flex-grow: 0 !important; }
       .chat-header-back { display: block; }
       .main-container { position: relative; }
     }
