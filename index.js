@@ -1965,10 +1965,10 @@ async function handleIncomingMessage(msg) {
 
     await loadCatalog();
 
-    // ── Detectar género mencionado ──
-    const mencionaDama   = /\b(dama|damas|mujer|mujeres|femenino|ella|ellas)\b/i.test(lower);
-    const mencionaCabal  = /\b(caballero|caballeros|hombre|hombres|masculino|él|el|varón|varon)\b/i.test(lower);
-    const mencionaNino   = /\b(ni[ñn][oa]|ni[ñn]os|ni[ñn]as|infantil|niñez)\b/i.test(lower);
+    // ── Detectar género mencionado (singular, plural, variantes) ──
+    const mencionaDama  = /\b(dama|damas|mujer|mujeres|femenin[ao]|señora|señoras|chica|chicas|ella|ellas)\b/i.test(lower);
+    const mencionaCabal = /\b(caballero|caballeros|hombre|hombres|masculin[ao]|señor|señores|chico|chicos|varón|varon|varones|él|para\s*el\b)\b/i.test(lower);
+    const mencionaNino  = /\b(niño|niños|niña|niñas|nino|ninos|nina|ninas|adolescente|adolescentes|juvenil|juveniles|infantil|kids?|escolar)\b/i.test(lower);
     const generoEspecificado = mencionaDama || mencionaCabal || mencionaNino;
 
     // ── Mapeo categoría → géneros posibles ──
@@ -2036,12 +2036,16 @@ async function handleIncomingMessage(msg) {
         ? `${partes[0]} o ${partes[1]}`
         : `${partes.slice(0,-1).join(', ')} o ${partes[partes.length-1]}`;
 
+      // Guardar descripción/estilo para usarla después de la respuesta de género
+      const _estiloParaGuardar = lower.replace(/hola|buenas|buenos|hey|tienen|hay|busco|quiero|para|\?|¿|!/gi, '').replace(categoriaDetectada || '', '').trim();
+
       await sendTextWithTyping(waId,
         `${saludo}¡Claro que tenemos ${categoriaDetectada || 'eso'}! 😊\n\n¿Buscás para ${preguntaGenero}?`
       );
       session.saludo_enviado = true;
       session.state = "ESPERANDO_RESPUESTA_CATALOGO";
       session.ultimaCategoriaBuscada = categoriaDetectada;
+      session.ultimaDescripcionBuscada = _estiloParaGuardar || null;
       session.generosPosCat = generosPosCat;
       saveDataToDisk();
       return;
@@ -2137,9 +2141,9 @@ async function handleIncomingMessage(msg) {
 
   // ✅ Capturar respuesta de género cuando bot preguntó ¿para damas/caballeros/niños?
   if (session.state === "ESPERANDO_RESPUESTA_CATALOGO" && session.ultimaCategoriaBuscada && session.generosPosCat) {
-    const esRespDama   = /\b(dama|damas|mujer|mujeres|femenino|ella|ellas)\b/i.test(lower);
-    const esRespCabal  = /\b(caballero|caballeros|hombre|hombres|masculino|varon|varón)\b/i.test(lower);
-    const esRespNino   = /\b(ni[ñn][oa]|ni[ñn]os|ni[ñn]as|infantil|kids?)\b/i.test(lower);
+    const esRespDama   = /\b(dama|damas|mujer|mujeres|femenin[ao]|señora|señoras|chica|chicas|ella|ellas)\b/i.test(lower);
+    const esRespCabal  = /\b(caballero|caballeros|hombre|hombres|masculin[ao]|señor|señores|chico|chicos|varón|varon|varones)\b/i.test(lower);
+    const esRespNino   = /\b(niño|niños|niña|niñas|nino|ninos|nina|ninas|adolescente|adolescentes|juvenil|infantil|kids?|escolar)\b/i.test(lower);
     const esRespGenero = esRespDama || esRespCabal || esRespNino;
 
     if (esRespGenero) {
@@ -2148,7 +2152,10 @@ async function handleIncomingMessage(msg) {
       const saludo   = /hola|buenas|buenos|hey/i.test(lower) ? '¡Hola! Pura vida 🙌\n\n' : '';
 
       await loadCatalog();
-      const resultadoResp = buscarPreciosPorTipo(catResp, rootResp);
+      // Incluir descripción guardada si existe (ej: "campana", "negro", "pretina ancha")
+      const descGuardada = session.ultimaDescripcionBuscada || '';
+      const queryResp = descGuardada ? `${catResp} ${descGuardada}` : catResp;
+      const resultadoResp = buscarPreciosPorTipo(queryResp, rootResp);
 
       if (!resultadoResp || resultadoResp.encontrados === 0) {
         // No hay en catálogo → avisar y pasar a humano
@@ -2179,6 +2186,7 @@ async function handleIncomingMessage(msg) {
       msg += `\n\nRevisalos acá 👇\n${linkResp}`;
       await sendTextWithTyping(waId, msg);
       session.ultimaCategoriaBuscada = catResp;
+      session.ultimaDescripcionBuscada = null;
       session.generosPosCat = null;
       session.state = "ESPERANDO_RESPUESTA_CATALOGO";
       session.saludo_enviado = true;
