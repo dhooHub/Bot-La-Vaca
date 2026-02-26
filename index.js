@@ -1716,8 +1716,7 @@ async function handleIncomingMessage(msg) {
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
   // Detectar incluso si NO está en NEW (nueva consulta con foto)
-  console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}, text="${text}", lower="${lower}", humanMode=${session.humanMode}, blocked=${profile.blocked}, paused=${botPaused}`);
-  console.log(`🔍 DEBUG: isStoreOpen=${isStoreOpen()} CRhour=${getCostaRicaTime().hour}`);
+  console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}, humanMode=${session.humanMode}, blocked=${profile.blocked}, paused=${botPaused}`);
   if(hasImage){
     const webData = parseWebMessage(text);
     console.log(`🔍 webData: ${webData ? JSON.stringify(webData) : 'null'}`);
