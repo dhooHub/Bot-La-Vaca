@@ -346,6 +346,7 @@
   <button class="nav-tab" onclick="showTab('alertas',this)">🔔 Alertas</button>
   <button class="nav-tab" onclick="showTab('likes',this);loadLikesStats();">❤️ Likes</button>
   <button class="nav-tab" onclick="showTab('contactos',this);loadContactos();">👥 Contactos</button>
+  <button class="nav-tab" onclick="showTab('banner',this);loadBanner();">🪧 Banner Bot</button>
 </div>
 
 <div id="p-ventas" class="panel active">
@@ -424,6 +425,50 @@
     <div id="ctTop" style="font-size:.82rem;color:var(--muted);">Cargando...</div>
   </div>
   <div id="ctList">Cargando...</div>
+</div>
+
+<!-- Panel Banner Bot -->
+<div id="p-banner" class="panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div>
+      <div style="font-size:1.1rem;font-weight:700;">🪧 Banner del Bot</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px;">Mensaje automático al primer contacto de cada cliente</div>
+    </div>
+    <button onclick="loadBanner()" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:7px 14px;font-size:.8rem;cursor:pointer;">↻</button>
+  </div>
+
+  <div id="bannerStatus" style="margin-bottom:16px;padding:12px 16px;border-radius:10px;font-size:.85rem;font-weight:600;background:#f3f4f6;color:#6b7280;">
+    Cargando...
+  </div>
+
+  <div style="margin-bottom:14px;">
+    <label style="font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px;">Texto del banner</label>
+    <textarea id="bannerTexto" rows="5" placeholder="Ej: 🔥 ¡Liquidación de temporada! Hasta 50% OFF en jeans y blusas 🛍️" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:.88rem;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button onclick="saveBanner(true)" style="flex:1;min-width:120px;padding:11px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.85rem;">
+      ✅ Guardar y Activar
+    </button>
+    <button onclick="saveBanner(false)" style="flex:1;min-width:120px;padding:11px;background:#6b7280;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.85rem;">
+      💾 Guardar sin activar
+    </button>
+    <button onclick="toggleBanner()" id="btnToggleBanner" style="flex:1;min-width:120px;padding:11px;background:#f59e0b;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.85rem;">
+      ⏸️ Desactivar
+    </button>
+  </div>
+
+  <div id="bannerMsg" style="margin-top:10px;font-size:.82rem;min-height:18px;"></div>
+
+  <div style="margin-top:20px;padding:14px;background:#fff8e1;border-radius:10px;border:1px solid #ffe082;">
+    <div style="font-weight:700;font-size:.8rem;color:#b45309;margin-bottom:8px;">💡 Ideas</div>
+    <div style="font-size:.76rem;color:#92400e;display:flex;flex-direction:column;gap:4px;">
+      <div>🔥 "¡Liquidación! Hasta 50% OFF en jeans y blusas"</div>
+      <div>🎓 "¡Temporada escolar! Uniformes disponibles"</div>
+      <div>🆕 "¡Nueva colección llegó! Revisá el catálogo"</div>
+      <div>⏰ "Este feriado atendemos de 10am a 4pm"</div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Contacto -->
@@ -1147,6 +1192,71 @@ async function eliminarContacto(waId){
     if(d.success) loadContactos();
     else alert('Error: '+(d.error||''));
   } catch(e){ alert('Error de conexión'); }
+}
+
+// ── BANNER BOT ──
+let _bannerActivo = false;
+async function loadBanner() {
+  try {
+    const r = await fetch(`${BOT}/api/admin/banner?pwd=${PWD}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    _bannerActivo = data.banner?.activo || false;
+    $('bannerTexto').value = data.banner?.texto || '';
+    updateBannerUI();
+  } catch(e) { console.log('Error cargando banner', e); }
+}
+function updateBannerUI() {
+  const statusEl = $('bannerStatus');
+  const btnToggle = $('btnToggleBanner');
+  if (!statusEl) return;
+  if (_bannerActivo) {
+    statusEl.style.background = '#dcfce7'; statusEl.style.color = '#166534';
+    statusEl.textContent = '✅ Banner ACTIVO — Se envía al primer mensaje de cada cliente nuevo';
+    btnToggle.textContent = '⏸️ Desactivar'; btnToggle.style.background = '#ef4444';
+  } else {
+    statusEl.style.background = '#f3f4f6'; statusEl.style.color = '#6b7280';
+    statusEl.textContent = '⏸️ Banner INACTIVO — No se está enviando';
+    btnToggle.textContent = '▶️ Activar'; btnToggle.style.background = '#22c55e';
+  }
+}
+async function saveBanner(activar) {
+  const texto = $('bannerTexto').value.trim();
+  const msgEl = $('bannerMsg');
+  if (!texto) { msgEl.textContent = '⚠️ Escribí el texto del banner primero'; msgEl.style.color='#dc2626'; return; }
+  try {
+    const r = await fetch(`${BOT}/api/admin/banner?pwd=${PWD}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ texto, activo: activar })
+    });
+    const data = await r.json();
+    if (data.success) {
+      _bannerActivo = data.banner.activo;
+      updateBannerUI();
+      msgEl.textContent = activar ? '✅ Banner guardado y activado' : '💾 Banner guardado (inactivo)';
+      msgEl.style.color = activar ? '#166534' : '#6b7280';
+      setTimeout(() => { msgEl.textContent = ''; }, 3000);
+    }
+  } catch(e) { $('bannerMsg').textContent = '❌ Error al guardar'; }
+}
+async function toggleBanner() {
+  const nuevoEstado = !_bannerActivo;
+  const texto = $('bannerTexto').value.trim();
+  try {
+    const r = await fetch(`${BOT}/api/admin/banner?pwd=${PWD}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ activo: nuevoEstado, texto })
+    });
+    const data = await r.json();
+    if (data.success) {
+      _bannerActivo = data.banner.activo;
+      updateBannerUI();
+      const msgEl = $('bannerMsg');
+      msgEl.textContent = nuevoEstado ? '✅ Banner activado' : '⏸️ Banner desactivado';
+      msgEl.style.color = nuevoEstado ? '#166534' : '#6b7280';
+      setTimeout(() => { msgEl.textContent = ''; }, 3000);
+    }
+  } catch(e) {}
 }
 
 </script>
