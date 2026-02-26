@@ -98,10 +98,10 @@ const adminTokens = new Map(); // Tokens de sesión temporales
 const STORE_NAME = process.env.STORE_NAME || "La Vaca CR";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 // Horario tienda: Lun-Sáb 9am-7pm, Dom 10am-6pm
-const HOURS_WEEKDAY_START = 9;
-const HOURS_WEEKDAY_END = 19;   // 7pm
-const HOURS_SUNDAY_START = 10;
-const HOURS_SUNDAY_END = 18;    // 6pm
+const HOURS_WEEKDAY_START = 0;  // TEMP: siempre abierto para pruebas — cambiar a 9
+const HOURS_WEEKDAY_END = 24;   // TEMP: siempre abierto para pruebas — cambiar a 19
+const HOURS_SUNDAY_START = 0;   // TEMP: siempre abierto para pruebas — cambiar a 10
+const HOURS_SUNDAY_END = 24;    // TEMP: siempre abierto para pruebas — cambiar a 18
 const HOURS_DAY = "9am - 6:50pm";
 const DELAY_MIN = 5;
 const DELAY_MAX = 20;
@@ -637,7 +637,7 @@ Respondé SOLO con una palabra: RESPUESTA_FLUJO, FAQ, NUEVO_PRODUCTO, o OTRO.`;
 }
 
 async function askAI(userMessage, conversationHistory = []) {
-  if (!OPENAI_API_KEY) return null;
+  if (!OPENAI_API_KEY) { console.log("❌ askAI: OPENAI_API_KEY vacía"); return null; }
   try {
     const diaActual = getCostaRicaDayName();
     const {hour, minute} = getCostaRicaTime();
@@ -693,7 +693,7 @@ async function askAI(userMessage, conversationHistory = []) {
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_API_KEY}` },
       body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: 150, temperature: 0.7 })
     });
-    if (!response.ok) return null;
+    if (!response.ok) { console.log(`❌ OpenAI error: ${response.status} ${response.statusText}`); return null; }
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content?.trim();
     if (aiResponse) { console.log("🤖 IA respondió:", aiResponse.slice(0, 50) + "..."); account.metrics.ia_calls = (account.metrics.ia_calls || 0) + 1; }
@@ -1525,7 +1525,7 @@ async function handleIncomingMessageWithDebounce(msg) {
     try {
       await handleIncomingMessage(lastMsg);
     } catch(e) {
-      console.error("❌ Error procesando mensaje:", e.message);
+      console.log("❌ Error procesando mensaje:", e.message, e.stack?.split('\n').slice(0,3).join(' | '));
     }
     
     buffer.processing = false;
@@ -1716,7 +1716,8 @@ async function handleIncomingMessage(msg) {
 
   // ✅ FOTO DIRECTA (no del catálogo web) - Pedir detalles antes de pasar al dueño
   // Detectar incluso si NO está en NEW (nueva consulta con foto)
-  console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}`);
+  console.log(`🔍 Check foto: hasImage=${hasImage}, state=${session.state}, text="${text}", lower="${lower}", humanMode=${session.humanMode}, blocked=${profile.blocked}, paused=${botPaused}`);
+  console.log(`🔍 DEBUG: isStoreOpen=${isStoreOpen()} CRhour=${getCostaRicaTime().hour}`);
   if(hasImage){
     const webData = parseWebMessage(text);
     console.log(`🔍 webData: ${webData ? JSON.stringify(webData) : 'null'}`);
@@ -1786,6 +1787,7 @@ async function handleIncomingMessage(msg) {
     }
   }
 
+  console.log(`🔍 POST-FOTO: llegó acá, state=${session.state}`);
   // ✅ Estado: Esperando detalles de foto externa
   if(session.state === "ESPERANDO_DETALLES_FOTO"){
     if(text.trim().length < 1){
@@ -2418,6 +2420,7 @@ async function handleIncomingMessage(msg) {
   }
 
   // ============ ESTADO NEW ============
+  console.log(`🟢 LLEGÓ A ESTADO NEW: text="${text}" state=${session.state}`);
 
   // ✅ Detectar gracias (simple, no necesita IA)
   if(/gracias/i.test(lower)){
@@ -2731,6 +2734,7 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ Para todo lo demás → IA analiza y responde
+  console.log(`🟡 PRE-IA: text="${text}" aiKey=${!!process.env.OPENAI_API_KEY}`);
   console.log(`🤖 CAYÓ A IA GENÉRICA: text="${text}" state="${session.state}" lower="${lower}"`);
   const aiResponse = await askAI(text);
   
