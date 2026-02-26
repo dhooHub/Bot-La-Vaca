@@ -139,6 +139,38 @@
     .chat-input { flex: 1; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
     .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
+    /* Quick Replies Bar */
+    .quick-replies-bar { background: #f0f2f5; border-top: 1px solid #d0d0d0; padding: 0.5rem 0.7rem; display: flex; flex-wrap: nowrap; gap: 0.5rem; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; align-items: center; -webkit-overflow-scrolling: touch; }
+    .quick-replies-bar::-webkit-scrollbar { display: none; }
+    .qr-chip { background: #fff; border: 1px solid #ccc; border-radius: 20px; padding: 0.5rem 1.1rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; min-height: 36px; display: flex; align-items: center; }
+    .qr-chip:active { background: var(--primary-light); color: #fff; border-color: var(--primary-light); }
+    .qr-chip-manage { background: none; border: 1px dashed #bbb; color: #888; border-radius: 20px; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; flex-shrink: 0; min-height: 36px; display: flex; align-items: center; }
+
+    /* Quick Reply Preview */
+    .qr-preview { background: #e8f5e9; border-top: 2px solid var(--primary-light); padding: 0.6rem 0.8rem; display: none; flex-shrink: 0; }
+    .qr-preview.active { display: flex; align-items: flex-start; gap: 0.6rem; }
+    .qr-preview-text { flex: 1; font-size: 0.85rem; color: #333; white-space: pre-wrap; line-height: 1.4; max-height: 80px; overflow-y: auto; }
+    .qr-preview-close { background: #fee; border: 1px solid #fcc; border-radius: 6px; font-size: 0.85rem; cursor: pointer; color: var(--danger); flex-shrink: 0; padding: 0.3rem 0.5rem; }
+
+    /* Quick Replies Manager Modal */
+    .qr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 300; }
+    .qr-modal-overlay.active { display: flex; }
+    .qr-modal-box { background: #fff; border-radius: 16px; padding: 1.5rem; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
+    .qr-modal-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .qr-modal-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .qr-item { display: grid; grid-template-columns: 90px 1fr 36px; gap: 0.5rem; align-items: start; margin-bottom: 0.6rem; }
+    .qr-item-code { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; font-weight: 700; font-family: monospace; }
+    .qr-item-text { padding: 0.5rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.88rem; resize: vertical; min-height: 55px; }
+    .qr-item-del { background: #fee; border: 1px solid #fcc; color: var(--danger); border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; height: 36px; }
+    .qr-add-btn { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 10px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; margin-bottom: 1rem; font-weight: 600; }
+    .qr-save-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 0.8rem; width: 100%; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; }
+
+    /* Emoji Picker */
+    .emoji-picker { position: fixed; bottom: 130px; left: 10px; background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 0.6rem; display: none; grid-template-columns: repeat(8, 1fr); gap: 4px; z-index: 200; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-width: 300px; }
+    .emoji-picker.active { display: grid; }
+    .emoji-btn-item { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px; border-radius: 6px; }
+    .emoji-btn-item:active { background: var(--bg); }
+
     /* QR Section */
     .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
     .qr-overlay.active { display: flex; }
