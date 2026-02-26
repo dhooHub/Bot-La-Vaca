@@ -26,7 +26,7 @@
       --sinpe-border: #2196f3;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; }
 
     /* ===== LOGIN ===== */
     #login { position: fixed; inset: 0; background: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
@@ -41,7 +41,7 @@
     .login-error { color: #FF6B6B; margin-top: 1rem; }
 
     /* ===== MAIN LAYOUT ===== */
-    #app { display: none; height: 100vh; }
+    #app { display: none; height: 100vh; height: 100dvh; }
     #app.active { display: flex; flex-direction: column; }
 
     /* Header */
@@ -926,8 +926,8 @@ if (!location.search.includes('v=')) {
             <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
           </div>
         </div>
-        ${isHuman ? `<div style="background:#fff3e0;border-bottom:2px solid #f39c12;padding:0.5rem 1rem;font-size:0.9rem;color:#e65100;text-align:center;">👤 <strong>Modo humano</strong> — el bot no responde en este chat. Vos controlás.</div>` : ''}
         <div class="messages-container" id="messagesContainer">
+          ${isHuman ? `<div style="background:#fff3e0;border:2px solid #f39c12;border-radius:8px;padding:0.5rem 1rem;font-size:0.85rem;color:#e65100;text-align:center;margin-bottom:0.5rem;">👤 <strong>Modo humano</strong> — el bot no responde en este chat.</div>` : ''}
           ${renderMessages(chat)}
         </div>
         <div class="chat-input-area">
