@@ -535,6 +535,7 @@ INFORMACIÓN DE LA TIENDA:
 - Teléfono: 2237-3335
 - WhatsApp: Este mismo chat (no dar otro número, ya están escribiendo aquí)
 - Catálogo online: https://www.lavacacr.com
+- SIEMPRE que menciones el sitio web usá el link completo con https:// para que sea clicable: https://www.lavacacr.com (NUNCA escribas solo "www.lavacacr.com")
 
 ⚠️ MUY IMPORTANTE - CÓMO RESPONDER CONSULTAS DE PRODUCTOS:
 SINÓNIMOS (tratá estas palabras como iguales):
@@ -679,6 +680,12 @@ async function askAI(userMessage, conversationHistory = []) {
   } catch (error) { console.log("❌ Error IA:", error.message); return null; }
 }
 
+// Convertir www.x.com sin https:// en links clicables
+function sanitizeLinks(text) {
+  if (!text) return text;
+  return text.replace(/(^|[\s\n(])(?!https?:\/\/)(www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '$1https://$2');
+}
+
 function getStateDescription(state) {
   const map = {
     ESPERANDO_DETALLES_FOTO: "Se le pidió qué talla, color o tamaño quiere del producto de la foto",
@@ -724,19 +731,35 @@ setInterval(saveDataToDisk, 5 * 60 * 1000);
 
 // ====== AUTO-RELEASE: Volver a bot tras 30 min de inactividad del empleado ======
 const HUMAN_MODE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+const VENDOR_CONFIRM_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos sin confirmar disponibilidad
 setInterval(() => {
   const now = Date.now();
   for (const [waId, session] of sessions.entries()) {
-    if (!session.humanMode) continue;
-    if (session.humanModeManual) continue; // Tomado manualmente — no liberar automático
-    const lastActivity = session.humanModeLastActivity || session.humanModeAt || 0;
-    if (now - lastActivity >= HUMAN_MODE_TIMEOUT_MS) {
-      session.humanMode = false;
-      session.humanModeAt = null;
-      session.humanModeLastActivity = null;
-      console.log(`🤖 Auto-release: ${waId} vuelve al bot por inactividad`);
-      io.emit("human_mode_changed", { waId, humanMode: false, autoRelease: true });
-      saveDataToDisk();
+    // ── Auto-release humanMode ──
+    if (session.humanMode && !session.humanModeManual) {
+      const lastActivity = session.humanModeLastActivity || session.humanModeAt || 0;
+      if (now - lastActivity >= HUMAN_MODE_TIMEOUT_MS) {
+        session.humanMode = false;
+        session.humanModeAt = null;
+        session.humanModeLastActivity = null;
+        console.log(`🤖 Auto-release humanMode: ${waId} vuelve al bot por inactividad`);
+        io.emit("human_mode_changed", { waId, humanMode: false, autoRelease: true });
+        saveDataToDisk();
+      }
+    }
+    // ── Auto-reset ESPERANDO_CONFIRMACION_VENDEDOR tras 30 min ──
+    if (session.state === 'ESPERANDO_CONFIRMACION_VENDEDOR') {
+      const stateAge = now - (session.humanModeAt || now);
+      if (stateAge >= VENDOR_CONFIRM_TIMEOUT_MS) {
+        console.log(`⏰ Auto-reset: ${waId} llevaba 30min en ESPERANDO_CONFIRMACION_VENDEDOR → NEW`);
+        session.state = 'NEW';
+        session.humanMode = false;
+        session.humanModeAt = null;
+        session.humanModeLastActivity = null;
+        pendingQuotes.delete(waId);
+        io.emit('pending_resolved', { waId });
+        saveDataToDisk();
+      }
     }
   }
 }, 60 * 1000); // Revisar cada minuto
@@ -751,7 +774,7 @@ const FRASES = {
   confirmacion: ["¡Buenísimo! 🙌","¡Perfecto! 🎉","¡Excelente! 👍","¡Genial! 🙌","¡Dale! 😊","¡Qué bien! 🎉","¡Tuanis! 🙌","¡Listo! 👍"],
   no_quiere: ["¡Con gusto! 🙌 ¿Te puedo ayudar con algo más?","¡Está bien! 🙌 ¿Hay algo más en que te pueda ayudar?","No hay problema 👍 ¿Ocupás algo más?","Dale 🙌 ¿Te ayudo con alguna otra cosa?"],
   despedida: ["¡Pura vida! 🙌 Cualquier cosa aquí estamos. ¡Que te vaya bien!","¡Con gusto! 😊 Cuando ocupés, nos escribís. ¡Pura vida!","¡Dale! 🙌 Aquí estamos para cuando gustés. ¡Buena vibra!","¡Perfecto! 😊 Si necesitás algo en el futuro, con gusto te ayudamos. ¡Pura vida!"],
-  no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo. ¿Querés ver algo más? 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 ¿Te interesa ver algo similar en el catálogo? 🙌"],
+  no_hay: ["No tenemos ese disponible en este momento 😔 ¿Te interesa ver otro producto? Con gusto te ayudo 🙌","Uy, ese no nos queda 😔 Pero hay más opciones en el catálogo: https://www.lavacacr.com 🙌","Qué lástima, no lo tenemos 😔 ¿Te ayudo con otro producto?","Ese se nos agotó 😔 Revisá el catálogo: https://www.lavacacr.com 🙌"],
   pedir_zona: ["¿Me podés decir de qué provincia y cantón nos escribís? 📍","Para calcular el envío, ¿de qué provincia y cantón sos? 📍","¿Me decís tu provincia y cantón? 📍","¿De qué provincia y cantón te lo enviaríamos? 📍"],
   pedir_metodo: ["¿Querés que te lo enviemos o preferís recogerlo en tienda? 📦🏪\n\n1. 📦 Envío\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆","¿Cómo lo preferís? 🙌\n\n1. 📦 Envío a tu casa\n2. 🏪 Recoger en tienda\n\nResponde con el número 👆"],
   nocturno: ["¡Hola! De momento estamos fuera de servicio.\n\nNuestro horario de atención es de 9am a 7pm de lunes a sábado y de 10am a 6pm domingos."],
@@ -2111,7 +2134,7 @@ async function handleIncomingMessage(msg) {
       if(classification==="FAQ"){
         const aiResp=await askAI(text);
         const recordatorio=FRASES.recordatorio_flujo[session.state]||"";
-        if(aiResp){await sendTextWithTyping(waId,recordatorio?`${aiResp}\n\n${recordatorio}`:aiResp);}
+        if(aiResp){const cleanResp=sanitizeLinks(aiResp);await sendTextWithTyping(waId,recordatorio?`${cleanResp}\n\n${recordatorio}`:cleanResp);}
         else{await sendTextWithTyping(waId,"Si tenés alguna duda, podés llamarnos al 2237-3335 🙌"+(recordatorio?`\n\n${recordatorio}`:""));}
         return;
       }
@@ -2163,7 +2186,7 @@ async function handleIncomingMessage(msg) {
         }
         
         // Si la IA respondió algo coherente, enviar su respuesta
-        await sendTextWithTyping(waId,`${aiResp}${recordatorio?`\n\n${recordatorio}`:""}`);
+        await sendTextWithTyping(waId,`${sanitizeLinks(aiResp)}${recordatorio?`\n\n${recordatorio}`:""}`);
         return;
       }
       // RESPUESTA_FLUJO → continuar normalmente
