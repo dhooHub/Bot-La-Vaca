@@ -1965,116 +1965,95 @@ async function handleIncomingMessage(msg) {
 
     await loadCatalog();
 
-    // ── Detectar género mencionado (singular, plural, variantes) ──
+    const saludo = /hola|buenas|buenos|hey/i.test(lower) ? '¡Hola! Pura vida 🙌\n\n' : '';
+
+    // ── PASO 1: Detectar categoría ──
+    const mapeoCategoriaProd = {
+      'jean':'jeans', 'jeans':'jeans',
+      'pantalon':'pantalones', 'pantalones':'pantalones',
+      'short':'shorts', 'shorts':'shorts',
+      'chaqueta':'chaquetas', 'chaquetas':'chaquetas',
+      'jacket':'chaquetas', 'jackets':'chaquetas',
+      'blusa':'blusas', 'blusas':'blusas',
+      'vestido':'vestidos', 'vestidos':'vestidos',
+      'falda':'faldas', 'faldas':'faldas',
+      'camisa':'camisas', 'camisas':'camisas',
+      'camiseta':'camisetas', 'camisetas':'camisetas',
+      'sueter':'chaquetas', 'sweater':'chaquetas', 'saco':'chaquetas',
+      'conjunto':'conjuntos', 'conjuntos':'conjuntos',
+      'accesorio':'accesorios', 'accesorios':'accesorios',
+    };
+    let categoriaDetectada = null;
+    for (const [palabra, cat] of Object.entries(mapeoCategoriaProd)) {
+      if (lower.includes(palabra)) { categoriaDetectada = cat; break; }
+    }
+    if (!categoriaDetectada && session.ultimaCategoriaBuscada) {
+      categoriaDetectada = session.ultimaCategoriaBuscada;
+    }
+    if (!categoriaDetectada) {
+      const aiResp = await askAI(text);
+      if (aiResp) await sendTextWithTyping(waId, aiResp);
+      return;
+    }
+
+    // ── PASO 2: Detectar género mencionado ──
     const mencionaDama  = /\b(dama|damas|mujer|mujeres|femenin[ao]|señora|señoras|chica|chicas|ella|ellas)\b/i.test(lower);
-    const mencionaCabal = /\b(caballero|caballeros|hombre|hombres|masculin[ao]|señor|señores|chico|chicos|varón|varon|varones|él|para\s*el\b)\b/i.test(lower);
+    const mencionaCabal = /\b(caballero|caballeros|hombre|hombres|masculin[ao]|señor|señores|chico|chicos|varón|varon|varones)\b/i.test(lower);
     const mencionaNino  = /\b(niño|niños|niña|niñas|nino|ninos|nina|ninas|adolescente|adolescentes|juvenil|juveniles|infantil|kids?|escolar)\b/i.test(lower);
     const generoEspecificado = mencionaDama || mencionaCabal || mencionaNino;
 
-    // ── Mapeo categoría → géneros posibles ──
-    // Si la categoría puede ser para más de un género, preguntar siempre
-    const mapeoGeneros = {
-      'jeans':      ['damas', 'caballeros', 'ninos'],
-      'pantalones': ['damas', 'caballeros', 'ninos'],
-      'shorts':     ['damas', 'caballeros', 'ninos'],
-      'chaquetas':  ['damas', 'caballeros', 'ninos'],
-      'camisas':    ['damas', 'caballeros', 'ninos'],
-      'camisetas':  ['damas', 'caballeros', 'ninos'],
-      'blusas':     ['damas', 'ninas'],
-      'vestidos':   ['damas', 'ninas'],
-      'faldas':     ['damas', 'ninas'],
-      'conjuntos':  ['damas', 'ninas'],
-      'accesorios': ['damas'],
+    // Géneros posibles por categoría
+    const mapeoGenerosProd = {
+      'jeans':['damas','caballeros','ninos'], 'pantalones':['damas','caballeros','ninos'],
+      'shorts':['damas','caballeros','ninos'], 'chaquetas':['damas','caballeros','ninos'],
+      'camisas':['damas','caballeros','ninos'], 'camisetas':['damas','caballeros','ninos'],
+      'blusas':['damas','ninas'], 'vestidos':['damas','ninas'],
+      'faldas':['damas','ninas'], 'conjuntos':['damas','ninas'],
+      'accesorios':['damas'],
     };
+    const generosPosCat = mapeoGenerosProd[categoriaDetectada] || ['damas'];
+    const necesitaGenero = generosPosCat.length > 1 && !generoEspecificado && session.state !== "ESPERANDO_RESPUESTA_CATALOGO";
 
-    // ── Detectar categoría del mensaje ──
-    const mapeoCategoria = {
-      'jean': 'jeans', 'jeans': 'jeans',
-      'pantalon': 'pantalones', 'pantalones': 'pantalones',
-      'short': 'shorts', 'shorts': 'shorts',
-      'chaqueta': 'chaquetas', 'chaquetas': 'chaquetas',
-      'jacket': 'chaquetas', 'jackets': 'chaquetas',
-      'blusa': 'blusas', 'blusas': 'blusas',
-      'vestido': 'vestidos', 'vestidos': 'vestidos',
-      'falda': 'faldas', 'faldas': 'faldas',
-      'camisa': 'camisas', 'camisas': 'camisas',
-      'camiseta': 'camisetas', 'camisetas': 'camisetas',
-      'sueter': 'chaquetas', 'sweater': 'chaquetas', 'saco': 'chaquetas',
-      'conjunto': 'conjuntos', 'conjuntos': 'conjuntos',
-      'accesorio': 'accesorios', 'accesorios': 'accesorios',
-    };
-
-    let categoriaDetectada = null;
-    for (const [palabra, cat] of Object.entries(mapeoCategoria)) {
-      if (lower.includes(palabra)) { categoriaDetectada = cat; break; }
-    }
-
-    // ── Determinar root según género ──
-    function getRootByGenero(cat, genero) {
-      if (genero === 'damas')     return 'damas';
-      if (genero === 'caballeros') return 'caballeros';
-      if (genero === 'ninos')     return 'ninos';
-      return 'damas'; // fallback
-    }
-
-    const saludo = /hola|buenas|buenos|hey/i.test(lower) ? '¡Hola! Pura vida 🙌\n\n' : '';
-
-    // ── Si no especificó género y la categoría tiene múltiples géneros → PREGUNTAR ──
-    const generosPosCat = categoriaDetectada ? (mapeoGeneros[categoriaDetectada] || ['damas']) : ['damas'];
-    const debePreguntar = !generoEspecificado && generosPosCat.length > 1 && session.state !== "ESPERANDO_RESPUESTA_CATALOGO";
-
-    if (debePreguntar) {
-      // Construir pregunta según géneros posibles
-      let opcionesGenero = generosPosCat.map(g => {
-        if (g === 'damas') return 'damas';
-        if (g === 'caballeros') return 'caballeros';
-        if (g === 'ninos') return 'niños/niñas';
-      }).join(', ');
-      // Quitar última coma y poner "o"
+    // ── PASO 3: Si no trajo género → PREGUNTAR SIEMPRE ──
+    if (necesitaGenero) {
       const partes = generosPosCat.map(g => g === 'ninos' ? 'niños/niñas' : g);
-      const preguntaGenero = partes.length === 2 
+      const preguntaStr = partes.length === 2
         ? `${partes[0]} o ${partes[1]}`
         : `${partes.slice(0,-1).join(', ')} o ${partes[partes.length-1]}`;
 
-      // Guardar descripción/estilo para usarla después de la respuesta de género
-      const _estiloParaGuardar = lower.replace(/hola|buenas|buenos|hey|tienen|hay|busco|quiero|para|\?|¿|!/gi, '').replace(categoriaDetectada || '', '').trim();
+      // Guardar descripción extra (color, estilo) para usarla después
+      const stopW = /^(hola|buenas|buenos|hey|tienen|hay|busco|quiero|para|de|que|con|los|las|un|una|si|no|y|o|a|es|me|interesa|también|tambien)$/i;
+      const descExtra = lower.replace(/[¿?!¡]/g,'').split(/\s+/)
+        .filter(w => w.length > 3 && !stopW.test(w) && !Object.keys(mapeoCategoriaProd).includes(w))
+        .join(' ').trim();
 
       await sendTextWithTyping(waId,
-        `${saludo}¡Claro que tenemos ${categoriaDetectada || 'eso'}! 😊\n\n¿Buscás para ${preguntaGenero}?`
+        `${saludo}¡Claro que tenemos ${categoriaDetectada}! 😊\n\n¿Buscás para ${preguntaStr}?`
       );
       session.saludo_enviado = true;
       session.state = "ESPERANDO_RESPUESTA_CATALOGO";
       session.ultimaCategoriaBuscada = categoriaDetectada;
-      session.ultimaDescripcionBuscada = _estiloParaGuardar || null;
+      session.ultimaDescripcionBuscada = descExtra || null;
       session.generosPosCat = generosPosCat;
       saveDataToDisk();
       return;
     }
 
-    // ── Determinar root final ──
+    // ── PASO 4: Determinar root ──
     let rootFinal = 'damas';
     if (mencionaCabal) rootFinal = 'caballeros';
     else if (mencionaNino) rootFinal = 'ninos';
-    else if (session.state === "ESPERANDO_RESPUESTA_CATALOGO" && session.ultimaCategoriaBuscada) {
-      // Respuesta al género preguntado
-      if (/\b(dama|damas|mujer|mujeres|femenino|para\s*ella)\b/i.test(lower)) rootFinal = 'damas';
-      else if (/\b(caballero|hombre|masculino|para\s*él|para\s*el)\b/i.test(lower)) rootFinal = 'caballeros';
-      else if (/\b(ni[ñn][oa]|niños|infantil)\b/i.test(lower)) rootFinal = 'ninos';
-      categoriaDetectada = categoriaDetectada || session.ultimaCategoriaBuscada;
-    }
+    // si ya había preguntado género y ahora viene con categoria+descripción, mantener root de sesión
+    else if (!generoEspecificado && session.ultimaRootBuscado) rootFinal = session.ultimaRootBuscado;
 
-    if (!categoriaDetectada) {
-      // No detectamos categoría → IA
-      const aiResp = await askAI(text);
-      if (aiResp) { await sendTextWithTyping(waId, aiResp); }
-      return;
-    }
-
+    // ── PASO 5: Buscar en catálogo ──
     const resultado = buscarPreciosPorTipo(text, rootFinal);
+    console.log(`🔍 BUSQUEDA: cat=${categoriaDetectada} root=${rootFinal} encontrados=${resultado?.encontrados}`);
 
-    // ── Sin productos en catálogo online → mensaje contextual + humano ──
     if (!resultado || resultado.encontrados === 0) {
+      await sendTextWithTyping(waId, `Dame un momento, ya te ayudo 🙌`);
       session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+      session.humanMode = true;
       const quote = {
         waId, phone: profile.phone || waId, name: profile.name || "",
         producto: `❓ Busca: ${categoriaDetectada} para ${rootFinal} — ${text.trim()}`,
@@ -2084,19 +2063,16 @@ async function handleIncomingMessage(msg) {
       pendingQuotes.set(waId, quote);
       io.emit("new_pending", quote);
       sendPushoverAlert("PRODUCTO_CATALOGO", quote);
-
-      // No hay en catálogo → avisar y pasar a humano
-      await sendTextWithTyping(waId, `Dame un momento, ya te ayudo 🙌`);
-      session.humanMode = true;
       io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
+      saveDataToDisk();
       return;
     }
 
     const linkBase = `${CATALOG_URL}/catalogo.html?root=${rootFinal}&cat=${resultado.categoria}`;
 
-    // ── Buscar descripción específica en nombres ──
+    // ── PASO 6: Buscar descripción específica en nombres ──
     const stopWords = /^(hola|tienen|hay|jean|jeans|blusa|blusas|vestido|vestidos|falda|faldas|pantalon|pantalones|short|shorts|chaqueta|para|dama|mujer|caballero|hombre|nino|niño|quiero|busco|me|interesa|de|que|con|los|las|un|una|si|no|y|o|también|tambien|a|es)$/i;
-    const palabrasClave = lower.replace(/[¿?!¡]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.test(w));
+    const palabrasClave = lower.replace(/[¿?!¡]/g,'').split(/\s+/).filter(w => w.length > 3 && !stopWords.test(w));
     const especificacion = resultado.estiloDetectado;
 
     let productosConMatch = [];
@@ -2113,7 +2089,7 @@ async function handleIncomingMessage(msg) {
     const hayMatch = productosConMatch.length > 0;
 
     if (descripcionBuscada && hayMatch) {
-      const precios = productosConMatch.map(p => p.descuento > 0 ? Math.round(p.precio * (1-p.descuento/100)) : p.precio);
+      const precios = productosConMatch.map(p => p.descuento > 0 ? Math.round(p.precio*(1-p.descuento/100)) : p.precio);
       const minP = Math.min(...precios), maxP = Math.max(...precios);
       const conDesc = productosConMatch.filter(p => p.descuento > 0);
       let msg = `${saludo}¡Sí! Tenemos ${resultado.categoria} con ${descripcionBuscada} 🎉\n\n`;
@@ -2133,13 +2109,15 @@ async function handleIncomingMessage(msg) {
     }
 
     session.ultimaCategoriaBuscada = resultado.categoria;
+    session.ultimaRootBuscado = rootFinal;
+    session.ultimaDescripcionBuscada = null;
     session.saludo_enviado = true;
     session.state = "ESPERANDO_RESPUESTA_CATALOGO";
     saveDataToDisk();
     return;
   }
 
-  // ✅ Capturar respuesta de género cuando bot preguntó ¿para damas/caballeros/niños?
+    // ✅ Capturar respuesta de género cuando bot preguntó ¿para damas/caballeros/niños?
   if (session.state === "ESPERANDO_RESPUESTA_CATALOGO" && session.ultimaCategoriaBuscada && session.generosPosCat) {
     const esRespDama   = /\b(dama|damas|mujer|mujeres|femenin[ao]|señora|señoras|chica|chicas|ella|ellas)\b/i.test(lower);
     const esRespCabal  = /\b(caballero|caballeros|hombre|hombres|masculin[ao]|señor|señores|chico|chicos|varón|varon|varones)\b/i.test(lower);
@@ -3779,4 +3757,3 @@ server.listen(PORT, async () => {
     if (connectionStatus === "disconnected" && fs.existsSync(path.join(AUTH_FOLDER, "creds.json"))) { console.log("🐕 Watchdog: reconectando..."); connectWhatsApp(); }
   }, 2 * 60 * 1000);
 });
-}
