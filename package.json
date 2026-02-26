@@ -1,12 +1,14 @@
 {
   "name": "tico-bot",
   "version": "1.0.0",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",
     "express": "^4.21.2",
+    "node-fetch": "^2.7.0",
     "openai": "^4.78.1",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",
