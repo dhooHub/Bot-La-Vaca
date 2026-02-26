@@ -3779,3 +3779,4 @@ server.listen(PORT, async () => {
     if (connectionStatus === "disconnected" && fs.existsSync(path.join(AUTH_FOLDER, "creds.json"))) { console.log("🐕 Watchdog: reconectando..."); connectWhatsApp(); }
   }, 2 * 60 * 1000);
 });
+}
