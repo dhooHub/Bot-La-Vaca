@@ -2481,9 +2481,12 @@ async function handleIncomingMessage(msg) {
   }
 
   // ✅ Si pregunta por productos específicos o catálogo → enviar catálogo
+  // ⚠️ EXCLUIR preguntas FAQ que usan palabras como "que" pero no son sobre productos
+  const esFAQ = /hora|horario|abierto|abren|cierran|cierra|cerrar|atienden|atenci[oó]n|cuando abren|costo.*envi[oó]|envi[oó].*costo|apartado|separar|reservar|cambio|devoluci[oó]n|d[oó]nde est[aá]|ubicaci[oó]n|direcci[oó]n|c[oó]mo llegar|forma.*pago|m[eé]todo.*pago|garantia|garant[ií]a/i.test(lower);
+  
   const preguntaEspecifica = /oferta|descuento|rebaja|promo|dama|caballero|hombre|mujer|niñ|nin|blusa|vestido|jean|pantalon/i.test(lower);
   
-  if(/tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower)){
+  if(!esFAQ && /tienen|hay|busco|quiero ver|necesito|catalogo|productos|que venden|que tienen/i.test(lower)){
     if(preguntaEspecifica){
       // ✅ FALLBACK: Si tiene categoría específica, buscar precios ANTES de caer a IA
       console.log(`🔍 FALLBACK-CATEGORIA: "${lower}" → intentando buscarPreciosPorTipo`);
