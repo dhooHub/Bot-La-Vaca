@@ -877,7 +877,8 @@ async function handleIncomingMessage(msg) {
         io.emit('new_pending', quote);
         sendPushoverAlert('CONSULTA', { phone: profile.phone || waId, name: profile.name || '', mensaje: `Busca: ${cat} para ${root}` });
       } else {
-        const link = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
+        const descParam = resultado.estiloDetectado ? `&desc=${encodeURIComponent(resultado.estiloDetectado)}` : '';
+        const link = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}${descParam}`;
         let msg = `¡Claro! Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
         if (resultado.conDescuento > 0) msg += `\n\n🔥 Tenemos opciones con descuento, hasta ${resultado.maxDescuento}% OFF`;
         msg += `\n\nRevisalos acá 👇\n${link}`;
@@ -964,7 +965,8 @@ async function handleIncomingMessage(msg) {
     const resultado = buscarPreciosPorTipo(text, rootFinal);
 
     if (resultado && resultado.encontrados > 0) {
-      const link = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}`;
+      const descParam = resultado.estiloDetectado ? `&desc=${encodeURIComponent(resultado.estiloDetectado)}` : '';
+      const link = `${CATALOG_URL}/catalogo.html?root=${resultado.rootCategoria}&cat=${resultado.categoria}${descParam}`;
       let msg = `${saludo}¡Sí! Tenemos ${resultado.display} desde ₡${resultado.minPrecio.toLocaleString()} hasta ₡${resultado.maxPrecio.toLocaleString()} 🛍️`;
       if (resultado.conDescuento > 0) msg += `\n\n🔥 Con descuento hasta ${resultado.maxDescuento}% OFF`;
       msg += `\n\nRevisalos acá 👇\n${link}`;
