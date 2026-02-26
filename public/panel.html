@@ -135,7 +135,7 @@
     .action-card-image { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 0.8rem; cursor: pointer; background: #f5f5f5; }
 
     /* Chat input */
-    .chat-input-area { background: #fff; padding: 0.7rem 1rem; display: flex; gap: 0.5rem; align-items: center; }
+    .chat-input-area { background: #fff; padding: 0.7rem 1rem; display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; }
     .chat-input { flex: 1; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
     .chat-send-btn { width: 46px; height: 46px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.3rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
@@ -967,19 +967,18 @@ if (!location.search.includes('v=')) {
       chat.messages.forEach(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
         // Detectar si hay imagen: puede ser ruta /images/... o base64
-        const hasImg = !!(m.imageUrl);
         let imgSrc = null;
-        if (hasImg) {
+        if (m.imageUrl && m.imageUrl !== '(imagen)' && m.imageUrl !== 'null') {
           if (m.imageUrl.startsWith('/images/')) {
-            // Ruta de archivo en el servidor
             const botBase = typeof BOT_URL !== 'undefined' ? BOT_URL : 'https://tico-bot-lite.onrender.com';
             imgSrc = botBase + m.imageUrl;
           } else if (m.imageUrl.startsWith('data:')) {
             imgSrc = m.imageUrl;
           } else if (m.imageUrl.length > 100) {
-            imgSrc = `data:image/jpeg;base64,${m.imageUrl}`;
+            imgSrc = 'data:image/jpeg;base64,' + m.imageUrl;
           }
         }
+        const hasImg = !!imgSrc;
         html += `
           <div class="message ${m.direction}">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
