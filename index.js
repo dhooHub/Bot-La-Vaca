@@ -2664,12 +2664,15 @@ async function executeAction(clientWaId, actionType, data = {}) {
   }
 
   if (actionType === "NO_HAY") {
-    session.state = "PREGUNTANDO_ALGO_MAS";
-    await sendTextWithTyping(clientWaId, frase("no_hay", clientWaId) + `\n\n${CATALOG_URL}`);
+    session.state = "ESPERANDO_CONFIRMACION_VENDEDOR";
+    session.humanMode = true;
+    await sendTextWithTyping(clientWaId, frase("no_hay", clientWaId) + `\n\n${CATALOG_URL}\n\nDame un momento, te paso con un compañer@ por si te podemos ayudar con algo más 🙌`);
     pendingQuotes.delete(clientWaId);
     io.emit("pending_resolved", { waId: clientWaId });
+    io.emit("human_mode_changed", { waId: normalizePhone(clientWaId), humanMode: true });
+    emitSessionUpdate(normalizePhone(clientWaId), session);
     saveDataToDisk();
-    return { success: true, message: "No hay enviado" };
+    return { success: true, message: "No hay enviado, pasado a humano" };
   }
 
   // ====== MULTI-PRODUCTO: Dueño marca cuáles hay ======
