@@ -175,8 +175,8 @@
     @media (max-width: 768px) {
       .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
       .sidebar.hidden { display: none; }
-      .chat-area { position: absolute; inset: 0; z-index: 20; display: none; }
-      .chat-area.active { display: flex; }
+      .chat-area { position: absolute; inset: 0; z-index: 20; display: none; overflow: hidden; }
+      .chat-area.active { display: flex; flex-direction: column; }
       .chat-header-back { display: block; }
       .main-container { position: relative; }
     }
