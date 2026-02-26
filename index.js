@@ -1722,7 +1722,7 @@ async function handleIncomingMessage(msg) {
           console.log(`📷 *** EMITIENDO new_pending (con detalles) ***`);
           io.emit("new_pending", quote);
           sendPushoverAlert("PRODUCTO_FOTO", quote);
-          await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
+          await sendTextWithTyping(waId, `Dame un momento 🙌`);
           session.humanMode = true;
           io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
           saveDataToDisk();
@@ -1775,7 +1775,7 @@ async function handleIncomingMessage(msg) {
     io.emit("new_pending", quote);
     console.log(`📷 *** EMITIDO! ***`);
     sendPushoverAlert("PRODUCTO_FOTO", quote);
-    await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
+    await sendTextWithTyping(waId, `Dame un momento 🙌`);
     session.humanMode = true;
     io.emit("human_mode_changed", { waId: normalizePhone(waId), humanMode: true });
     saveDataToDisk();
@@ -1878,7 +1878,7 @@ async function handleIncomingMessage(msg) {
     if(detalles.length>0)resumenProducto+=`\n👕 ${detalles.join(", ")}`;
     if(detalles.length>0){
       session.talla_color=detalles.join(", "); session.state="ESPERANDO_CONFIRMACION_VENDEDOR";
-      await sendTextWithTyping(waId, `¡Hola! 🙌 Vi que estás interesad@ en ese producto, dame un momento para validar existencia 😊`);
+      await sendTextWithTyping(waId, `Dame un momento 🙌`);
       addPendingQuote(session); return;
     }
     session.state="ESPERANDO_TALLA";
