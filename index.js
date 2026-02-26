@@ -3076,6 +3076,8 @@ async function executeAction(clientWaId, actionType, data = {}) {
   return { success: false, message: "Acción desconocida" };
 }
 
+} // end handleIncomingMessage
+
 // ============ SOCKET.IO ============
 io.on("connection", (socket) => {
   let authenticated = false;
