@@ -1658,12 +1658,13 @@ if (!location.search.includes('v=')) {
     // ===== MODAL ESCRIBIR =====
     // ===== NUEVO CHAT =====
     function openNewChat() {
+      document.getElementById('newChatSearch').value = '';
       document.getElementById('newChatPhone').value = '';
       document.getElementById('newChatMsg').value = '';
       document.getElementById('newChatSuggestions').innerHTML = '';
       document.getElementById('newChatMsg2').textContent = '';
       document.getElementById('newChatModal').style.display = 'flex';
-      setTimeout(function() { document.getElementById('newChatPhone').focus(); }, 100);
+      setTimeout(function() { document.getElementById('newChatSearch').focus(); }, 100);
     }
 
     function closeNewChat() {
@@ -1672,38 +1673,88 @@ if (!location.search.includes('v=')) {
 
     function filterNewChatContacts(val) {
       var box = document.getElementById('newChatSuggestions');
-      var clean = val.replace(/\D/g, '');
-      if (clean.length < 3) { box.innerHTML = ''; return; }
-      var matches = Object.keys(chats).filter(function(waId) {
+      var query = val.trim().toLowerCase();
+      var digits = val.replace(/\D/g, '');
+
+      if (query.length < 2) { box.innerHTML = ''; return; }
+
+      // Buscar en chats activos + profiles/contacts
+      var seen = new Set();
+      var results = [];
+
+      // Fuente 1: chats activos
+      Object.keys(chats).forEach(function(waId) {
         var c = chats[waId];
         var name = (c.name || c.pushName || '').toLowerCase();
-        return waId.includes(clean) || name.includes(val.toLowerCase());
-      }).slice(0, 6);
-      box.innerHTML = matches.map(function(waId) {
-        var c = chats[waId];
-        var name = c.name || c.pushName || formatPhone(waId);
-        return '<button onclick="selectNewChatContact(\'' + waId + '\')" style="padding:10px 14px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;text-align:left;cursor:pointer;font-size:.9rem;font-family:inherit;">'
-          + '<strong>' + escapeHtml(name) + '</strong> <span style="color:#9ca3af;font-size:.8rem;">' + formatPhone(waId) + '</span></button>';
+        var matchName = name && name.includes(query);
+        var matchPhone = digits.length >= 3 && waId.includes(digits);
+        if ((matchName || matchPhone) && !seen.has(waId)) {
+          seen.add(waId);
+          results.push({ waId: waId, name: c.name || c.pushName || '', phone: waId });
+        }
+      });
+
+      // Fuente 2: contacts/profiles del servidor
+      if (typeof contacts !== 'undefined') {
+        contacts.forEach(function(c) {
+          var waId = c.waId || c.phone || '';
+          if (!waId || seen.has(waId)) return;
+          var name = (c.name || c.pushName || '').toLowerCase();
+          var matchName = name && name.includes(query);
+          var matchPhone = digits.length >= 3 && waId.includes(digits);
+          if (matchName || matchPhone) {
+            seen.add(waId);
+            results.push({ waId: waId, name: c.name || c.pushName || '', phone: waId });
+          }
+        });
+      }
+
+      results = results.slice(0, 8);
+
+      if (results.length === 0) {
+        // Si escribió solo dígitos (número nuevo), mostrar opción de crear
+        if (digits.length >= 7) {
+          box.innerHTML = '<button onclick="selectNewChatContact(\'' + digits + '\',\'\')" style="padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;text-align:left;cursor:pointer;font-size:.9rem;font-family:inherit;color:#166534;">➕ Enviar a número nuevo: <strong>' + formatPhone(digits) + '</strong></button>';
+        } else {
+          box.innerHTML = '<div style="padding:8px 12px;color:#9ca3af;font-size:.85rem;">No se encontraron contactos</div>';
+        }
+        return;
+      }
+
+      box.innerHTML = results.map(function(r) {
+        var displayName = r.name || formatPhone(r.waId);
+        var displayPhone = r.name ? formatPhone(r.waId) : '';
+        return '<button onclick="selectNewChatContact(\'' + r.waId + '\',\'' + escapeHtml(r.name) + '\')" style="padding:10px 14px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;text-align:left;cursor:pointer;font-size:.9rem;font-family:inherit;width:100%;">'
+          + '<strong>' + escapeHtml(displayName) + '</strong>'
+          + (displayPhone ? ' <span style="color:#9ca3af;font-size:.8rem;">' + displayPhone + '</span>' : '')
+          + '</button>';
       }).join('');
     }
 
-    function selectNewChatContact(waId) {
-      var c = chats[waId];
-      var phone = (c && (c.phone || waId)) || waId;
-      // Strip 506 prefix for display
-      var display = phone.replace(/^506/, '');
-      document.getElementById('newChatPhone').value = display;
+    function selectNewChatContact(waId, name) {
+      document.getElementById('newChatPhone').value = waId;
+      var display = name ? name + ' (' + formatPhone(waId) + ')' : formatPhone(waId);
+      document.getElementById('newChatSearch').value = display;
       document.getElementById('newChatSuggestions').innerHTML = '';
       document.getElementById('newChatMsg').focus();
     }
 
     function sendNewChat() {
-      var rawPhone = document.getElementById('newChatPhone').value.trim().replace(/\D/g, '');
+      var searchVal = document.getElementById('newChatSearch').value.trim();
+      var hiddenPhone = document.getElementById('newChatPhone').value.trim();
       var msg = document.getElementById('newChatMsg').value.trim();
       var statusEl = document.getElementById('newChatMsg2');
 
-      if (!rawPhone) { statusEl.textContent = '⚠️ Ingresá un número'; statusEl.style.color = '#ef4444'; return; }
+      // Determinar waId: usar hidden si fue seleccionado, sino intentar parsear el search como número
+      var rawPhone = hiddenPhone || searchVal.replace(/\D/g, '');
+
+      if (!rawPhone || rawPhone.length < 7) {
+        statusEl.textContent = '⚠️ Seleccioná un contacto o ingresá un número válido';
+        statusEl.style.color = '#ef4444'; return;
+      }
       if (!msg) { statusEl.textContent = '⚠️ Escribí un mensaje'; statusEl.style.color = '#ef4444'; return; }
+
+      var waId = rawPhone.startsWith('506') ? rawPhone : '506' + rawPhone;
 
       // Normalize: add 506 if not already
       var waId = rawPhone.startsWith('506') ? rawPhone : '506' + rawPhone;
@@ -1978,16 +2029,16 @@ if (!location.search.includes('v=')) {
       </div>
 
       <div style="margin-bottom:12px;">
-        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Número de teléfono</label>
-        <div style="display:flex;gap:8px;">
-          <input id="newChatPhone" type="tel" placeholder="Ej: 88887777 o 50688887777"
-            style="flex:1;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;"
-            onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"
-            oninput="filterNewChatContacts(this.value)">
-        </div>
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Buscar por nombre o teléfono</label>
+        <input id="newChatSearch" type="text" placeholder="Ej: María, 88887777 o 50688887777"
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;box-sizing:border-box;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"
+          oninput="filterNewChatContacts(this.value)">
+        <!-- waId seleccionado o número manual -->
+        <input id="newChatPhone" type="hidden">
       </div>
 
-      <div id="newChatSuggestions" style="max-height:180px;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column;gap:6px;"></div>
+      <div id="newChatSuggestions" style="max-height:200px;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column;gap:6px;"></div>
 
       <div style="margin-bottom:14px;">
         <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Mensaje inicial</label>
