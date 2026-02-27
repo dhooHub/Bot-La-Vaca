@@ -988,8 +988,11 @@ if (!location.search.includes('v=')) {
         </div>
       `;
       
-      // Enter to send
-      // Input now uses modal - no keypress needed
+      // Asignar evento al botón Editar (no puede ir como inline onclick dentro de template literal)
+      setTimeout(() => {
+        const editBtn = document.querySelector('.qr-edit-btn');
+        if (editBtn) editBtn.addEventListener('click', openEditAtajos);
+      }, 0);
       
       // Scroll to bottom
       const container = $('messagesContainer');
@@ -1297,6 +1300,14 @@ if (!location.search.includes('v=')) {
       const found = quickReplies.find(r => r.slug === slug || r.name === slug);
       const label = (found && found.label) || slug;
       const text = (found && found.text) || '';
+      // Si el atajo no tiene texto configurado, abrir el editor en lugar de enviar vacío
+      if (!text.trim()) {
+        openEditAtajos();
+        setTimeout(() => {
+          toast('⚠️ Este atajo no tiene texto. Configuralo aquí.', 'warning');
+        }, 300);
+        return;
+      }
       openChipPreview(label, text);
     }
 
@@ -1339,12 +1350,18 @@ if (!location.search.includes('v=')) {
         `<button class="qr-pill" onclick="useQuickReply('${p.slug}')">${escapeHtml(p.label)}</button>`
       ).join('');
 
-      return pillsHtml + `<button class="qr-pill" onclick="openEditAtajos()" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe;flex-shrink:0;">✏️ Editar</button>`;
+      // Botón Editar se agrega separado para evitar problemas de comillas en template literals
+      return pillsHtml + `<button class="qr-pill qr-edit-btn" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe;flex-shrink:0;">✏️ Editar</button>`;
     }
 
     function refreshQuickRepliesBar() {
       const bar = document.getElementById('quickRepliesBar');
-      if (bar) bar.innerHTML = renderQuickRepliesBar();
+      if (bar) {
+        bar.innerHTML = renderQuickRepliesBar();
+        // Asignar evento al botón editar por separado, sin inline onclick
+        const editBtn = bar.querySelector('.qr-edit-btn');
+        if (editBtn) editBtn.addEventListener('click', openEditAtajos);
+      }
     }
 
     // ===== MODAL EDITAR ATAJOS =====
@@ -1558,42 +1575,53 @@ if (!location.search.includes('v=')) {
 
     function extractResumenFromChat() {
       if (!currentChat) return {};
-      const chat = chats.find(c => c.waId === currentChat || c.id === currentChat);
+      const chat = chats[currentChat]; // chats es objeto, no array
       const msgs = (chat && chat.messages) || [];
       const allText = msgs.map(m => m.text || '').join(' ');
       const data = {};
 
-      // Nombre - buscar en mensajes del cliente
-      const clientMsgs = msgs.filter(m => !m.fromMe).map(m => m.text || '');
-      
-      // Teléfono - usar el waId
+      // Teléfono - usar el waId formateado
       data.telefono = formatPhone(currentChat) || '';
 
       // Nombre del perfil
-      const profile = chats.find(c => c.waId === currentChat);
-      data.nombre = (profile && profile.name) || (profile && profile.pushName) || '';
+      data.nombre = (chat && (chat.name || chat.pushName)) || '';
 
-      // Código producto - buscar patrón de código numérico en mensajes
-      const codigoMatch = allText.match(/[Cc]odigo[ :]+ *([0-9]{4,7})|#([0-9]{4,7})/);
+      // Buscar en mensajes del cliente (direction 'in')
+      const clientMsgs = msgs.filter(m => m.direction === 'in' || m.from === 'client').map(m => m.text || '');
+      const clientText = clientMsgs.join(' ');
+
+      // Código producto - buscar patrón en TODO el texto
+      const codigoMatch = allText.match(/[Cc][oó]digo[:\s#]*([0-9]{3,7})|#([0-9]{3,7})\b/);
       if (codigoMatch) data.codigo = codigoMatch[1] || codigoMatch[2] || '';
 
-      // Precio - buscar ₡ o colones
-      const precioMatch = allText.match(/[₡][ ]?([0-9,.]{4,12})/);
+      // Precio - buscar ₡ o "colones"
+      const precioMatch = allText.match(/₡\s*([0-9][0-9,.]{2,10})/);
       if (precioMatch) data.precio = '₡' + precioMatch[1].trim();
 
-      // Descripción - buscar nombre de producto en mensajes
-      const descMatch = allText.match(/interesado.a en[^:]* *([^.]{5,60})/i);
+      // Descripción - buscar nombre de producto mencionado
+      const descMatch = allText.match(/interesad[oa] en ([^.?!]{5,60})/i)
+        || allText.match(/producto[:\s]+([^.?\n]{5,60})/i);
       if (descMatch) data.descripcion = descMatch[1].trim();
 
-      // Provincia/cantón/distrito - buscar si el cliente los mencionó
-      const provinciaMatch = allText.match(/[Pp]rovincia[^a-zA-Z]*([a-zA-Z ]{3,20})/);
-      if (provinciaMatch) data.provincia = provinciaMatch[1].trim();
+      // Dirección - buscar en mensajes del cliente
+      const provMatch = clientText.match(/[Pp]rovincia[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (provMatch) data.provincia = provMatch[1].trim();
 
-      const cantonMatch = allText.match(/[Cc]ant.n[^a-zA-Z]*([a-zA-Z ]{3,20})/);
-      if (cantonMatch) data.canton = cantonMatch[1].trim();
+      const cantMatch = clientText.match(/[Cc]ant[oó]n[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (cantMatch) data.canton = cantMatch[1].trim();
 
-      const distritoMatch = allText.match(/[Dd]istrito[^a-zA-Z]*([a-zA-Z ]{3,20})/);
-      if (distritoMatch) data.distrito = distritoMatch[1].trim();
+      const distMatch = clientText.match(/[Dd]istrito[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (distMatch) data.distrito = distMatch[1].trim();
+
+      // Dirección exacta - línea larga del cliente que no sea saludo
+      const dirMatch = clientText.match(/(?:direcci[oó]n|casa|vivo|exacta)[:\s]+([^.\n]{10,80})/i);
+      if (dirMatch) data.direccion = dirMatch[1].trim();
+
+      // Envío - buscar costo de envío en mensajes del bot (direction 'out')
+      const botText = msgs.filter(m => m.direction === 'out' || m.from === 'bot').map(m => m.text || '').join(' ');
+      const envioMatch = botText.match(/env[íi]o[:\s]+₡?\s*([0-9][0-9,.]{2,8})/i)
+        || allText.match(/costo.*env[íi]o.*₡\s*([0-9][0-9,.]{2,8})/i);
+      if (envioMatch) data.envio = '₡' + envioMatch[1].trim();
 
       return data;
     }
