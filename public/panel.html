@@ -141,9 +141,9 @@
     .chat-input { flex: 1; padding: 8px 12px; border: none; border-radius: 20px; background: var(--bg); font-size: 0.95rem; outline: none; }
     .chat-send-btn { width: 38px; height: 38px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     /* Quick replies bar — horizontal scroll, thin pills */
-    .quick-replies-bar { display: flex; gap: 6px; padding: 5px 10px; background: #fff; border-top: 1px solid #f0f0f0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .quick-replies-bar { display: flex; gap: 8px; padding: 6px 10px; background: #fff; border-top: 1px solid #f0f0f0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
     .quick-replies-bar::-webkit-scrollbar { display: none; }
-    .qr-pill { background: #f0f0f0; border: none; border-radius: 999px; padding: 4px 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; color: #333; flex-shrink: 0; }
+    .qr-pill { background: #f0f0f0; border: none; border-radius: 999px; padding: 5px 14px; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; color: #333; flex-shrink: 0; line-height: 1.2; }
     .qr-pill:active { background: var(--primary-light); color: #fff; }
 
     /* QR Section */
@@ -937,11 +937,11 @@ if (!location.search.includes('v=')) {
           <button class="chat-header-back" onclick="closeChat()">←</button>
           <div class="chat-header-avatar" style="${isHuman ? 'background:#f39c12' : ''}">${currentChat.slice(-2).toUpperCase()}</div>
           <div class="chat-header-info">
-            <div class="chat-header-name">
-              ${escapeHtml(name)}
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="chat-header-name">${escapeHtml(name)}</div>
               ${isHuman
-                ? `<span style="background:#f39c12;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;cursor:pointer;" onclick="liberarChat()">👤 MODO HUMANO</span>`
-                : `<span style="background:#22c55e;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;cursor:pointer;" onclick="tomarChat()">🤖 BOT ACTIVO</span>`
+                ? `<span style="background:#f39c12;color:#fff;font-size:0.8rem;font-weight:800;padding:3px 11px;border-radius:999px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;" onclick="liberarChat()">👤 MODO HUMANO</span>`
+                : `<span style="background:#22c55e;color:#fff;font-size:0.8rem;font-weight:800;padding:3px 11px;border-radius:999px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;" onclick="tomarChat()">🤖 BOT ACTIVO</span>`
               }
             </div>
             <div class="chat-header-status">${formatPhone(currentChat)}</div>
@@ -962,7 +962,7 @@ if (!location.search.includes('v=')) {
         </div>
         ${quickReplies.length > 0 ? `
         <div class="quick-replies-bar">
-          ${quickReplies.map(r => `<button class="qr-pill" onclick="useQuickReply(${JSON.stringify(r.text)})">⚡ ${escapeHtml(r.name)}</button>`).join('')}
+          ${quickReplies.map(r => { const label = r.name || r.label || r.text || ''; return `<button class="qr-pill" onclick="useQuickReply(${JSON.stringify(r.text || r)})">⚡ ${escapeHtml(label.slice(0,20))}</button>`; }).join('')}
         </div>` : ''}
       `;
       
