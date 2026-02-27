@@ -1406,6 +1406,23 @@ io.on('connection', (socket) => {
     quickReplies = data.quickReplies;
     saveDataToDisk(); io.emit('quick_replies', { quickReplies });
   });
+
+  // Dismiss pending - marcar como visto permanentemente (persiste en disco)
+  socket.on('dismiss_pending', ({ waId }) => {
+    if (!waId) return;
+    // Eliminar del Map de pendientes activos
+    pendingQuotes.delete(waId);
+    // Marcar en la sesión para que no se regenere al reconectar
+    const session = sessions.get(waId);
+    if (session) {
+      session.pendingDismissed = true;
+      saveDataToDisk(); // Persistir en disco para sobrevivir reinicios
+    }
+    // Notificar a todos los paneles conectados
+    io.emit('pending_resolved', { waId });
+    console.log(`✅ Pending dismissed permanentemente para ${waId}`);
+  });
+
   socket.on('get_metrics', () => { socket.emit('metrics', { metrics: account.metrics }); });
   socket.on('purge_data', (data) => {
     const { beforeDate, purgeSessions, purgeSales, purgeHistory } = data;
