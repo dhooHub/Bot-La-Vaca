@@ -1575,6 +1575,18 @@ app.post('/api/admin/banner', adminAuth, express.json(), (req, res) => {
   res.json({ success: true, banner });
 });
 
+app.get('/api/admin/quick-replies', adminAuth, (req, res) => {
+  res.json({ quickReplies });
+});
+app.post('/api/admin/quick-replies', adminAuth, express.json(), (req, res) => {
+  if (!Array.isArray(req.body.quickReplies)) return res.json({ success: false, error: 'Invalid data' });
+  quickReplies = req.body.quickReplies;
+  saveDataToDisk();
+  io.emit('quick_replies', { quickReplies });
+  console.log(`⚡ Quick replies actualizados: ${quickReplies.length} atajos`);
+  res.json({ success: true, quickReplies });
+});
+
 // ============ INICIAR ============
 server.listen(PORT, async () => {
   if (!fs.existsSync(PERSISTENT_DIR)) { try { fs.mkdirSync(PERSISTENT_DIR, { recursive: true }); } catch(e) {} }
