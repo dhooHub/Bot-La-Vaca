@@ -41,7 +41,7 @@
     .login-error { color: #FF6B6B; margin-top: 1rem; }
 
     /* ===== MAIN LAYOUT ===== */
-    #app { display: none; height: 100vh; }
+    #app { display: none; height: 100vh; height: 100dvh; }
     #app.active { display: flex; flex-direction: column; }
 
     /* Header */
@@ -69,7 +69,7 @@
     .pending-indicator.active { display: inline-block; }
 
     /* Main container */
-    .main-container { flex: 1; display: flex; overflow: hidden; }
+    .main-container { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
     /* Sidebar - Lista de chats */
     .sidebar { width: 320px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
@@ -182,8 +182,8 @@
     @media (max-width: 768px) {
       .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
       .sidebar.hidden { display: none; }
-      .chat-area { position: absolute; inset: 0; z-index: 20; display: none; }
-      .chat-area.active { display: flex; }
+      .chat-area { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: none; flex-direction: column; background: #e5ddd5; }
+      .chat-area.active { display: flex; top: var(--header-h, 56px); }
       .chat-header-back { display: block; }
       .main-container { position: relative; }
     }
@@ -589,6 +589,14 @@ if (!location.search.includes('v=')) {
     if (savedPin) connect(savedPin);
     else pins[0].focus();
 
+    // Medir altura del header para el chat-area en móvil
+    function updateHeaderHeight() {
+      const h = document.querySelector('.header');
+      if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+    }
+    window.addEventListener('resize', updateHeaderHeight);
+    setTimeout(updateHeaderHeight, 300);
+
     // ===== SOCKET CONNECTION =====
     function connect(pin) {
       socket = io({
@@ -929,18 +937,20 @@ if (!location.search.includes('v=')) {
           <button class="chat-header-back" onclick="closeChat()">←</button>
           <div class="chat-header-avatar" style="${isHuman ? 'background:#f39c12' : ''}">${currentChat.slice(-2).toUpperCase()}</div>
           <div class="chat-header-info">
-            <div class="chat-header-name">${escapeHtml(name)}</div>
-            <div class="chat-header-status">${isHuman ? '👤 Modo humano' : '🤖 Bot · ' + formatPhone(currentChat)}</div>
+            <div class="chat-header-name">
+              ${escapeHtml(name)}
+              ${isHuman
+                ? `<span style="background:#f39c12;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;cursor:pointer;" onclick="liberarChat()">👤 MODO HUMANO</span>`
+                : `<span style="background:#22c55e;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;cursor:pointer;" onclick="tomarChat()">🤖 BOT ACTIVO</span>`
+              }
+            </div>
+            <div class="chat-header-status">${formatPhone(currentChat)}</div>
           </div>
           <div class="chat-header-actions">
-            ${isHuman
-              ? `<button class="chat-header-btn" style="background:#e8f5e9;color:#2e7d32;" onclick="liberarChat()">🤖 Bot</button>`
-              : `<button class="chat-header-btn" style="background:#fff3e0;color:#e65100;" onclick="tomarChat()">👤 Tomar</button>`
-            }
             <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
           </div>
         </div>
-        ${isHuman ? `<div style="background:#fff3e0;border-bottom:1px solid #f39c12;padding:3px 10px;font-size:0.72rem;color:#e65100;text-align:center;">👤 <strong>Modo humano</strong> — Vos controlás</div>` : ''}
+
         <div class="messages-container" id="messagesContainer">
           ${(() => { try { return renderMessages(chat); } catch(e) { console.error('❌ renderMessages error:', e); return '<div style="padding:20px;color:red;font-size:0.8rem;">Error: ' + e.message + '</div>'; } })()}
         </div>
