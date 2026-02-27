@@ -702,6 +702,7 @@ if (!location.search.includes('v=')) {
         if (data.quickReplies) quickReplies = data.quickReplies;
         renderChatList();
         if (currentChat) renderChat();
+        refreshQuickRepliesBar();
         
         // Auto-abrir chat específico si viene de Pushover (?chat=XXXX)
         const urlParams = new URLSearchParams(window.location.search);
@@ -828,6 +829,7 @@ if (!location.search.includes('v=')) {
       socket.on('quick_replies', data => {
         quickReplies = data.quickReplies || [];
         if (currentChat) renderChat();
+        refreshQuickRepliesBar();
       });
     }
 
@@ -959,19 +961,8 @@ if (!location.search.includes('v=')) {
           </div>
           <button class="chat-send-btn" onclick="sendMessage()">➤</button>
         </div>
-        <div class="quick-replies-bar">
-          <button class="qr-pill" onclick="useQuickReply('si_hay')">✅ Sí Hay</button>
-          <button class="qr-pill" onclick="useQuickReply('no_hay')">❌ No Hay</button>
-          <button class="qr-pill" onclick="useQuickReply('horario')">🕐 Horario</button>
-          <button class="qr-pill" onclick="useQuickReply('direccion')">📍 Dirección</button>
-          <button class="qr-pill" onclick="useQuickReply('info_envios')">🚚 Info Envíos</button>
-          <button class="qr-pill" onclick="useQuickReply('datos_envio')">📦 Datos Envío</button>
-          <button class="qr-pill" onclick="useQuickReply('sinpe')">💳 SINPE</button>
-          <button class="qr-pill" onclick="useQuickReply('gracias')">🙏 Gracias</button>
-          <button class="qr-pill" onclick="useQuickReply('cambios')">🔄 Cambios</button>
-          <button class="qr-pill" onclick="useQuickReply('garantia')">🛡️ Garantía</button>
-          <button class="qr-pill" onclick="useQuickReply('resumen')">📋 Resumen</button>
-          <button class="qr-pill" onclick="openEditAtajos()" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe;">✏️ Editar</button>
+        <div class="quick-replies-bar" id="quickRepliesBar">
+          ${renderQuickRepliesBar()}
         </div>
       `;
       
@@ -1285,8 +1276,7 @@ if (!location.search.includes('v=')) {
       openChipPreview(label, text);
     }
 
-
-    // ===== MODAL EDITAR ATAJOS =====
+    // ===== BARRA DINÁMICA DE ATAJOS =====
     const SLUGS_DEFAULT = [
       { slug: 'si_hay',      label: '✅ Sí Hay' },
       { slug: 'no_hay',      label: '❌ No Hay' },
@@ -1301,18 +1291,61 @@ if (!location.search.includes('v=')) {
       { slug: 'resumen',     label: '📋 Resumen' },
     ];
 
+    function renderQuickRepliesBar() {
+      // Construir lista ordenada: primero los que están en quickReplies (con el orden guardado),
+      // luego los defaults que aún no estén, y siempre al final el botón Editar
+      let pills = [];
+
+      // Si hay quickReplies guardados, usarlos como orden base
+      if (quickReplies && quickReplies.length > 0) {
+        quickReplies.forEach(r => {
+          pills.push({ slug: r.slug, label: r.label || r.slug });
+        });
+        // Agregar defaults que no estén en quickReplies
+        SLUGS_DEFAULT.forEach(d => {
+          if (!pills.find(p => p.slug === d.slug)) {
+            pills.push({ slug: d.slug, label: d.label });
+          }
+        });
+      } else {
+        pills = [...SLUGS_DEFAULT];
+      }
+
+      const pillsHtml = pills.map(p =>
+        `<button class="qr-pill" onclick="useQuickReply('${p.slug}')">${escapeHtml(p.label)}</button>`
+      ).join('');
+
+      return pillsHtml + `<button class="qr-pill" onclick="openEditAtajos()" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe;flex-shrink:0;">✏️ Editar</button>`;
+    }
+
+    function refreshQuickRepliesBar() {
+      const bar = document.getElementById('quickRepliesBar');
+      if (bar) bar.innerHTML = renderQuickRepliesBar();
+    }
+
+    // ===== MODAL EDITAR ATAJOS =====
     let editAtajosRows = [];
+    let dragSrcIndex = null;
 
     function openEditAtajos() {
-      editAtajosRows = SLUGS_DEFAULT.map(d => {
-        const saved = quickReplies.find(r => r.slug === d.slug);
-        return { slug: d.slug, label: d.label, text: saved ? saved.text : '', fixed: true };
-      });
-      quickReplies.forEach(r => {
-        if (!SLUGS_DEFAULT.find(d => d.slug === r.slug)) {
-          editAtajosRows.push({ slug: r.slug, label: r.label || r.slug, text: r.text, fixed: false });
-        }
-      });
+      // Construir lista igual que renderQuickRepliesBar: orden de quickReplies primero
+      const merged = [];
+      if (quickReplies && quickReplies.length > 0) {
+        quickReplies.forEach(r => {
+          const def = SLUGS_DEFAULT.find(d => d.slug === r.slug);
+          merged.push({ slug: r.slug, label: r.label || (def ? def.label : r.slug), text: r.text || '', fixed: !!def });
+        });
+        SLUGS_DEFAULT.forEach(d => {
+          if (!merged.find(m => m.slug === d.slug)) {
+            merged.push({ slug: d.slug, label: d.label, text: '', fixed: true });
+          }
+        });
+      } else {
+        SLUGS_DEFAULT.forEach(d => {
+          merged.push({ slug: d.slug, label: d.label, text: '', fixed: true });
+        });
+      }
+      editAtajosRows = merged;
       renderEditAtajos();
       const modal = $('editAtajosModal');
       modal.style.display = 'flex';
@@ -1325,14 +1358,15 @@ if (!location.search.includes('v=')) {
     function renderEditAtajos() {
       const body = $('editAtajosBody');
       body.innerHTML = editAtajosRows.map((row, i) => `
-        <div style="margin-bottom:14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+        <div data-index="${i}" class="atajo-row" style="margin-bottom:14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);touch-action:none;">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span class="drag-handle" data-index="${i}" style="cursor:grab;font-size:1.2rem;color:#9ca3af;padding:0 4px;user-select:none;touch-action:none;" title="Arrastrar para reordenar">⠿</span>
             ${row.fixed
               ? `<span style="font-size:.9rem;font-weight:700;flex:1;">${escapeHtml(row.label)}</span>`
               : `<input value="${escapeHtml(row.label)}" oninput="editAtajosRows[${i}].label=this.value"
                   placeholder="Nombre del atajo"
                   style="flex:1;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.9rem;font-weight:700;font-family:inherit;">
-                 <button onclick="editAtajosRows.splice(${i},1);renderEditAtajos()" style="background:#fff0f0;border:none;color:#ef4444;cursor:pointer;font-size:0.85rem;padding:6px 10px;border-radius:8px;font-weight:600;">🗑️ Borrar</button>`
+                 <button onclick="deleteAtajo(${i})" style="background:#fff0f0;border:none;color:#ef4444;cursor:pointer;font-size:0.85rem;padding:6px 10px;border-radius:8px;font-weight:600;">🗑️ Borrar</button>`
             }
           </div>
           <textarea rows="3" oninput="editAtajosRows[${i}].text=this.value"
@@ -1341,18 +1375,119 @@ if (!location.search.includes('v=')) {
           >${escapeHtml(row.text)}</textarea>
         </div>
       `).join('');
+
+      // Agregar eventos de drag & drop (touch + mouse)
+      setupAtajosDragDrop();
+    }
+
+    function deleteAtajo(i) {
+      editAtajosRows.splice(i, 1);
+      renderEditAtajos();
+    }
+
+    function setupAtajosDragDrop() {
+      const body = $('editAtajosBody');
+      let dragIdx = null;
+      let touchStartY = 0;
+      let dragEl = null;
+      let placeholder = null;
+
+      // ---- TOUCH DRAG ----
+      body.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('touchstart', e => {
+          dragIdx = parseInt(handle.dataset.index);
+          dragEl = handle.closest('.atajo-row');
+          touchStartY = e.touches[0].clientY;
+          dragEl.style.opacity = '0.5';
+          e.stopPropagation();
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', e => {
+          if (dragIdx === null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const touchY = e.touches[0].clientY;
+          const rows = Array.from(body.querySelectorAll('.atajo-row'));
+          let targetIdx = null;
+          rows.forEach((row, idx) => {
+            const rect = row.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            if (touchY > mid) targetIdx = idx;
+          });
+          if (targetIdx === null) targetIdx = 0;
+          else targetIdx = Math.min(targetIdx + 1, editAtajosRows.length - 1);
+
+          if (targetIdx !== dragIdx) {
+            const moved = editAtajosRows.splice(dragIdx, 1)[0];
+            editAtajosRows.splice(targetIdx, 0, moved);
+            dragIdx = targetIdx;
+            renderEditAtajos();
+            // Re-attach: el re-render borra los eventos, pero los re-agrega
+          }
+        }, { passive: false });
+
+        handle.addEventListener('touchend', e => {
+          if (dragEl) dragEl.style.opacity = '1';
+          dragIdx = null;
+          dragEl = null;
+          e.stopPropagation();
+        });
+      });
+
+      // ---- MOUSE DRAG ----
+      body.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('mousedown', e => {
+          dragIdx = parseInt(handle.dataset.index);
+          dragEl = handle.closest('.atajo-row');
+          dragEl.style.opacity = '0.5';
+          document.body.style.userSelect = 'none';
+
+          const onMouseMove = (ev) => {
+            const rows = Array.from(body.querySelectorAll('.atajo-row'));
+            let targetIdx = null;
+            rows.forEach((row, idx) => {
+              const rect = row.getBoundingClientRect();
+              const mid = rect.top + rect.height / 2;
+              if (ev.clientY > mid) targetIdx = idx;
+            });
+            if (targetIdx === null) targetIdx = 0;
+            else targetIdx = Math.min(targetIdx + 1, editAtajosRows.length - 1);
+
+            if (targetIdx !== dragIdx) {
+              const moved = editAtajosRows.splice(dragIdx, 1)[0];
+              editAtajosRows.splice(targetIdx, 0, moved);
+              dragIdx = targetIdx;
+              renderEditAtajos();
+              // Re-setup happened, need to re-attach global mousemove
+            }
+          };
+
+          const onMouseUp = () => {
+            document.body.style.userSelect = '';
+            dragIdx = null;
+            dragEl = null;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        });
+      });
     }
 
     function addNewAtajo() {
       editAtajosRows.push({ slug: 'nuevo_' + Date.now(), label: 'Nuevo atajo', text: '', fixed: false });
       renderEditAtajos();
-      $('editAtajosBody').scrollTop = 99999;
+      setTimeout(() => { $('editAtajosBody').scrollTop = 99999; }, 50);
     }
 
     async function saveAtajosFromPanel() {
-      const toSave = editAtajosRows.map(r => ({ slug: r.slug, label: r.label, text: r.text.trim() })).filter(r => r.text);
+      const toSave = editAtajosRows.map(r => ({ slug: r.slug, label: r.label, text: r.text.trim() }));
+      // Guardar todos (incluso los sin texto) para preservar el orden
       socket.emit('save_quick_replies', { quickReplies: toSave });
       quickReplies = toSave;
+      refreshQuickRepliesBar();
       const msg = $('editAtajosMsg');
       msg.textContent = '✅ Atajos guardados correctamente';
       msg.style.display = 'block';
