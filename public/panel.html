@@ -970,7 +970,7 @@ if (!location.search.includes('v=')) {
         // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
         const hasImg = (m.imageBase64 || m.imageUrl) && (m.imageBase64 || m.imageUrl).length > 100;
         const rawImg = m.imageBase64 || m.imageUrl || null;
-        const imgSrc = hasImg ? (rawImg.startsWith('data:') ? rawImg : `data:image/jpeg;base64,${rawImg}`) : null; null;
+        const imgSrc = hasImg ? (rawImg.startsWith('data:') ? rawImg : `data:image/jpeg;base64,${rawImg}`) : null;
         html += `
           <div class="message ${m.direction}">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
@@ -1047,7 +1047,7 @@ if (!location.search.includes('v=')) {
               </div>
               ${!isSinpe ? badgeHtml : ''}
             </div>
-            ${false ? `<img class="action-card-image" src="" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : '<!-- No foto_url -->'}
+            ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : ''}
             <div class="action-card-details">
               <div class="action-card-detail">📦 <strong>${p.producto_url ? `<a href="${p.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(p.producto || 'Producto')} 🔗</a>` : escapeHtml(p.producto || 'Producto')}</strong></div>
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
