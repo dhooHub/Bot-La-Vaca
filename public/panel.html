@@ -120,7 +120,7 @@
     .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
     .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
-    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; }
+    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; flex-wrap: wrap; }
     .action-card-icon { font-size: 1.3rem; }
     .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 1rem; margin-bottom: 0.8rem; }
     .action-card-detail { margin-bottom: 0.3rem; }
@@ -311,6 +311,7 @@ if (!location.search.includes('v=')) {
     let allSales = [];
     let chats = {}, pending = {}, contacts = {};
     let humanModeChats = new Set(); // Chats en modo humano
+    let quickReplies = [];
     let notificationsEnabled = false;
     let swRegistration = null;
     let alertInterval = null; // Para repetir sonido
@@ -682,6 +683,8 @@ if (!location.search.includes('v=')) {
         if(data.sales) allSales = data.sales;
         // Human mode chats
         humanModeChats = new Set(data.humanModeChats || []);
+        // Quick replies
+        if (data.quickReplies) quickReplies = data.quickReplies;
         renderChatList();
         if (currentChat) renderChat();
         
@@ -809,6 +812,12 @@ if (!location.search.includes('v=')) {
       socket.on('contacts_list', data => {
         (data.contacts || []).forEach(c => contacts[c.waId] = c);
       });
+
+      // Quick replies update
+      socket.on('quick_replies', data => {
+        quickReplies = data.quickReplies || [];
+        if (currentChat) renderChat();
+      });
     }
 
     // ===== QR =====
@@ -927,12 +936,16 @@ if (!location.search.includes('v=')) {
         </div>
         ${isHuman ? `<div style="background:#fff3e0;border-bottom:2px solid #f39c12;padding:0.5rem 1rem;font-size:0.9rem;color:#e65100;text-align:center;">👤 <strong>Modo humano</strong> — el bot no responde en este chat. Vos controlás.</div>` : ''}
         <div class="messages-container" id="messagesContainer">
-          ${renderMessages(chat)}
+          ${(() => { try { return renderMessages(chat); } catch(e) { console.error('❌ renderMessages error:', e); return '<div style="padding:20px;color:red;font-size:0.8rem;">Error cargando mensajes: ' + e.message + '</div>'; } })()}
         </div>
         <div class="chat-input-area">
           <input type="text" class="chat-input" id="chatInput" placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Respuesta manual (no activa modo humano)...'}">
           <button class="chat-send-btn" onclick="sendMessage()">➤</button>
         </div>
+        ${quickReplies.length > 0 ? `
+        <div id="quickRepliesBar" style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#f8f9fa;border-top:1px solid #eee;overflow-x:auto;">
+          ${quickReplies.map(r => `<button onclick="useQuickReply(${JSON.stringify(r.text)})" style="background:#fff;border:1.5px solid #ddd;border-radius:999px;padding:5px 12px;font-size:0.78rem;cursor:pointer;white-space:nowrap;font-family:inherit;">⚡ ${escapeHtml(r.name)}</button>`).join('')}
+        </div>` : ''}
       `;
       
       // Enter to send
@@ -1040,11 +1053,9 @@ if (!location.search.includes('v=')) {
 
         html += `
           <div class="action-card ${cardClass}" id="actionCard">
-            <div class="action-card-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
-              <div style="display:flex;align-items:center;gap:8px;width:100%;">
-                <span class="action-card-icon">${icon}</span>
-                <span style="flex:1;">${title}</span>
-              </div>
+            <div class="action-card-header">
+              <span class="action-card-icon">${icon}</span>
+              <span style="flex:1;">${title}</span>
               ${!isSinpe ? badgeHtml : ''}
             </div>
             ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : ''}
@@ -1237,6 +1248,11 @@ if (!location.search.includes('v=')) {
       
       socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
       input.value = '';
+    }
+
+    function useQuickReply(text) {
+      const input = $('chatInput');
+      if (input) { input.value = text; input.focus(); }
     }
 
     function deleteChat() {
