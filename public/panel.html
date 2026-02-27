@@ -1130,6 +1130,8 @@ if (!location.search.includes('v=')) {
     function dismissAction() {
       if (!currentChat || !chats[currentChat]) return;
       stopAlert(); // Detener alarma
+      // Notificar al servidor para que elimine el pending permanentemente
+      socket.emit('dismiss_pending', { waId: currentChat });
       chats[currentChat].pending = null;
       renderChat();
       renderChatList();
