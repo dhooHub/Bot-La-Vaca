@@ -1519,9 +1519,9 @@ if (!location.search.includes('v=')) {
       socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
       document.getElementById('writeModalText').value = '';
       // Update display
+      // Update display
       var display = document.getElementById('chatInputDisplay');
-      if (display) display.textContent = isHuman ? 'Escribí tu respuesta...' : 'Mensaje manual...';
-      closeWriteModal();
+      if (display) display.innerHTML = humanModeChats.indexOf(currentChat) >= 0 ? 'Escribí tu respuesta...' : 'Mensaje manual...';
     }
 
     function openEmojiPickerInModal() {
