@@ -227,8 +227,9 @@
     <div class="main-container">
       <!-- Sidebar -->
       <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-          <input type="text" class="search-input" id="searchInput" placeholder="🔍 Buscar chat...">
+        <div class="sidebar-header" style="display:flex;gap:8px;align-items:center;">
+          <input type="text" class="search-input" id="searchInput" placeholder="🔍 Buscar chat..." style="flex:1;">
+          <button onclick="openNewChat()" style="background:#22c55e;border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:1.4rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;">+</button>
         </div>
         <div class="chat-list" id="chatList">
           <!-- Chats se renderizan aquí -->
@@ -1496,6 +1497,72 @@ if (!location.search.includes('v=')) {
 
 
     // ===== MODAL ESCRIBIR =====
+    // ===== NUEVO CHAT =====
+    function openNewChat() {
+      document.getElementById('newChatPhone').value = '';
+      document.getElementById('newChatMsg').value = '';
+      document.getElementById('newChatSuggestions').innerHTML = '';
+      document.getElementById('newChatMsg2').textContent = '';
+      document.getElementById('newChatModal').style.display = 'flex';
+      setTimeout(function() { document.getElementById('newChatPhone').focus(); }, 100);
+    }
+
+    function closeNewChat() {
+      document.getElementById('newChatModal').style.display = 'none';
+    }
+
+    function filterNewChatContacts(val) {
+      var box = document.getElementById('newChatSuggestions');
+      var clean = val.replace(/\D/g, '');
+      if (clean.length < 3) { box.innerHTML = ''; return; }
+      var matches = Object.keys(chats).filter(function(waId) {
+        var c = chats[waId];
+        var name = (c.name || c.pushName || '').toLowerCase();
+        return waId.includes(clean) || name.includes(val.toLowerCase());
+      }).slice(0, 6);
+      box.innerHTML = matches.map(function(waId) {
+        var c = chats[waId];
+        var name = c.name || c.pushName || formatPhone(waId);
+        return '<button onclick="selectNewChatContact(\'' + waId + '\')" style="padding:10px 14px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;text-align:left;cursor:pointer;font-size:.9rem;font-family:inherit;">'
+          + '<strong>' + escapeHtml(name) + '</strong> <span style="color:#9ca3af;font-size:.8rem;">' + formatPhone(waId) + '</span></button>';
+      }).join('');
+    }
+
+    function selectNewChatContact(waId) {
+      var c = chats[waId];
+      var phone = (c && (c.phone || waId)) || waId;
+      // Strip 506 prefix for display
+      var display = phone.replace(/^506/, '');
+      document.getElementById('newChatPhone').value = display;
+      document.getElementById('newChatSuggestions').innerHTML = '';
+      document.getElementById('newChatMsg').focus();
+    }
+
+    function sendNewChat() {
+      var rawPhone = document.getElementById('newChatPhone').value.trim().replace(/\D/g, '');
+      var msg = document.getElementById('newChatMsg').value.trim();
+      var statusEl = document.getElementById('newChatMsg2');
+
+      if (!rawPhone) { statusEl.textContent = '⚠️ Ingresá un número'; statusEl.style.color = '#ef4444'; return; }
+      if (!msg) { statusEl.textContent = '⚠️ Escribí un mensaje'; statusEl.style.color = '#ef4444'; return; }
+
+      // Normalize: add 506 if not already
+      var waId = rawPhone.startsWith('506') ? rawPhone : '506' + rawPhone;
+
+      socket.emit('action', { clientWaId: waId, actionType: 'MENSAJE', payload: { texto: msg } });
+
+      statusEl.textContent = '✅ Mensaje enviado';
+      statusEl.style.color = '#16a34a';
+      document.getElementById('newChatMsg').value = '';
+
+      setTimeout(function() {
+        closeNewChat();
+        // Open the chat if it exists or will appear
+        currentChat = waId;
+        renderChat();
+      }, 800);
+    }
+
     function openWriteModal() {
       if (!currentChat) return;
       var modal = document.getElementById('writeModal');
@@ -1743,6 +1810,39 @@ if (!location.search.includes('v=')) {
   </script>
 
   <!-- ===== MODAL PREVIEW CHIP (editar antes de enviar) ===== -->
+  <!-- ===== MODAL NUEVO CHAT ===== -->
+  <div id="newChatModal" onclick="if(event.target===this)closeNewChat()" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center;">
+    <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;padding:20px 16px 30px;box-sizing:border-box;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:1.05rem;">💬 Nuevo chat</div>
+        <button onclick="closeNewChat()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;">✕</button>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Número de teléfono</label>
+        <div style="display:flex;gap:8px;">
+          <input id="newChatPhone" type="tel" placeholder="Ej: 88887777 o 50688887777"
+            style="flex:1;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;"
+            onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"
+            oninput="filterNewChatContacts(this.value)">
+        </div>
+      </div>
+
+      <div id="newChatSuggestions" style="max-height:180px;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column;gap:6px;"></div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Mensaje inicial</label>
+        <textarea id="newChatMsg" rows="3" placeholder="Escribí el primer mensaje..."
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;resize:none;box-sizing:border-box;outline:none;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+      </div>
+
+      <button onclick="sendNewChat()" style="width:100%;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;">➤ Enviar mensaje</button>
+      <div id="newChatMsg2" style="text-align:center;font-size:.82rem;margin-top:8px;min-height:18px;"></div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL CHIP PREVIEW ===== -->
   <div id="chipPreviewModal" style="display:none;position:fixed;top:0;left:0;right:0;height:50vh;z-index:998;background:#fff;flex-direction:column;box-shadow:0 4px 30px rgba(0,0,0,.25);border-radius:0 0 20px 20px;">
     <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
       <button onclick="closeChipPreview()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;">←</button>
