@@ -788,6 +788,28 @@ if (!location.search.includes('v=')) {
         if (currentChat === data.waId) renderChat();
       });
 
+      // LID resuelto: fusionar chat huérfano con el chat real
+      socket.on('lid_merged', data => {
+        const { oldId, newId } = data;
+        if (!oldId || !newId || oldId === newId) return;
+        // Fusionar mensajes del chat huérfano al chat real
+        if (chats[oldId]) {
+          if (!chats[newId]) chats[newId] = { messages: [], pending: null };
+          // Mover mensajes
+          chats[newId].messages = [...chats[oldId].messages, ...chats[newId].messages]
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          // Mover pending si existe
+          if (chats[oldId].pending && !chats[newId].pending) {
+            chats[newId].pending = chats[oldId].pending;
+          }
+          delete chats[oldId];
+        }
+        // Si estaba viendo el chat huérfano, redirigir al real
+        if (currentChat === oldId) { currentChat = newId; renderChat(); }
+        renderChatList();
+        toast(`🔗 Chat sincronizado correctamente`, 'success');
+      });
+
       // Sale completed
       socket.on('sale_completed', sale => {
         allSales.push(sale);
