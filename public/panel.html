@@ -668,9 +668,22 @@ if (!location.search.includes('v=')) {
         if (data.paused) {
           btn.textContent = '⏸️ Pausado';
           btn.className = 'bot-toggle paused';
+          // Pausa global → todos los chats pasan a modo humano visualmente
+          if (data.allHuman && data.affectedChats) {
+            data.affectedChats.forEach(waId => humanModeChats.add(waId));
+            // Si hay un chat abierto que fue afectado, re-renderizar
+            if (currentChat && data.affectedChats.includes(currentChat)) renderChat();
+            renderChatList();
+          }
         } else {
           btn.textContent = '▶️ Bot';
           btn.className = 'bot-toggle active';
+          // Reanuda → retirar modo humano de los que fueron pausados globalmente
+          if (data.released && data.released.length > 0) {
+            data.released.forEach(waId => humanModeChats.delete(waId));
+            if (currentChat && data.released.includes(currentChat)) renderChat();
+            renderChatList();
+          }
         }
       });
 
