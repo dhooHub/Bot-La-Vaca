@@ -266,31 +266,6 @@ function saveLidMap() {
   try { fs.writeFileSync(LID_MAP_FILE, JSON.stringify(Object.fromEntries(lidPhoneMap), null, 2)); } catch(e) {}
 }
 
-// Fusionar historial de un LID huérfano al número real cuando se resuelve
-function mergeLidHistory(lidId, realWaId) {
-  if (!lidId || !realWaId || lidId === realWaId) return;
-  const orphanMsgs = fullHistory.filter(m => m.waId === lidId);
-  if (orphanMsgs.length === 0) return;
-  // Reasignar al waId real
-  orphanMsgs.forEach(m => { m.waId = realWaId; });
-  // Fusionar sesión huérfana si existe
-  if (sessions.has(lidId) && !sessions.has(realWaId)) {
-    sessions.set(realWaId, sessions.get(lidId));
-    sessions.delete(lidId);
-  }
-  // Fusionar profile huérfano
-  if (profiles.has(lidId) && !profiles.has(realWaId)) {
-    const orphanProfile = profiles.get(lidId);
-    orphanProfile.waId = realWaId;
-    profiles.set(realWaId, orphanProfile);
-    profiles.delete(lidId);
-  }
-  saveDataToDisk();
-  // Notificar al panel para que actualice
-  io.emit('lid_merged', { oldId: lidId, newId: realWaId });
-  console.log(`🔗 LID fusionado: ${lidId} → ${realWaId} (${orphanMsgs.length} mensajes)`);
-}
-
 // ============ CRM SIMPLE ============
 function loadCrmData() {
   try {
@@ -640,13 +615,13 @@ async function handleIncomingMessage(msg) {
   let waId, realPhone = null;
   if (senderPn) {
     realPhone = fromJid(senderPn); waId = realPhone;
-    if (lidId) { mergeLidHistory(lidId, waId); lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
+    if (lidId) { lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
   } else if (isLid && lidPhoneMap.has(lidId)) {
     realPhone = lidPhoneMap.get(lidId); waId = realPhone;
   } else if (isLid) {
     try {
       const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
-      if (pn) { realPhone = fromJid(pn); waId = realPhone; mergeLidHistory(lidId, waId); lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
+      if (pn) { realPhone = fromJid(pn); waId = realPhone; lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
       else waId = lidId;
     } catch(e) { waId = lidId; }
   } else {
@@ -1340,33 +1315,7 @@ async function connectWhatsApp() {
     for (const msg of messages) {
       if (msg.key.remoteJid?.endsWith('@g.us')) continue;
       if (msg.key.fromMe) {
-        // Resolver waId correctamente (igual que en handleIncomingMessage)
-        const remoteJid = msg.key.remoteJid || '';
-        const isLid = remoteJid.endsWith('@lid');
-        const senderPn = msg.key.senderPn || msg.key.senderPnAlt || null;
-        let waId;
-        if (senderPn) {
-          waId = fromJid(senderPn);
-          if (isLid) { lidPhoneMap.set(fromJid(remoteJid), waId); saveLidMap(); }
-        } else if (isLid && lidPhoneMap.has(fromJid(remoteJid))) {
-          waId = lidPhoneMap.get(fromJid(remoteJid));
-        } else if (isLid) {
-          // Intentar resolver via signalRepository
-          try {
-            const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
-            if (pn) {
-              waId = fromJid(pn);
-              lidPhoneMap.set(fromJid(remoteJid), waId);
-              saveLidMap();
-              // Fusionar historial huérfano si existe
-              mergeLidHistory(fromJid(remoteJid), waId);
-            } else {
-              waId = fromJid(remoteJid);
-            }
-          } catch(e) { waId = fromJid(remoteJid); }
-        } else {
-          waId = fromJid(remoteJid);
-        }
+        const waId = fromJid(msg.key.remoteJid || '');
         if (!waId) continue;
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         if (text) addToChatHistory(waId, 'out', text);
@@ -1421,7 +1370,45 @@ io.on('connection', (socket) => {
     if (connectionStatus === 'connected') { socket.emit('connection_status', { status: 'connected', phone: connectedPhone }); return; }
     connectWhatsApp();
   });
-  socket.on('toggle_bot', () => { botPaused = !botPaused; saveDataToDisk(); io.emit('bot_status', { paused: botPaused }); });
+  socket.on('toggle_bot', () => {
+    botPaused = !botPaused;
+    saveDataToDisk();
+
+    if (botPaused) {
+      // PAUSA GLOBAL → poner todos los chats en modo humano
+      const affected = [];
+      for (const [wId, s] of sessions.entries()) {
+        if (!s.humanMode) {
+          s.humanMode = true;
+          s.humanModeAt = s.humanModeAt || Date.now();
+          s.humanModeLastActivity = Date.now();
+          // Marcar que fue activado por pausa global (no manual) para poder revertir
+          s._pausedByGlobal = true;
+          affected.push(wId);
+        }
+      }
+      // Notificar al panel que todos están en modo humano
+      io.emit('bot_status', { paused: true, allHuman: true, affectedChats: affected });
+      console.log(`⏸️ Bot pausado globalmente. ${affected.length} chats → modo humano`);
+    } else {
+      // REANUDA → solo quitar humanMode a los que fueron activados por pausa global
+      const released = [];
+      for (const [wId, s] of sessions.entries()) {
+        if (s.humanMode && s._pausedByGlobal && !s.humanModeManual) {
+          s.humanMode = false;
+          s.humanModeAt = null;
+          s.humanModeLastActivity = null;
+          s._pausedByGlobal = false;
+          released.push(wId);
+        } else if (s._pausedByGlobal) {
+          s._pausedByGlobal = false; // Limpiar flag aunque no se revierta
+        }
+      }
+      io.emit('bot_status', { paused: false, released });
+      console.log(`▶️ Bot reanudado. ${released.length} chats → bot activo`);
+    }
+    saveDataToDisk();
+  });
   socket.on('action', async (data) => {
     const result = await executeAction(data.clientWaId, data.actionType, data.payload || {});
     socket.emit('action_result', result);
@@ -1457,23 +1444,6 @@ io.on('connection', (socket) => {
     quickReplies = data.quickReplies;
     saveDataToDisk(); io.emit('quick_replies', { quickReplies });
   });
-
-  // Dismiss pending - marcar como visto permanentemente (persiste en disco)
-  socket.on('dismiss_pending', ({ waId }) => {
-    if (!waId) return;
-    // Eliminar del Map de pendientes activos
-    pendingQuotes.delete(waId);
-    // Marcar en la sesión para que no se regenere al reconectar
-    const session = sessions.get(waId);
-    if (session) {
-      session.pendingDismissed = true;
-      saveDataToDisk(); // Persistir en disco para sobrevivir reinicios
-    }
-    // Notificar a todos los paneles conectados
-    io.emit('pending_resolved', { waId });
-    console.log(`✅ Pending dismissed permanentemente para ${waId}`);
-  });
-
   socket.on('get_metrics', () => { socket.emit('metrics', { metrics: account.metrics }); });
   socket.on('purge_data', (data) => {
     const { beforeDate, purgeSessions, purgeSales, purgeHistory } = data;
