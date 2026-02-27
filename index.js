@@ -676,7 +676,7 @@ async function handleIncomingMessage(msg) {
     io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true, manual: true });
   }
 
-  // Modo humano → solo notificar al panel
+  // Modo humano → notificar al panel y pushover siempre
   if (session.humanMode) {
     console.log(`👤 Modo humano: ${displayPhone}`);
     io.emit('human_mode_message', {
@@ -684,9 +684,7 @@ async function handleIncomingMessage(msg) {
       text: text || (hasImage ? '(foto)' : '(mensaje)'),
       timestamp: new Date().toISOString()
     });
-    if (profile.botDisabled) {
-      sendPushoverAlert('HUMANO_MENSAJE', { waId, phone: profile.phone || waId, name: profile.name || '', mensaje: text || '(foto)' });
-    }
+    sendPushoverAlert('HUMANO_MENSAJE', { waId, phone: profile.phone || waId, name: profile.name || '', mensaje: text || '(foto)' });
     return;
   }
 
