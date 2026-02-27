@@ -266,6 +266,31 @@ function saveLidMap() {
   try { fs.writeFileSync(LID_MAP_FILE, JSON.stringify(Object.fromEntries(lidPhoneMap), null, 2)); } catch(e) {}
 }
 
+// Fusionar historial de un LID huérfano al número real cuando se resuelve
+function mergeLidHistory(lidId, realWaId) {
+  if (!lidId || !realWaId || lidId === realWaId) return;
+  const orphanMsgs = fullHistory.filter(m => m.waId === lidId);
+  if (orphanMsgs.length === 0) return;
+  // Reasignar al waId real
+  orphanMsgs.forEach(m => { m.waId = realWaId; });
+  // Fusionar sesión huérfana si existe
+  if (sessions.has(lidId) && !sessions.has(realWaId)) {
+    sessions.set(realWaId, sessions.get(lidId));
+    sessions.delete(lidId);
+  }
+  // Fusionar profile huérfano
+  if (profiles.has(lidId) && !profiles.has(realWaId)) {
+    const orphanProfile = profiles.get(lidId);
+    orphanProfile.waId = realWaId;
+    profiles.set(realWaId, orphanProfile);
+    profiles.delete(lidId);
+  }
+  saveDataToDisk();
+  // Notificar al panel para que actualice
+  io.emit('lid_merged', { oldId: lidId, newId: realWaId });
+  console.log(`🔗 LID fusionado: ${lidId} → ${realWaId} (${orphanMsgs.length} mensajes)`);
+}
+
 // ============ CRM SIMPLE ============
 function loadCrmData() {
   try {
@@ -615,13 +640,13 @@ async function handleIncomingMessage(msg) {
   let waId, realPhone = null;
   if (senderPn) {
     realPhone = fromJid(senderPn); waId = realPhone;
-    if (lidId) { lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
+    if (lidId) { mergeLidHistory(lidId, waId); lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
   } else if (isLid && lidPhoneMap.has(lidId)) {
     realPhone = lidPhoneMap.get(lidId); waId = realPhone;
   } else if (isLid) {
     try {
       const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
-      if (pn) { realPhone = fromJid(pn); waId = realPhone; lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
+      if (pn) { realPhone = fromJid(pn); waId = realPhone; mergeLidHistory(lidId, waId); lidPhoneMap.set(lidId, realPhone); saveLidMap(); }
       else waId = lidId;
     } catch(e) { waId = lidId; }
   } else {
@@ -1315,7 +1340,33 @@ async function connectWhatsApp() {
     for (const msg of messages) {
       if (msg.key.remoteJid?.endsWith('@g.us')) continue;
       if (msg.key.fromMe) {
-        const waId = fromJid(msg.key.remoteJid || '');
+        // Resolver waId correctamente (igual que en handleIncomingMessage)
+        const remoteJid = msg.key.remoteJid || '';
+        const isLid = remoteJid.endsWith('@lid');
+        const senderPn = msg.key.senderPn || msg.key.senderPnAlt || null;
+        let waId;
+        if (senderPn) {
+          waId = fromJid(senderPn);
+          if (isLid) { lidPhoneMap.set(fromJid(remoteJid), waId); saveLidMap(); }
+        } else if (isLid && lidPhoneMap.has(fromJid(remoteJid))) {
+          waId = lidPhoneMap.get(fromJid(remoteJid));
+        } else if (isLid) {
+          // Intentar resolver via signalRepository
+          try {
+            const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(remoteJid);
+            if (pn) {
+              waId = fromJid(pn);
+              lidPhoneMap.set(fromJid(remoteJid), waId);
+              saveLidMap();
+              // Fusionar historial huérfano si existe
+              mergeLidHistory(fromJid(remoteJid), waId);
+            } else {
+              waId = fromJid(remoteJid);
+            }
+          } catch(e) { waId = fromJid(remoteJid); }
+        } else {
+          waId = fromJid(remoteJid);
+        }
         if (!waId) continue;
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         if (text) addToChatHistory(waId, 'out', text);
