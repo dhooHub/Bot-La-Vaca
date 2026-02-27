@@ -118,6 +118,7 @@
 
     /* Action cards inside chat */
     .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
     .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
     .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; }
     .action-card-icon { font-size: 1.3rem; }
@@ -967,8 +968,9 @@ if (!location.search.includes('v=')) {
       chat.messages.forEach(m => {
         const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
         // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
-        const hasImg = m.imageUrl && m.imageUrl.length > 100;
-        const imgSrc = hasImg ? (m.imageUrl.startsWith('data:') ? m.imageUrl : `data:image/jpeg;base64,${m.imageUrl}`) : null;
+        const hasImg = (m.imageBase64 || m.imageUrl) && (m.imageBase64 || m.imageUrl).length > 100;
+        const rawImg = m.imageBase64 || m.imageUrl || null;
+        const imgSrc = hasImg ? (rawImg.startsWith('data:') ? rawImg : `data:image/jpeg;base64,${rawImg}`) : null; null;
         html += `
           <div class="message ${m.direction}">
             ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
@@ -1029,13 +1031,23 @@ if (!location.search.includes('v=')) {
         // Debug: ver si llega foto_url
         console.log('📷 Pending foto_url:', p.foto_url ? p.foto_url.substring(0, 50) + '...' : 'NULL');
         
+        // Tiempo desde que llegó el aviso
+        const alertAge = p.created_at ? Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000) : 0;
+        const isNew = alertAge < 5;
+        const badgeHtml = isNew
+          ? `<span style="background:#ef4444;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.5px;animation:pulse 1.5s infinite;">🔴 NUEVA ALERTA</span>`
+          : `<span style="background:#f59e0b;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.5px;">🟡 ALERTA PENDIENTE</span>`;
+
         html += `
           <div class="action-card ${cardClass}" id="actionCard">
-            <div class="action-card-header">
-              <span class="action-card-icon">${icon}</span>
-              <span>${title}</span>
+            <div class="action-card-header" style="flex-direction:column;align-items:flex-start;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;width:100%;">
+                <span class="action-card-icon">${icon}</span>
+                <span style="flex:1;">${title}</span>
+              </div>
+              ${!isSinpe ? badgeHtml : ''}
             </div>
-            ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : '<!-- No foto_url -->'}
+            ${false ? `<img class="action-card-image" src="" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : '<!-- No foto_url -->'}
             <div class="action-card-details">
               <div class="action-card-detail">📦 <strong>${p.producto_url ? `<a href="${p.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(p.producto || 'Producto')} 🔗</a>` : escapeHtml(p.producto || 'Producto')}</strong></div>
               ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
