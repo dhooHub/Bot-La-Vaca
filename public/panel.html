@@ -1315,7 +1315,21 @@
 
 
 
-    // Textos por defecto para cada slug
+    // ===== BARRA DINÁMICA DE ATAJOS =====
+    const SLUGS_DEFAULT = [
+      { slug: 'si_hay',      label: '✅ Sí Hay' },
+      { slug: 'no_hay',      label: '❌ No Hay' },
+      { slug: 'horario',     label: '🕐 Horario' },
+      { slug: 'direccion',   label: '📍 Dirección' },
+      { slug: 'info_envios', label: '🚚 Info Envíos' },
+      { slug: 'datos_envio', label: '📦 Datos Envío' },
+      { slug: 'sinpe',       label: '💳 SINPE' },
+      { slug: 'gracias',     label: '🙏 Gracias' },
+      { slug: 'cambios',     label: '🔄 Cambios' },
+      { slug: 'garantia',    label: '🛡️ Garantía' },
+      { slug: 'resumen',     label: '📋 Resumen' },
+    ];
+
     const TEXTS_DEFAULT = {
       si_hay:      '✅ Sí tenemos ese producto disponible. ¿Te interesa?',
       no_hay:      '❌ Lo sentimos, ese producto no está disponible en este momento.',
@@ -1331,37 +1345,16 @@
 
     function useQuickReply(slug) {
       if (slug === 'resumen') { openResumen(); return; }
-      
-      // Buscar texto: primero en quickReplies guardados, luego en defaults
       const saved = quickReplies.find(r => r.slug === slug || r.name === slug);
       const label = (saved && saved.label) || (SLUGS_DEFAULT.find(d => d.slug === slug) || {}).label || slug;
-      const text = (saved && saved.text && saved.text.trim()) 
-                   || TEXTS_DEFAULT[slug] 
-                   || '';
-      
+      const text = (saved && saved.text && saved.text.trim()) || TEXTS_DEFAULT[slug] || '';
       if (!text) {
-        // Solo si no hay texto en ningún lado, abrir editor
         openEditAtajos();
         setTimeout(() => toast('⚠️ Configurá el texto de este atajo', 'warning'), 300);
         return;
       }
       openChipPreview(label, text);
     }
-
-    // ===== BARRA DINÁMICA DE ATAJOS =====
-    const SLUGS_DEFAULT = [
-      { slug: 'si_hay',      label: '✅ Sí Hay' },
-      { slug: 'no_hay',      label: '❌ No Hay' },
-      { slug: 'horario',     label: '🕐 Horario' },
-      { slug: 'direccion',   label: '📍 Dirección' },
-      { slug: 'info_envios', label: '🚚 Info Envíos' },
-      { slug: 'datos_envio', label: '📦 Datos Envío' },
-      { slug: 'sinpe',       label: '💳 SINPE' },
-      { slug: 'gracias',     label: '🙏 Gracias' },
-      { slug: 'cambios',     label: '🔄 Cambios' },
-      { slug: 'garantia',    label: '🛡️ Garantía' },
-      { slug: 'resumen',     label: '📋 Resumen' },
-    ];
 
     function renderQuickRepliesBar() {
       // Construir lista ordenada: primero los que están en quickReplies (con el orden guardado),
@@ -2191,9 +2184,9 @@
         onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
     </div>
     <div style="padding:10px 16px 14px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;flex-shrink:0;">
-    <div style="padding:10px 16px 14px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;flex-shrink:0;">
       <button onclick="closeChipPreview()" style="flex:1;padding:14px;background:#f3f4f6;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;color:#374151;">✕ Cancelar</button>
       <button onclick="sendChipPreview()" style="flex:2;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;">➤ Enviar al cliente</button>
+    </div>
   </div>
 
   <!-- ===== MODAL RESUMEN PEDIDO ===== -->
