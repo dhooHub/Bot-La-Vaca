@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="no">
+  <meta name="theme-color" content="#1a1f25">
+  <meta name="description" content="Panel de control TICObot - La Vaca CR">
+  <!-- NO manifest para evitar modo PWA standalone que rompe links -->
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>TICObot 🐄</title>
+  <style>
+    :root {
+      --primary: #1a1f25;
+      --primary-light: #25D366;
+      --bg: #f0f2f5;
+      --card: #fff;
+      --text: #1a1f25;
+      --text-muted: #667781;
+      --danger: #E74C3C;
+      --success: #25D366;
+      --warning: #F39C12;
+      --action-bg: #fff3cd;
+      --action-border: #ffc107;
+      --sinpe-bg: #e3f2fd;
+      --sinpe-border: #2196f3;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+    /* ===== LOGIN ===== */
+    #login { position: fixed; inset: 0; background: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; z-index: 1000; }
+    #login.hidden { display: none; }
+    .login-title { color: #fff; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .login-subtitle { color: rgba(255,255,255,0.6); margin-bottom: 2rem; }
+    .pin-box { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
+    .pin-digit { width: 55px; height: 65px; font-size: 1.8rem; text-align: center; border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; outline: none; }
+    .pin-digit:focus { border-color: var(--primary-light); }
+    .login-btn { background: var(--primary-light); color: #fff; border: none; padding: 1rem 3rem; font-size: 1.1rem; font-weight: 600; border-radius: 25px; cursor: pointer; }
+    .login-btn:disabled { opacity: 0.5; }
+    .login-error { color: #FF6B6B; margin-top: 1rem; }
+
+    /* ===== MAIN LAYOUT ===== */
+    #app { display: none; height: 100vh; height: 100dvh; }
+    #app.active { display: flex; flex-direction: column; }
+
+    /* Header */
+    .header { background: var(--primary); color: #fff; padding: 0.8rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .header-left { display: flex; align-items: center; gap: 0.8rem; }
+    .header-title { font-size: 1.4rem; font-weight: 700; }
+    .conn-badge { padding: 0.3rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700; }
+    .conn-badge.on { background: var(--success); }
+    .conn-badge.off { background: var(--danger); cursor: pointer; }
+    .conn-badge.wait { background: var(--warning); }
+    .header-right { display: flex; align-items: center; gap: 0.6rem; }
+    .bot-toggle { padding: 0.4rem 0.8rem; border-radius: 12px; font-size: 0.9rem; font-weight: 600; border: none; cursor: pointer; }
+    .bot-toggle.active { background: var(--success); color: #fff; }
+    .bot-toggle.paused { background: var(--warning); color: #fff; }
+    .notif-btn { background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 8px; font-size: 1.1rem; cursor: pointer; position: relative; }
+    .notif-btn.enabled { background: var(--success); }
+    .notif-btn:not(.enabled) { animation: pulse-notif 2s infinite; }
+    .notif-btn::after { content: ''; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; display: none; }
+    .notif-btn:not(.enabled)::after { display: block; animation: blink 1s infinite; }
+    @keyframes pulse-notif { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    
+    /* Indicador de acciones pendientes en header */
+    .pending-indicator { background: var(--danger); color: #fff; padding: 0.3rem 0.6rem; border-radius: 12px; font-size: 0.85rem; font-weight: 700; animation: blink 1s infinite; display: none; }
+    .pending-indicator.active { display: inline-block; }
+
+    /* Main container */
+    .main-container { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+    /* Sidebar - Lista de chats */
+    .sidebar { width: 320px; background: #fff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 0.8rem; border-bottom: 1px solid #e0e0e0; }
+    .search-input { width: 100%; padding: 0.8rem 1rem; border: none; border-radius: 20px; background: var(--bg); font-size: 1.05rem; outline: none; }
+    .chat-list { flex: 1; overflow-y: auto; }
+    .chat-item { display: flex; align-items: center; gap: 0.8rem; padding: 1rem 1rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
+    .chat-item:hover { background: #f5f5f5; }
+    .chat-item.active { background: #e8f5e9; }
+    .chat-item.has-action { background: #fff8e1; }
+    .chat-item.human-mode { background: #fff3e0; border-left: 3px solid #f39c12; }
+    .chat-avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.05rem; position: relative; flex-shrink: 0; }
+    .chat-avatar .badge { position: absolute; top: -2px; right: -2px; width: 20px; height: 20px; background: var(--danger); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: #fff; border: 2px solid #fff; }
+    .chat-info { flex: 1; min-width: 0; }
+    .chat-name { font-weight: 600; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-preview { font-size: 0.95rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-meta { text-align: right; flex-shrink: 0; }
+    .chat-time { font-size: 0.85rem; color: var(--text-muted); }
+    .chat-action-icon { font-size: 1.1rem; margin-top: 0.2rem; }
+
+    /* Chat area */
+    .chat-area { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; min-height: 0; overflow: hidden; }
+    .chat-area.empty { align-items: center; justify-content: center; }
+    .empty-chat { text-align: center; color: var(--text-muted); }
+    .empty-chat-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-chat-text { font-size: 1.1rem; }
+
+    /* Chat header — compact */
+    .chat-header { background: #fff; padding: 6px 10px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e0e0e0; min-height: 48px; }
+    .chat-header-back { display: none; background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 6px; }
+    .chat-header-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--primary-light); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+    .chat-header-info { flex: 1; min-width: 0; }
+    .chat-header-name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-status { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-header-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .chat-header-btn { background: var(--bg); border: none; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+
+    /* Messages */
+    .messages-container { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem; min-height: 0; }
+    .message { max-width: 80%; padding: 0.6rem 0.9rem; border-radius: 10px; font-size: 1.05rem; position: relative; line-height: 1.4; }
+    .message.in { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .message.out { background: #d9fdd3; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .message-text { word-wrap: break-word; }
+    .message-time { font-size: 0.75rem; color: var(--text-muted); text-align: right; margin-top: 0.2rem; }
+    .message-image { max-width: 100%; max-height: 200px; border-radius: 8px; margin-bottom: 0.3rem; cursor: pointer; }
+
+    /* Action cards inside chat */
+    .action-card { background: var(--action-bg); border: 2px solid var(--action-border); border-radius: 12px; padding: 1rem; margin: 0.5rem 0; align-self: center; width: 90%; max-width: 400px; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+    .action-card.sinpe { background: var(--sinpe-bg); border-color: var(--sinpe-border); }
+    .action-card-header { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; margin-bottom: 0.8rem; font-size: 1.05rem; flex-wrap: wrap; }
+    .action-card-icon { font-size: 1.3rem; }
+    .action-card-details { background: rgba(255,255,255,0.7); padding: 0.6rem; border-radius: 8px; font-size: 1rem; margin-bottom: 0.8rem; }
+    .action-card-detail { margin-bottom: 0.3rem; }
+    .action-card-buttons { display: flex; gap: 0.5rem; }
+    .action-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .action-btn.primary { background: var(--success); color: #fff; }
+    .action-btn.danger { background: var(--danger); color: #fff; }
+    .action-btn.info { background: #2196f3; color: #fff; }
+    .action-resolved { text-align: center; padding: 0.5rem; font-weight: 600; color: var(--text-muted); font-size: 1rem; }
+    .action-card.tienda { background: #fff3e0; border-color: #ff9800; }
+    .action-card.foto-externa { background: #e8f5e9; border-color: #4caf50; }
+    .action-card-image { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; margin-bottom: 0.8rem; cursor: pointer; background: #f5f5f5; }
+
+    /* Chat input */
+    .chat-input-area { background: #fff; padding: 8px 12px; display: flex; gap: 8px; align-items: center; border-top: 1px solid #eee; }
+    .chat-input-icon { background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 5px; opacity: 0.6; flex-shrink: 0; }
+    .chat-input { flex: 1; padding: 11px 16px; border: none; border-radius: 24px; background: var(--bg); font-size: 1.05rem; outline: none; }
+    .chat-send-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--primary-light); border: none; color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    /* Quick replies bar — horizontal scroll, thin pills */
+    .quick-replies-bar { display: flex; gap: 8px; padding: 8px 10px; background: #fff; border-top: 1px solid #f0f0f0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+    .quick-replies-bar::-webkit-scrollbar { display: none; }
+    .qr-pill { background: #f0f0f0; border: none; border-radius: 999px; padding: 8px 16px; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; color: #333; flex-shrink: 0; line-height: 1.3; -webkit-tap-highlight-color: transparent; }
+    .qr-pill:active { background: var(--primary-light); color: #fff; }
+
+    /* QR Section */
+    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .qr-overlay.active { display: flex; }
+    .qr-modal { background: #fff; padding: 2rem; border-radius: 16px; text-align: center; max-width: 350px; }
+    .qr-modal img { width: 220px; height: 220px; margin: 1rem 0; }
+    .qr-instructions { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+    .qr-close { margin-top: 1rem; background: var(--danger); color: #fff; border: none; padding: 0.6rem 1.5rem; border-radius: 20px; cursor: pointer; }
+
+    /* Shipping Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #fff; padding: 1.5rem; border-radius: 16px; width: 90%; max-width: 400px; }
+    .modal-title { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: 1rem; }
+    .modal-info { background: var(--bg); padding: 0.8rem; border-radius: 10px; margin-bottom: 1rem; }
+    .modal-info-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.9rem; }
+    .modal-input { width: 100%; padding: 1rem; font-size: 1.3rem; font-weight: 700; border: 2px solid var(--bg); border-radius: 12px; text-align: center; outline: none; }
+    .modal-input:focus { border-color: var(--primary-light); }
+    .quick-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0; }
+    .quick-price { padding: 0.6rem; background: var(--bg); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .quick-price:hover { background: var(--primary-light); color: #fff; }
+    .modal-buttons { display: flex; gap: 0.5rem; }
+    .modal-btn { flex: 1; padding: 0.8rem; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .modal-btn.cancel { background: var(--bg); }
+    .modal-btn.confirm { background: var(--primary-light); color: #fff; }
+    .modal-btn.danger { background: var(--danger); color: #fff; margin-top: 0.5rem; width: 100%; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: #fff; padding: 0.8rem 1.5rem; border-radius: 25px; opacity: 0; transition: all 0.3s; z-index: 300; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; position: absolute; inset: 0; z-index: 10; display: flex; }
+      .sidebar.hidden { display: none; }
+      .chat-area { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: none; flex-direction: column; background: #e5ddd5; }
+      .chat-area.active { display: flex; top: var(--header-h, 56px); }
+      .chat-header-back { display: block; }
+      .main-container { position: relative; }
+    }
+  
+    
+
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login">
+    <div class="login-title">🐄 TICObot</div>
+    <p class="login-subtitle">Ingresá tu PIN</p>
+    <div class="pin-box">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+      <input type="tel" class="pin-digit" maxlength="1" inputmode="numeric">
+    </div>
+    <button class="login-btn" id="loginBtn" disabled>Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+
+  <!-- APP -->
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="header-title">🐄 TICObot</span>
+        <span class="conn-badge off" id="connBadge" onclick="showQR()">CONECTAR</span>
+        <span class="pending-indicator" id="pendingIndicator">0 PENDIENTES</span>
+      </div>
+      <div class="header-right">
+        <button class="notif-btn" onclick="showSales()" title="Ventas" style="font-size:18px">💰</button>
+        <button class="notif-btn" id="notifBtn" onclick="requestNotifications()" title="Activar notificaciones">🔔</button>
+        <button class="bot-toggle active" id="botToggle">▶️ Bot</button>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main-container">
+      <!-- Sidebar -->
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-header" style="display:flex;gap:8px;align-items:center;">
+          <input type="text" class="search-input" id="searchInput" placeholder="🔍 Buscar chat..." style="flex:1;">
+          <button onclick="openNewChat()" style="background:#22c55e;border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:1.4rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;">+</button>
+        </div>
+        <div class="chat-list" id="chatList">
+          <!-- Chats se renderizan aquí -->
+        </div>
+      </div>
+
+      <!-- Chat Area -->
+      <div class="chat-area empty" id="chatArea">
+        <div class="empty-chat">
+          <div class="empty-chat-icon">💬</div>
+          <div class="empty-chat-text">Seleccioná un chat para empezar</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="qr-overlay" id="qrOverlay">
+    <div class="qr-modal">
+      <h3>📱 Conectar WhatsApp</h3>
+      <div id="qrContent">
+        <p class="qr-instructions">Cargando...</p>
+      </div>
+      <button class="qr-close" onclick="hideQR()">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Shipping Modal -->
+  <div class="modal-overlay" id="shippingModal">
+    <div class="modal">
+      <div class="modal-title">📦 Costo de Envío</div>
+      <div class="modal-info">
+        <div class="modal-info-row"><span>📱 Cliente:</span><span id="shipClient">-</span></div>
+        <div class="modal-info-row"><span>📍 Zona:</span><span id="shipZone">-</span></div>
+        <div class="modal-info-row"><span>💰 Producto:</span><span id="shipPrice">-</span></div>
+      </div>
+      <input type="number" class="modal-input" id="shipInput" placeholder="₡0" inputmode="numeric">
+      <div class="quick-prices">
+        <button class="quick-price" onclick="setShip(2000)">₡2,000</button>
+        <button class="quick-price" onclick="setShip(2500)">₡2,500</button>
+        <button class="quick-price" onclick="setShip(3000)">₡3,000</button>
+        <button class="quick-price" onclick="setShip(3500)">₡3,500</button>
+        <button class="quick-price" onclick="setShip(4000)">₡4,000</button>
+        <button class="quick-price" onclick="setShip(5000)">₡5,000</button>
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="hideShipModal()">Cancelar</button>
+        <button class="modal-btn confirm" onclick="sendShipping()">Enviar ✓</button>
+      </div>
+      <button class="modal-btn danger" onclick="noShipping()">🚫 No envío a esa zona</button>
+    </div>
+  </div>
+
+  <!-- Image Viewer Modal -->
+  <div class="modal-overlay" id="imageViewer" onclick="hideImageViewer()">
+    <img id="viewerImage" src="" style="max-width:95%; max-height:90vh; border-radius:8px;">
+  </div>
+
+  <!-- Sales Modal -->
+  <div class="modal-overlay" id="salesModal">
+    <div style="background:#fff; border-radius:12px; padding:20px; max-width:500px; width:95%; max-height:85vh; overflow-y:auto; position:relative;">
+      <button onclick="hideSales()" style="position:absolute;top:10px;right:15px;background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      <h2 style="margin:0 0 5px;font-size:20px;">💰 Registro de Ventas</h2>
+      <div id="salesSummary" style="background:#f0f9f0;padding:12px;border-radius:8px;margin-bottom:15px;"></div>
+      <div id="salesList" style="font-size:14px;"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Audio for notifications - Tono más fuerte -->
+  <audio id="notifSound" preload="auto">
+    <source src="https://cdn.freesound.org/previews/536/536420_11943129-lq.mp3" type="audio/mpeg">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleRT5NJ7W5buNOOV4u9vYonVEfZK9vZ2Ce2V0jqq6s5J9aF5tbHx+fnxzcHJzd319fHl3d3p8fn9/fX18fX5/gICAf39/f4CAgICAgIB/f39/f4CAgICAf39/f4CAgIB/f39/gICAgH9/f3+AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgH9/f39/f39/f3+AgICAf39/f3+AgICAgICAgICAgH9/f39/f39/gICAgICAgIB/f39/gICAgH9/f3+AgIB/f39/gICAf39/f4CAgH9/f3+AgIB/f39/gICAgH9/f4CAgH9/f3+AgIB/f39/gICAgH9/f4CAgH9/f3+AgIB/f39/gICAgICAgICAgH9/f3+AgICAgIB/f39/gICAgH9/f3+AgICAgICAgICAgICAgICAgH9/f3+AgICAf39/f4CAgIB/f39/gICAgICAgICAgICAgIB/gICAgICAgIB/f3+AgICAgICAgH9/f3+AgIB/f4CAgIB/f3+AgIB/f39/gICAgICAgH9/f4CAgH9/gICAgH9/f4CAgICAgICAgH9/gICAgH9/f3+AgIB/f4CAf39/gICAf39/f4CAgH9/f4CAf3+AgIB/f3+AgH9/f4CAgH9/f4CAf3+AgIB/f3+AgH9/gICAgH9/gIB/f3+AgH9/gICAf39/gH9/gICAf39/gH9/gICAf3+AgH9/f4B/f4CAgH9/gH9/f4CAgH9/gH9/f4CAgH9/gH9/f4CAf3+Af39/gICAgH+Af39/gICAf3+Af39/gICAgICAgH9/gICAgICAgH9/gICAgICAgH9/gICAgICAgH9/f4CAgICAgH9/f4CAgICAgICAgICAgICAgH9/f4CAgICAgH9/f4CAgICAgIB/f3+AgICAgICAf39/gICAgICAgH9/f4CAgICAgIB/f3+AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgH9/f3+AgICAf3+AgICAgICAgICAgICAgH9/f3+AgICAgICAgICAf39/f39/f4CAgH9/f3+AgICAgH9/f3+AgICAgIB/f39/gICAgH9/f39/gICAgICAgICAgICAgIB/f39/gICAgICAgICAgICAgICAgH9/f3+AgICAgICAgIB/f3+AgICAgICAgICAgICAgIB/f3+AgICAgICAgICAgICAgIB/f39/gICAgICAgICAf39/f4CAgICAgICAf39/f4CAgICAgICAgH9/f3+AgICAgICAgH9/f39/gICAgICAf39/f3+AgICAgICAgICAgIB/f39/gICAgICAgICAgH9/f4CAgICAgIB/f39/gICAgICAgICAgICAgIB/f39/gICAgICAf39/f4CAgICAgICAgICAgIB/f39/gICAgICAgICAgIB/f39/gICAgICAgIB/f39/gICAgICAgH9/f39/gICAgICAgICAgH9/f4CAgICAgICAgICAgICAgICAgICAgH9/f4CAgICAgH9/f39/gICAgIB/f39/gICAgICAgH9/f39/gICAgICAgIB/f39/gICAgICAgIB/f39/gICAgICAgICAf39/f4CAgICAgICAgICAgIB/f39/gICAgICAgICAgICAgICAgH9/f3+AgICAgICAgICAgICAgIB/f39/gICAgICAgICAgICAgICAgH9/f4CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==" type="audio/wav">
+  </audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+<script>
+// Anti-caché: recargar si es versión vieja
+if (!location.search.includes('v=')) {
+  location.replace(location.pathname + '?v=' + Date.now());
+}
+    // ===== GLOBALS =====
+    let socket, currentChat = null, shipClient = null;
+    let allSales = [];
+    let chats = {}, pending = {}, contacts = {};
+    let humanModeChats = new Set(); // Chats en modo humano individual
+    let botGlobalPaused = false;    // Pausa global del header
+    let quickReplies = [];
+    let notificationsEnabled = false;
+    let swRegistration = null;
+    let alertInterval = null; // Para repetir sonido
+
+    const $ = id => document.getElementById(id);
+    const $$ = sel => document.querySelectorAll(sel);
+
+    // ===== LIMPIAR PWA ANTERIOR =====
+    // Desregistrar service workers para salir del modo PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+        if (regs.length > 0) console.log('🧹 Service Workers limpiados');
+      });
+    }
+
+    // ===== HELPERS =====
+    function formatPhone(w) {
+      const d = String(w).replace(/\D/g, '');
+      return d.length === 11 && d.startsWith('506') ? d.slice(0,3) + ' ' + d.slice(3,7) + '-' + d.slice(7) : w;
+    }
+    function timeAgo(d) {
+      if (!d) return '';
+      const s = Math.floor((Date.now() - new Date(d)) / 1000);
+      if (s < 60) return 'ahora';
+      if (s < 3600) return Math.floor(s/60) + 'm';
+      if (s < 86400) return Math.floor(s/3600) + 'h';
+      return Math.floor(s/86400) + 'd';
+    }
+    function escapeHtml(t) {
+      return String(t || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+    function linkify(text) {
+      const escaped = escapeHtml(text);
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      return escaped.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener" style="color:#1a73e8;text-decoration:underline;">$1</a>');
+    }
+    function toast(msg, type = '') {
+      const t = $('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + type;
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+    // Variable para el audio
+    let audioContext = null;
+    let audioUnlocked = false;
+    
+    function playSound() {
+      console.log('🔊 Intentando reproducir sonido...');
+      try {
+        const audio = $('notifSound');
+        audio.currentTime = 0;
+        audio.volume = 1.0;
+        
+        // Intentar reproducir
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('🔊 Sonido reproducido');
+          }).catch(e => {
+            console.log('🔊 Audio bloqueado:', e.message);
+          });
+        }
+      } catch(e) {
+        console.log('🔊 Error:', e);
+      }
+    }
+    
+    // Desbloquear audio con el primer toque del usuario
+    document.addEventListener('touchstart', function unlockAudio() {
+      const audio = $('notifSound');
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audioUnlocked = true;
+        console.log('🔊 Audio desbloqueado');
+      }).catch(e => {});
+      document.removeEventListener('touchstart', unlockAudio);
+    }, { once: true });
+    
+    // También intentar con click
+    document.addEventListener('click', function unlockAudioClick() {
+      const audio = $('notifSound');
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audioUnlocked = true;
+        console.log('🔊 Audio desbloqueado (click)');
+      }).catch(e => {});
+      document.removeEventListener('click', unlockAudioClick);
+    }, { once: true });
+    
+    // ===== FORCE UPDATE UI =====
+    let updatePending = false;
+    function forceUpdate() {
+      if (updatePending) return;
+      updatePending = true;
+      
+      // Usar setTimeout 0 para salir del contexto actual
+      setTimeout(() => {
+        updatePending = false;
+        console.log('🔄 forceUpdate ejecutando');
+        
+        // Siempre re-renderizar la lista
+        renderChatList();
+        
+        // Si hay chat abierto, actualizar el contenido
+        if (currentChat && chats[currentChat]) {
+          // Solo actualizar el contenedor de mensajes, no todo el chatArea
+          const container = $('messagesContainer');
+          if (container) {
+            const chat = chats[currentChat];
+            container.innerHTML = renderMessages(chat);
+            container.scrollTop = container.scrollHeight;
+          } else {
+            // Si no existe el contenedor, re-renderizar todo
+            renderChat();
+          }
+        }
+      }, 0);
+    }
+
+    // ===== NOTIFICATIONS =====
+    function requestNotifications() {
+      if (!('Notification' in window)) {
+        toast('Tu navegador no soporta notificaciones', 'error');
+        return;
+      }
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') {
+          notificationsEnabled = true;
+          $('notifBtn').classList.add('enabled');
+          toast('🔔 Notificaciones activadas', 'success');
+          // Test notification via Service Worker
+          if (swRegistration) {
+            swRegistration.showNotification('✅ TICObot Activado', { 
+              body: 'Las notificaciones están funcionando. Podés cerrar el navegador.', 
+              icon: '/icon-192.svg',
+              badge: '/icon-192.svg',
+              requireInteraction: true,
+              vibrate: [200, 100, 200]
+            });
+          } else {
+            new Notification('✅ TICObot Activado', { 
+              body: 'Las notificaciones están funcionando', 
+              icon: '🐄',
+              requireInteraction: true
+            });
+          }
+        } else {
+          toast('Notificaciones denegadas', 'error');
+        }
+      });
+    }
+    
+    function showNotification(title, body) {
+      // Detener alerta anterior si existe
+      stopAlert();
+      
+      // Iniciar alerta repetitiva (sonido cada 15 segundos por 2 minutos)
+      startAlert();
+      
+      // Notificación via Service Worker (funciona con pantalla apagada)
+      if (swRegistration && Notification.permission === 'granted') {
+        swRegistration.showNotification(title, { 
+          body, 
+          icon: '/icon-192.svg',
+          badge: '/icon-192.svg',
+          tag: 'ticobot-action',
+          requireInteraction: true,
+          vibrate: [200, 100, 200, 100, 200, 100, 200],
+          actions: [
+            { action: 'open', title: '📱 Abrir' }
+          ]
+        });
+      } else if (notificationsEnabled && Notification.permission === 'granted') {
+        const notif = new Notification(title, { 
+          body, 
+          icon: '🐄',
+          tag: 'ticobot-action',
+          requireInteraction: true,
+          silent: false
+        });
+        notif.onclick = () => {
+          window.focus();
+          notif.close();
+          stopAlert();
+        };
+      }
+      
+      // Vibrar si está disponible (móvil)
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
+      }
+      
+      // Cambiar título de la pestaña para llamar atención
+      const originalTitle = document.title;
+      let blink = true;
+      const blinkInterval = setInterval(() => {
+        document.title = blink ? '🔴 ¡ACCIÓN REQUERIDA!' : originalTitle;
+        blink = !blink;
+      }, 1000);
+      
+      // Parar el parpadeo después de 2 minutos o cuando se enfoque la ventana
+      setTimeout(() => {
+        clearInterval(blinkInterval);
+        document.title = originalTitle;
+      }, 120000);
+      
+      window.addEventListener('focus', () => {
+        clearInterval(blinkInterval);
+        document.title = originalTitle;
+        stopAlert();
+      }, { once: true });
+    }
+    
+    function startAlert() {
+      playSound();
+      // Repetir sonido cada 15 segundos por 2 minutos
+      let count = 0;
+      alertInterval = setInterval(() => {
+        count++;
+        if (count > 8) { // 8 * 15 = 2 minutos
+          stopAlert();
+          return;
+        }
+        playSound();
+        // Vibrar también
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200, 100, 200]);
+        }
+      }, 15000);
+    }
+    
+    function stopAlert() {
+      if (alertInterval) {
+        clearInterval(alertInterval);
+        alertInterval = null;
+      }
+    }
+    
+    function playSound() {
+      try {
+        const audio = $('notifSound');
+        audio.currentTime = 0;
+        audio.volume = 1.0;
+        audio.play().catch(e => console.log('Audio blocked:', e));
+        // Repetir sonido 2 veces más
+        setTimeout(() => { audio.currentTime = 0; audio.play().catch(e=>{}); }, 400);
+        setTimeout(() => { audio.currentTime = 0; audio.play().catch(e=>{}); }, 800);
+      } catch(e) {}
+    }
+
+    // ===== LOGIN =====
+    const pins = $$('.pin-digit');
+    pins.forEach((p, i) => {
+      p.addEventListener('input', e => {
+        if (e.target.value && i < 3) pins[i+1].focus();
+        $('loginBtn').disabled = getPin().length !== 4;
+      });
+      p.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !e.target.value && i > 0) pins[i-1].focus();
+      });
+    });
+    function getPin() { return Array.from(pins).map(p => p.value).join(''); }
+
+    $('loginBtn').onclick = () => connect(getPin());
+    const savedPin = localStorage.getItem('ticobot_pin');
+    if (savedPin) connect(savedPin);
+    else pins[0].focus();
+
+    // Medir altura del header para el chat-area en móvil
+    function updateHeaderHeight() {
+      const h = document.querySelector('.header');
+      if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+    }
+    window.addEventListener('resize', updateHeaderHeight);
+    setTimeout(updateHeaderHeight, 300);
+
+    // ===== SOCKET CONNECTION =====
+    function connect(pin) {
+      socket = io({
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
+      });
+      
+      socket.on('connect', () => {
+        console.log('🔌 Socket conectado');
+        socket.emit('auth', pin);
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('🔌 Socket desconectado');
+      });
+      
+      socket.on('reconnect', () => {
+        console.log('🔌 Socket reconectado - solicitando datos frescos');
+        socket.emit('auth', pin);
+      });
+      
+      socket.on('auth_success', () => {
+        localStorage.setItem('ticobot_pin', pin);
+        $('login').classList.add('hidden');
+        $('app').classList.add('active');
+        toast('✅ Conectado', 'success');
+        // Check notification permission
+        if (Notification.permission === 'granted') {
+          notificationsEnabled = true;
+          $('notifBtn').classList.add('enabled');
+        }
+      });
+      socket.on('auth_error', msg => {
+        $('loginError').textContent = msg;
+        pins.forEach(p => p.value = '');
+        pins[0].focus();
+        localStorage.removeItem('ticobot_pin');
+      });
+
+      // Connection status
+      socket.on('connection_status', data => {
+        const badge = $('connBadge');
+        if (data.status === 'connected') {
+          badge.className = 'conn-badge on';
+          badge.textContent = '🟢 CONECTADO';
+          badge.onclick = null;
+          hideQR();
+        } else if (data.status === 'qr' || data.status === 'connecting') {
+          badge.className = 'conn-badge wait';
+          badge.textContent = '🟡 CONECTANDO';
+        } else {
+          badge.className = 'conn-badge off';
+          badge.textContent = '🔴 CONECTAR';
+          badge.onclick = showQR;
+        }
+      });
+
+      // QR Code
+      socket.on('qr_code', data => {
+        $('qrContent').innerHTML = `<img src="${data.qr}" alt="QR"><p class="qr-instructions">1. Abrí WhatsApp<br>2. ⋮ → Dispositivos vinculados<br>3. Escaneá el QR</p>`;
+      });
+
+      // Bot status
+      socket.on('bot_status', data => {
+        const btn = $('botToggle');
+        botGlobalPaused = !!data.paused;
+        if (data.paused) {
+          btn.textContent = '⏸️ Pausado';
+          btn.className = 'bot-toggle paused';
+        } else {
+          btn.textContent = '▶️ Bot';
+          btn.className = 'bot-toggle active';
+        }
+        // Re-renderizar todo para reflejar el estado en cada chat
+        renderChatList();
+        if (currentChat) renderChat();
+      });
+
+      // Init data
+      socket.on('init_data', data => {
+        // Process history into chats
+        chats = {};
+        (data.history || []).forEach(m => {
+          if (!chats[m.waId]) chats[m.waId] = { messages: [], pending: null };
+          chats[m.waId].messages.push(m);
+        });
+        // Process pending
+        (data.pending || []).forEach(p => {
+          if (!chats[p.waId]) chats[p.waId] = { messages: [], pending: null };
+          // Detectar si es multi-producto (tiene products array o type='multi')
+          if (p.products || p.type === 'multi') {
+            chats[p.waId].pending = Object.assign({}, p, { tipo: 'multi' });
+          } else {
+            chats[p.waId].pending = p;
+          }
+        });
+        // Contacts
+        (data.contacts || []).forEach(c => contacts[c.waId] = c);
+        // Sales
+        if(data.sales) allSales = data.sales;
+        // Human mode chats
+        humanModeChats = new Set(data.humanModeChats || []);
+        // Bot paused state (sincronizar por si acaso)
+        if (data.botPaused !== undefined) botGlobalPaused = data.botPaused;
+        // Quick replies
+        if (data.quickReplies) quickReplies = data.quickReplies;
+        renderChatList();
+        if (currentChat) renderChat();
+        refreshQuickRepliesBar();
+        
+        // Auto-abrir chat específico si viene de Pushover (?chat=XXXX)
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatParam = urlParams.get('chat');
+        if (chatParam && chats[chatParam]) {
+          openChat(chatParam);
+          // Limpiar URL para que no reabra al refrescar
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        
+        // Auto-abrir modal de envío si hay zonas pendientes
+        if (data.pendingZones && data.pendingZones.length > 0) {
+          const z = data.pendingZones[0];
+          shipClient = z.waId;
+          $('shipClient').textContent = formatPhone(z.waId);
+          $('shipZone').textContent = z.zone || '-';
+          $('shipPrice').textContent = '₡' + (z.precio || 0).toLocaleString();
+          $('shipInput').value = '';
+          $('shippingModal').classList.add('active');
+        }
+      });
+
+      // New message - NO notificar (solo actualizar UI)
+      socket.on('new_message', msg => {
+        console.log('📩 new_message:', msg.waId);
+        if (!chats[msg.waId]) chats[msg.waId] = { messages: [], pending: null };
+        chats[msg.waId].messages.push(msg);
+        forceUpdate();
+      });
+
+      // New pending (stock query)
+      socket.on('new_pending', item => {
+        console.log('📥 new_pending:', item.waId, 'foto_url:', item.foto_url ? item.foto_url.substring(0, 50) + '...' : 'null');
+        if (!chats[item.waId]) chats[item.waId] = { messages: [], pending: null };
+        chats[item.waId].pending = item;
+        forceUpdate();
+        showNotification('📥 Nueva consulta', `${item.producto || 'Producto'} - ${formatPhone(item.waId)}`);
+      });
+
+      // Multi-producto received
+      socket.on('new_pending_multi', item => {
+        console.log('📥 new_pending_multi:', item.waId, (item.products ? item.products.length : 0) + ' productos');
+        if (!chats[item.waId]) chats[item.waId] = { messages: [], pending: null };
+        chats[item.waId].pending = Object.assign({}, item, { tipo: 'multi' });
+        forceUpdate();
+        showNotification('📋 Lista de productos', `${(item.products ? item.products.length : 0) || '?'} productos - ${formatPhone(item.waId)}`);
+      });
+
+      // SINPE received
+      socket.on('sinpe_received', data => {
+        if (!chats[data.waId]) chats[data.waId] = { messages: [], pending: null };
+        chats[data.waId].pending = Object.assign({}, data, { tipo: 'sinpe' });
+        forceUpdate();
+        showNotification('💰 SINPE recibido', formatPhone(data.waId));
+      });
+
+      // Zone received - show shipping modal
+      socket.on('zone_received', data => {
+        shipClient = data.waId;
+        $('shipClient').textContent = formatPhone(data.waId);
+        $('shipZone').textContent = data.zone || '-';
+        $('shipPrice').textContent = '₡' + (data.precio || 0).toLocaleString();
+        $('shipInput').value = '';
+        $('shippingModal').classList.add('active');
+        showNotification('📍 Zona recibida', data.zone);
+      });
+
+      // Producto de tienda física (no en catálogo online)
+      socket.on('store_product_inquiry', data => {
+        if (!chats[data.waId]) chats[data.waId] = { messages: [], pending: null };
+        chats[data.waId].pending = Object.assign({}, data, { tipo: 'tienda', producto: data.producto });
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+        showNotification('🏪 Producto de tienda', `${(data.producto ? data.producto.slice(0,30) : "")} - ${formatPhone(data.waId)}`);
+      });
+
+      // Pending resolved
+      socket.on('pending_resolved', data => {
+        if (chats[data.waId]) {
+          chats[data.waId].pending = null;
+        }
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+      });
+
+      // LID resuelto: fusionar chat huérfano con el chat real
+      socket.on('lid_merged', data => {
+        const { oldId, newId } = data;
+        if (!oldId || !newId || oldId === newId) return;
+        // Fusionar mensajes del chat huérfano al chat real
+        if (chats[oldId]) {
+          if (!chats[newId]) chats[newId] = { messages: [], pending: null };
+          // Mover mensajes
+          chats[newId].messages = [...chats[oldId].messages, ...chats[newId].messages]
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          // Mover pending si existe
+          if (chats[oldId].pending && !chats[newId].pending) {
+            chats[newId].pending = chats[oldId].pending;
+          }
+          delete chats[oldId];
+        }
+        // Si estaba viendo el chat huérfano, redirigir al real
+        if (currentChat === oldId) { currentChat = newId; renderChat(); }
+        renderChatList();
+        toast(`🔗 Chat sincronizado correctamente`, 'success');
+      });
+
+      // Sale completed
+      socket.on('sale_completed', sale => {
+        allSales.push(sale);
+        toast(`💰 Venta: ₡${(sale.total||0).toLocaleString()} - ${sale.producto||'Producto'}`, 'success');
+        if (chats[sale.waId]) chats[sale.waId].pending = null;
+        renderChatList();
+      });
+
+      // Action result
+      socket.on('action_result', r => {
+        toast(r.success ? '✅ ' + r.message : '❌ ' + r.message, r.success ? 'success' : 'error');
+        hideShipModal();
+      });
+
+      // Human mode events
+      socket.on('human_mode_changed', data => {
+        if (data.humanMode) {
+          humanModeChats.add(data.waId);
+        } else {
+          humanModeChats.delete(data.waId);
+        }
+        renderChatList();
+        if (currentChat === data.waId) renderChat();
+      });
+
+      socket.on('human_mode_message', data => {
+        // Mensaje llegó mientras humano tiene el chat — solo notificar con sonido
+        if (currentChat === data.waId) return; // Ya lo ve en pantalla
+        playSound();
+        showNotification('💬 Mensaje nuevo', `${(data.text ? data.text.slice(0,30) : "")} — ${data.phone}`);
+      });
+
+      // Contacts
+      socket.on('contacts_list', data => {
+        (data.contacts || []).forEach(c => contacts[c.waId] = c);
+      });
+
+      // Quick replies update
+      socket.on('quick_replies', data => {
+        quickReplies = data.quickReplies || [];
+        if (currentChat) renderChat();
+        refreshQuickRepliesBar();
+      });
+    }
+
+    // ===== QR =====
+    function showQR() {
+      $('qrOverlay').classList.add('active');
+      socket.emit('connect_whatsapp');
+    }
+    function hideQR() {
+      $('qrOverlay').classList.remove('active');
+    }
+
+    // ===== RENDER CHAT LIST =====
+    function renderChatList() {
+      const list = $('chatList');
+      const filter = $('searchInput').value.toLowerCase();
+      
+      // Contar pendientes y actualizar indicador
+      const pendingCount = Object.values(chats).filter(c => c.pending).length;
+      const indicator = $('pendingIndicator');
+      if (pendingCount > 0) {
+        indicator.textContent = `${pendingCount} PENDIENTE${pendingCount > 1 ? 'S' : ''}`;
+        indicator.classList.add('active');
+      } else {
+        indicator.classList.remove('active');
+      }
+      
+      // Sort by last message time, pending first
+      const sorted = Object.keys(chats).sort((a, b) => {
+        const ap = chats[a].pending ? 1 : 0;
+        const bp = chats[b].pending ? 1 : 0;
+        if (ap !== bp) return bp - ap;
+        const aLast = chats[a].messages[chats[a].messages.length - 1];
+        const bLast = chats[b].messages[chats[b].messages.length - 1];
+        return new Date((bLast && bLast.timestamp) || 0) - new Date((aLast && aLast.timestamp) || 0);
+      });
+
+      list.innerHTML = sorted.filter(waId => {
+        if (!filter) return true;
+        const c = contacts[waId];
+        return waId.includes(filter) || ((c && c.name) || '').toLowerCase().includes(filter);
+      }).map(waId => {
+        const chat = chats[waId];
+        const last = chat.messages[chat.messages.length - 1];
+        const contact = contacts[waId];
+        const name = (contact && contact.name) || formatPhone(waId);
+        const hasPending = !!chat.pending;
+        const isHumanMode = botGlobalPaused || humanModeChats.has(waId);
+        const isSinpe = (chat.pending && chat.pending.tipo) === 'sinpe';
+        const actionIcon = isHumanMode ? '👤' : isSinpe ? '💰' : hasPending ? '🔔' : '';
+        
+        return `
+          <div class="chat-item ${currentChat === waId ? 'active' : ''} ${hasPending ? 'has-action' : ''} ${isHumanMode ? 'human-mode' : ''}" onclick="openChat('${waId}')">
+            <div class="chat-avatar">
+              ${waId.slice(-2).toUpperCase()}
+              ${(hasPending || isHumanMode) ? `<span class="badge">${actionIcon || '!'}</span>` : ''}
+            </div>
+            <div class="chat-info">
+              <div class="chat-name">${escapeHtml(name)}</div>
+              <div class="chat-preview">${escapeHtml((last && last.text ? last.text.slice(0,35) : "") || '')}</div>
+            </div>
+            <div class="chat-meta">
+              <div class="chat-time">${timeAgo((last && last.timestamp))}</div>
+              ${hasPending ? `<div class="chat-action-icon">${actionIcon}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    $('searchInput').oninput = renderChatList;
+
+    // ===== OPEN/RENDER CHAT =====
+   function openChat(waId) {
+  currentChat = waId;
+  renderChatList();
+  renderChat();
+  
+  // Mobile: show chat area
+  $('sidebar').classList.add('hidden');
+  $('chatArea').classList.add('active');
+  $('chatArea').classList.remove('empty');
+
+  // Agregar al historial para que el botón atrás funcione
+  history.pushState({ chat: waId }, '', '');
+      
+      // Scroll al fondo después del layout change
+      setTimeout(() => {
+        const c = $('messagesContainer');
+        if(c) c.scrollTop = c.scrollHeight;
+      }, 200);
+    }
+
+    function renderChat() {
+      if (!currentChat || !chats[currentChat]) return;
+      
+      const chat = chats[currentChat];
+      const contact = contacts[currentChat];
+      const name = (contact && contact.name) || formatPhone(currentChat);
+      const isHuman = botGlobalPaused || humanModeChats.has(currentChat);
+      
+      $('chatArea').innerHTML = `
+        <div class="chat-header">
+          <button class="chat-header-back" onclick="closeChat()">←</button>
+          <div class="chat-header-avatar" style="${isHuman ? 'background:#f39c12' : ''}">${currentChat.slice(-2).toUpperCase()}</div>
+          <div class="chat-header-info">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="chat-header-name">${escapeHtml(name)}</div>
+              ${isHuman
+                ? `<span style="background:#f39c12;color:#fff;font-size:0.8rem;font-weight:800;padding:3px 11px;border-radius:999px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;" onclick="liberarChat()">👤 MODO HUMANO</span>`
+                : `<span style="background:#22c55e;color:#fff;font-size:0.8rem;font-weight:800;padding:3px 11px;border-radius:999px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;" onclick="tomarChat()">🤖 BOT ACTIVO</span>`
+              }
+            </div>
+            <div class="chat-header-status" style="display:flex;align-items:center;gap:6px;">
+              <span>${formatPhone(currentChat)}</span>
+              ${chat.notes ? `<span style="font-size:.75rem;color:#9ca3af;font-style:italic;">📝 ${escapeHtml(chat.notes.slice(0, 40))}${chat.notes.length > 40 ? '…' : ''}</span>` : ''}
+            </div>
+          </div>
+          <div class="chat-header-actions">
+            <button class="chat-header-btn" onclick="openContactModal('${currentChat}')" title="Editar contacto">✏️</button>
+            <button class="chat-header-btn" onclick="deleteChat()">🗑️</button>
+          </div>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+          ${(() => { try { return renderMessages(chat); } catch(e) { console.error('❌ renderMessages error:', e); return '<div style="padding:20px;color:red;font-size:0.8rem;">Error: ' + e.message + '</div>'; } })()}
+        </div>
+        <div class="chat-input-area">
+          <button class="chat-input-icon" onclick="openEmojiPicker()">😊</button>
+          <button class="chat-input-icon" onclick="openFileAttach()">📎</button>
+          <textarea id="chatInputDisplay" 
+            placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Mensaje manual...'}"
+            rows="1"
+            style="flex:1;padding:10px 14px;border:none;border-radius:22px;background:var(--bg);font-size:1rem;font-family:inherit;outline:none;resize:none;line-height:1.4;max-height:100px;overflow-y:auto;"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDirectMessage();}"></textarea>
+          <button class="chat-send-btn" onclick="sendDirectMessage()">➤</button>
+        </div>
+        <div class="quick-replies-bar" id="quickRepliesBar">
+          ${renderQuickRepliesBar()}
+        </div>
+      `;
+      
+      // Scroll to bottom
+      const container = $('messagesContainer');
+      container.scrollTop = container.scrollHeight;
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 100);
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 500);
+    }
+
+    function tomarChat() {
+      if (!currentChat) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'TOMAR_CHAT' });
+      humanModeChats.add(currentChat);
+      renderChat();
+      renderChatList();
+    }
+
+    function liberarChat() {
+      if (!currentChat) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'LIBERAR_CHAT' });
+      humanModeChats.delete(currentChat);
+      renderChat();
+      renderChatList();
+    }
+
+    function renderMessages(chat) {
+      let html = '';
+      
+      // Render messages
+      chat.messages.forEach(m => {
+        const time = new Date(m.timestamp).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+        // Detectar si hay imagen (puede venir como base64 puro o con prefijo data:)
+        const hasImg = (m.imageBase64 || m.imageUrl) && (m.imageBase64 || m.imageUrl).length > 100;
+        const rawImg = m.imageBase64 || m.imageUrl || null;
+        const imgSrc = hasImg ? (rawImg.startsWith('data:') ? rawImg : `data:image/jpeg;base64,${rawImg}`) : null;
+        html += `
+          <div class="message ${m.direction}">
+            ${hasImg ? `<img class="message-image" src="${imgSrc}" onclick="viewImage(this.src)" alt="Imagen">` : ''}
+            ${m.text ? `<div class="message-text">${linkify(m.text)}</div>` : ''}
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      });
+      
+      // Render pending action card if exists
+      if (chat.pending) {
+        const p = chat.pending;
+        console.log('🎴 Rendering action card:', p.waId, 'foto_url:', p.foto_url ? 'YES (' + p.foto_url.substring(0, 30) + '...)' : 'NO');
+        const isSinpe = p.tipo === 'sinpe' || p.type === 'sinpe';
+        const isTienda = p.tipo === 'tienda' || p.type === 'tienda';
+        const isMulti = p.tipo === 'multi' || p.type === 'multi';
+        const isFotoExterna = p.foto_externa;
+        
+        if (isMulti) {
+          // ====== TARJETA MULTI-PRODUCTO ======
+          const prods = p.products || [];
+          let multiHtml = `
+            <div class="action-card" id="actionCard" style="background:#f0f4ff;border-color:#3b82f6;">
+              <div class="action-card-header">
+                <span class="action-card-icon">📋</span>
+                <span>LISTA DE PRODUCTOS (${prods.length})</span>
+              </div>
+              <div style="font-size:0.85rem;margin-bottom:10px;">
+          `;
+          prods.forEach((prod, i) => {
+            multiHtml += `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px;margin:4px 0;background:#fff;border-radius:8px;border:1px solid #e0e0e0;">
+                <span style="font-weight:bold;font-size:1.1rem;min-width:24px;color:#3b82f6;">${i+1}.</span>
+                <input type="checkbox" id="mp_${i}" data-idx="${i}" checked style="width:20px;height:20px;cursor:pointer;">
+                ${prod.foto_url ? `<img src="${prod.foto_url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="viewImage(this.src)" onerror="this.style.display='none'">` : ''}
+                <div style="flex:1;">
+                  <div style="font-weight:600;">${prod.producto_url ? `<a href="${prod.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(prod.producto || 'Producto')} 🔗</a>` : escapeHtml(prod.producto || 'Producto')}</div>
+                  <div style="font-size:0.8rem;color:#666;">${prod.codigo || ''} ${prod.talla ? '· ' + prod.talla : ''} ${prod.color ? '· ' + prod.color : ''}</div>
+                </div>
+                <input type="number" id="mpPrecio_${i}" value="${prod.precio || 0}" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:right;" placeholder="Precio">
+              </div>
+            `;
+          });
+          multiHtml += `
+              </div>
+              <div class="action-card-buttons">
+                <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
+              </div>
+            </div>
+          `;
+          html += multiHtml;
+        } else {
+        // ====== TARJETA NORMAL (producto individual) ======
+        let cardClass = isSinpe ? 'sinpe' : isTienda ? 'tienda' : isFotoExterna ? 'foto-externa' : '';
+        let icon = isSinpe ? '💰' : isTienda ? '🏪' : isFotoExterna ? '📷' : '🔔';
+        let title = isSinpe ? 'CONFIRMAR PAGO SINPE' : isTienda ? 'PRODUCTO DE TIENDA FÍSICA' : isFotoExterna ? 'PRODUCTO DE FOTO' : 'CONFIRMAR DISPONIBILIDAD';
+        
+        // Debug: ver si llega foto_url
+        console.log('📷 Pending foto_url:', p.foto_url ? p.foto_url.substring(0, 50) + '...' : 'NULL');
+        
+        // Tiempo desde que llegó el aviso
+        const alertAge = p.created_at ? Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000) : 0;
+        const isNew = alertAge < 5;
+        const badgeHtml = isNew
+          ? `<span style="background:#ef4444;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.5px;animation:pulse 1.5s infinite;">🔴 NUEVA ALERTA</span>`
+          : `<span style="background:#f59e0b;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.5px;">🟡 ALERTA PENDIENTE</span>`;
+
+        html += `
+          <div class="action-card ${cardClass}" id="actionCard">
+            <div class="action-card-header">
+              <span class="action-card-icon">${icon}</span>
+              <span style="flex:1;">${title}</span>
+              ${!isSinpe ? badgeHtml : ''}
+            </div>
+            ${p.foto_url ? `<img class="action-card-image" src="${p.foto_url}" onclick="viewImage(this.src)" onerror="console.log('❌ Error cargando imagen'); this.style.display='none'" alt="Foto producto">` : ''}
+            <div class="action-card-details">
+              <div class="action-card-detail">📦 <strong>${p.producto_url ? `<a href="${p.producto_url}" target="_blank" style="color:#1a73e8;text-decoration:none;">${escapeHtml(p.producto || 'Producto')} 🔗</a>` : escapeHtml(p.producto || 'Producto')}</strong></div>
+              ${p.codigo ? `<div class="action-card-detail">🏷️ Código: ${escapeHtml(p.codigo)}</div>` : ''}
+              ${p.talla_color ? `<div class="action-card-detail">👕 ${escapeHtml(p.talla_color)}</div>` : ''}
+              ${!isSinpe && !isTienda && !isFotoExterna && p.precio ? `<div class="action-card-detail">💰 ₡${(p.precio || 0).toLocaleString()}</div>` : ''}
+              ${isSinpe ? `
+                <div class="action-card-detail">💰 Producto: ₡${(p.precio || 0).toLocaleString()}</div>
+                ${p.shipping_cost ? `<div class="action-card-detail">🚚 Envío: ₡${(p.shipping_cost || 0).toLocaleString()}</div>` : ''}
+                <div class="action-card-detail"><strong>💵 Total: ₡${(p.total || 0).toLocaleString()}</strong></div>
+                ${p.zone ? `<div class="action-card-detail">📍 Zona: ${escapeHtml(p.zone)}</div>` : ''}
+                <div class="action-card-detail">📱 ${escapeHtml(p.method === 'envio' ? 'Envío' : 'Retiro en tienda')}</div>
+                <div style="margin:10px 0;padding:8px;background:#fff3cd;border-radius:8px;text-align:center">
+                  <div style="font-weight:bold;margin-bottom:6px">🧾 COMPROBANTE SINPE</div>
+                  ${p.comprobante_url ? `<img src="${p.comprobante_url}" onclick="viewImage(this.src)" style="max-width:100%;max-height:250px;border-radius:8px;cursor:pointer;border:2px solid #ddd" alt="Comprobante">` : '<div style="color:#999;font-style:italic">📷 El cliente no adjuntó foto</div>'}
+                  ${p.reference ? `<div style="margin-top:6px;font-size:0.85rem">📝 Ref: ${escapeHtml(p.reference)}</div>` : ''}
+                </div>
+              ` : ''}
+              ${isTienda ? `<div class="action-card-detail" style="color:#666;font-style:italic;">⚠️ Este producto no está en catálogo online.<br>El cliente fue invitado a visitar la tienda.</div>` : ''}
+            </div>
+            <div class="action-card-buttons">
+              ${isSinpe ? `
+                <button class="action-btn primary" onclick="confirmAction('PAGADO')">✅ Pago Confirmado</button>
+                <button class="action-btn danger" onclick="confirmAction('SINPE_ERROR')">❌ Error Comprobante</button>
+              ` : `
+                <button class="action-btn info" onclick="dismissAction()">✓ Visto</button>
+              `}
+            </div>
+          </div>
+        `;
+        } // end else (tarjeta normal)
+      }
+      
+      return html;
+    }
+
+    function closeChat() {
+      currentChat = null;
+      $('sidebar').classList.remove('hidden');
+      $('chatArea').classList.remove('active');
+      $('chatArea').classList.add('empty');
+      $('chatArea').innerHTML = `
+        <div class="empty-chat">
+          <div class="empty-chat-icon">💬</div>
+          <div class="empty-chat-text">Seleccioná un chat para empezar</div>
+        </div>
+      `;
+      renderChatList();
+    }
+
+    // ===== ACTIONS =====
+    function dismissAction() {
+      if (!currentChat || !chats[currentChat]) return;
+      stopAlert(); // Detener alarma
+      // Notificar al servidor para que elimine el pending permanentemente
+      socket.emit('dismiss_pending', { waId: currentChat });
+      chats[currentChat].pending = null;
+      renderChat();
+      renderChatList();
+      toast('✓ Marcado como visto', 'success');
+    }
+
+    function confirmAction(type) {
+      if (!currentChat) return;
+      
+      // Mensaje de confirmación según tipo
+      const mensajes = {
+        'SI_HAY': '¿Presionaste SÍ HAY, estás seguro?',
+        'NO_HAY': '¿Presionaste NO HAY, estás seguro?',
+        'PAGADO': '¿Presionaste PAGO CONFIRMADO, estás seguro?',
+        'SINPE_ERROR': '¿Presionaste ERROR COMPROBANTE, estás seguro?'
+      };
+      const msg = mensajes[type] || '¿Estás seguro de esta acción?';
+      if (!confirm(msg)) return;
+      
+      stopAlert();
+      
+      // Deshabilitar TODOS los botones de acción
+      const allBtns = document.querySelectorAll('.action-btn');
+      allBtns.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = '0.4';
+      });
+      const btn = event.target;
+      btn.textContent = '⏳ Enviando...';
+      btn.style.background = '#999';
+      
+      socket.emit('action', { clientWaId: currentChat, actionType: type });
+      
+      setTimeout(() => {
+        if (chats[currentChat]) {
+          chats[currentChat].pending = null;
+          renderChat();
+          renderChatList();
+        }
+      }, 1000);
+    }
+
+    function confirmMulti(waId) {
+      if (!confirm('¿Presionaste SÍ HAY TODOS, estás seguro?')) return;
+      
+      stopAlert();
+      // Recoger checkboxes marcados y precios
+      const disponibles = [];
+      const precios = {};
+      const checkboxes = document.querySelectorAll('[id^="mp_"]');
+      checkboxes.forEach(cb => {
+        const idx = parseInt(cb.dataset.idx);
+        const precioEl = document.getElementById('mpPrecio_' + idx);
+        if (cb.checked) {
+          disponibles.push(idx);
+          if (precioEl) precios[String(idx)] = parseInt(precioEl.value) || 0;
+        }
+      });
+      
+      // Deshabilitar botones
+      const allBtns = document.querySelectorAll('.action-btn');
+      allBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      event.target.textContent = '⏳ Enviando...';
+      
+      socket.emit('action', { 
+        clientWaId: waId, 
+        actionType: 'MULTI_DISPONIBILIDAD', 
+        payload: { disponibles, precios } 
+      });
+      
+      setTimeout(() => {
+        if (chats[waId]) {
+          chats[waId].pending = null;
+          renderChat();
+          renderChatList();
+        }
+      }, 1000);
+    }
+
+    function confirmMultiParcial(waId) {
+      const input = document.getElementById('multiParcial_' + waId);
+      const nums = input ? input.value.trim() : '';
+      
+      if (!nums) {
+        alert('Escribí los números de productos disponibles (ej: 1,3)');
+        return;
+      }
+      
+      // Parsear números: "1,3" o "1 3" o "1, 3"
+      const indices = nums.split(/[\s,]+/).map(n => parseInt(n.trim()) - 1).filter(n => !isNaN(n) && n >= 0);
+      
+      if (indices.length === 0) {
+        alert('Números inválidos. Usá formato: 1,3 o 1 3');
+        return;
+      }
+      
+      // Mostrar los números originales (1-indexed) en la confirmación
+      const numerosOriginales = indices.map(i => i + 1).join(', ');
+      if (!confirm(`¿Presionaste SOLO HAY #${numerosOriginales}, estás seguro?`)) return;
+      
+      stopAlert();
+      
+      // Recoger precios de los disponibles
+      const precios = {};
+      indices.forEach(idx => {
+        const precioEl = document.getElementById('mpPrecio_' + idx);
+        if (precioEl) precios[String(idx)] = parseInt(precioEl.value) || 0;
+      });
+      
+      // Deshabilitar botones
+      const allBtns = document.querySelectorAll('.action-btn');
+      allBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      event.target.textContent = '⏳ Enviando...';
+      
+      socket.emit('action', { 
+        clientWaId: waId, 
+        actionType: 'MULTI_DISPONIBILIDAD', 
+        payload: { disponibles: indices, precios } 
+      });
+      
+      setTimeout(() => {
+        if (chats[waId]) {
+          chats[waId].pending = null;
+          renderChat();
+          renderChatList();
+        }
+      }, 1000);
+    }
+
+    function sendMessage() { sendDirectMessage(); }
+
+    function sendDirectMessage() {
+      if (!currentChat) return;
+      var ta = document.getElementById('chatInputDisplay');
+      if (!ta) return;
+      var text = ta.value.trim();
+      if (!text) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      ta.value = '';
+      ta.style.height = 'auto';
+      ta.focus();
+    }
+
+
+
+
+
+
+
+
+    // Textos por defecto para cada slug
+    const TEXTS_DEFAULT = {
+      si_hay:      '✅ Sí tenemos ese producto disponible. ¿Te interesa?',
+      no_hay:      '❌ Lo sentimos, ese producto no está disponible en este momento.',
+      horario:     '🕐 Nuestro horario es de lunes a sábado de 9am a 6pm.',
+      direccion:   '📍 Nos encontramos en San José, Costa Rica. Te enviamos la ubicación exacta.',
+      info_envios: '🚚 Hacemos envíos a todo el país. El costo varía según la provincia. ¿A dónde necesitás el envío?',
+      datos_envio: '📦 Para coordinar el envío necesitamos:\n- Nombre completo\n- Provincia, cantón y distrito\n- Dirección exacta\n- Número de teléfono',
+      sinpe:       '💳 Hacemos transferencias por SINPE Móvil. Te damos el número cuando confirmés tu pedido.',
+      gracias:     '🙏 ¡Muchas gracias por su preferencia! Con gusto lo atendemos.',
+      cambios:     '🔄 Hacemos cambios dentro de los 8 días después de recibido el producto, en perfecto estado y con la factura.',
+      garantia:    '🛡️ Todos nuestros productos tienen garantía. Si tiene algún defecto lo cambiamos sin problema.',
+    };
+
+    function useQuickReply(slug) {
+      if (slug === 'resumen') { openResumen(); return; }
+      
+      // Buscar texto: primero en quickReplies guardados, luego en defaults
+      const saved = quickReplies.find(r => r.slug === slug || r.name === slug);
+      const label = (saved && saved.label) || (SLUGS_DEFAULT.find(d => d.slug === slug) || {}).label || slug;
+      const text = (saved && saved.text && saved.text.trim()) 
+                   || TEXTS_DEFAULT[slug] 
+                   || '';
+      
+      if (!text) {
+        // Solo si no hay texto en ningún lado, abrir editor
+        openEditAtajos();
+        setTimeout(() => toast('⚠️ Configurá el texto de este atajo', 'warning'), 300);
+        return;
+      }
+      openChipPreview(label, text);
+    }
+
+    // ===== BARRA DINÁMICA DE ATAJOS =====
+    const SLUGS_DEFAULT = [
+      { slug: 'si_hay',      label: '✅ Sí Hay' },
+      { slug: 'no_hay',      label: '❌ No Hay' },
+      { slug: 'horario',     label: '🕐 Horario' },
+      { slug: 'direccion',   label: '📍 Dirección' },
+      { slug: 'info_envios', label: '🚚 Info Envíos' },
+      { slug: 'datos_envio', label: '📦 Datos Envío' },
+      { slug: 'sinpe',       label: '💳 SINPE' },
+      { slug: 'gracias',     label: '🙏 Gracias' },
+      { slug: 'cambios',     label: '🔄 Cambios' },
+      { slug: 'garantia',    label: '🛡️ Garantía' },
+      { slug: 'resumen',     label: '📋 Resumen' },
+    ];
+
+    function renderQuickRepliesBar() {
+      // Construir lista ordenada: primero los que están en quickReplies (con el orden guardado),
+      // luego los defaults que aún no estén, y siempre al final el botón Editar
+      let pills = [];
+
+      // Si hay quickReplies guardados, usarlos como orden base
+      if (quickReplies && quickReplies.length > 0) {
+        quickReplies.forEach(r => {
+          pills.push({ slug: r.slug, label: r.label || r.slug });
+        });
+        // Agregar defaults que no estén en quickReplies
+        SLUGS_DEFAULT.forEach(d => {
+          if (!pills.find(p => p.slug === d.slug)) {
+            pills.push({ slug: d.slug, label: d.label });
+          }
+        });
+      } else {
+        pills = [...SLUGS_DEFAULT];
+      }
+
+      const pillsHtml = pills.map(p =>
+        `<button class="qr-pill" onclick="useQuickReply('${p.slug}')">${escapeHtml(p.label)}</button>`
+      ).join('');
+
+      // Botón Editar se agrega separado para evitar problemas de comillas en template literals
+      return pillsHtml + `<button class="qr-pill qr-edit-btn" style="background:#e0e7ff;color:#3730a3;border:1.5px solid #c7d2fe;flex-shrink:0;" onclick="openEditAtajos()">✏️ Editar</button>`;
+    }
+
+    function refreshQuickRepliesBar() {
+      const bar = document.getElementById('quickRepliesBar');
+      if (bar) bar.innerHTML = renderQuickRepliesBar();
+    }
+
+    // ===== MODAL EDITAR ATAJOS =====
+    let editAtajosRows = [];
+    let dragSrcIndex = null;
+
+    function openEditAtajos() {
+      // Construir lista igual que renderQuickRepliesBar: orden de quickReplies primero
+      const merged = [];
+      if (quickReplies && quickReplies.length > 0) {
+        quickReplies.forEach(r => {
+          const def = SLUGS_DEFAULT.find(d => d.slug === r.slug);
+          merged.push({ slug: r.slug, label: r.label || (def ? def.label : r.slug), text: r.text || '', fixed: !!def });
+        });
+        SLUGS_DEFAULT.forEach(d => {
+          if (!merged.find(m => m.slug === d.slug)) {
+            merged.push({ slug: d.slug, label: d.label, text: '', fixed: true });
+          }
+        });
+      } else {
+        SLUGS_DEFAULT.forEach(d => {
+          merged.push({ slug: d.slug, label: d.label, text: '', fixed: true });
+        });
+      }
+      editAtajosRows = merged;
+      renderEditAtajos();
+      const modal = $('editAtajosModal');
+      modal.style.display = 'flex';
+    }
+
+    function closeEditAtajos() {
+      $('editAtajosModal').style.display = 'none';
+    }
+
+    function renderEditAtajos() {
+      const body = $('editAtajosBody');
+      body.innerHTML = editAtajosRows.map((row, i) => `
+        <div data-index="${i}" class="atajo-row" style="margin-bottom:14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);touch-action:none;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span class="drag-handle" data-index="${i}" style="cursor:grab;font-size:1.2rem;color:#9ca3af;padding:0 4px;user-select:none;touch-action:none;" title="Arrastrar para reordenar">⠿</span>
+            ${row.fixed
+              ? `<span style="font-size:.9rem;font-weight:700;flex:1;">${escapeHtml(row.label)}</span>`
+              : `<input value="${escapeHtml(row.label)}" oninput="editAtajosRows[${i}].label=this.value"
+                  placeholder="Nombre del atajo"
+                  style="flex:1;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.9rem;font-weight:700;font-family:inherit;">
+                 <button onclick="deleteAtajo(${i})" style="background:#fff0f0;border:none;color:#ef4444;cursor:pointer;font-size:0.85rem;padding:6px 10px;border-radius:8px;font-weight:600;">🗑️ Borrar</button>`
+            }
+          </div>
+          <textarea rows="3" oninput="editAtajosRows[${i}].text=this.value"
+            placeholder="Escribí el texto que se enviará al cliente..."
+            style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:0.9rem;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.5;"
+          >${escapeHtml(row.text)}</textarea>
+        </div>
+      `).join('');
+
+      // Agregar eventos de drag & drop (touch + mouse)
+      setupAtajosDragDrop();
+    }
+
+    function deleteAtajo(i) {
+      editAtajosRows.splice(i, 1);
+      renderEditAtajos();
+    }
+
+    function setupAtajosDragDrop() {
+      const body = $('editAtajosBody');
+      let dragIdx = null;
+      let touchStartY = 0;
+      let dragEl = null;
+      let placeholder = null;
+
+      // ---- TOUCH DRAG ----
+      body.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('touchstart', e => {
+          dragIdx = parseInt(handle.dataset.index);
+          dragEl = handle.closest('.atajo-row');
+          touchStartY = e.touches[0].clientY;
+          dragEl.style.opacity = '0.5';
+          e.stopPropagation();
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', e => {
+          if (dragIdx === null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const touchY = e.touches[0].clientY;
+          const rows = Array.from(body.querySelectorAll('.atajo-row'));
+          let targetIdx = null;
+          rows.forEach((row, idx) => {
+            const rect = row.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            if (touchY > mid) targetIdx = idx;
+          });
+          if (targetIdx === null) targetIdx = 0;
+          else targetIdx = Math.min(targetIdx + 1, editAtajosRows.length - 1);
+
+          if (targetIdx !== dragIdx) {
+            const moved = editAtajosRows.splice(dragIdx, 1)[0];
+            editAtajosRows.splice(targetIdx, 0, moved);
+            dragIdx = targetIdx;
+            renderEditAtajos();
+            // Re-attach: el re-render borra los eventos, pero los re-agrega
+          }
+        }, { passive: false });
+
+        handle.addEventListener('touchend', e => {
+          if (dragEl) dragEl.style.opacity = '1';
+          dragIdx = null;
+          dragEl = null;
+          e.stopPropagation();
+        });
+      });
+
+      // ---- MOUSE DRAG ----
+      body.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('mousedown', e => {
+          dragIdx = parseInt(handle.dataset.index);
+          dragEl = handle.closest('.atajo-row');
+          dragEl.style.opacity = '0.5';
+          document.body.style.userSelect = 'none';
+
+          const onMouseMove = (ev) => {
+            const rows = Array.from(body.querySelectorAll('.atajo-row'));
+            let targetIdx = null;
+            rows.forEach((row, idx) => {
+              const rect = row.getBoundingClientRect();
+              const mid = rect.top + rect.height / 2;
+              if (ev.clientY > mid) targetIdx = idx;
+            });
+            if (targetIdx === null) targetIdx = 0;
+            else targetIdx = Math.min(targetIdx + 1, editAtajosRows.length - 1);
+
+            if (targetIdx !== dragIdx) {
+              const moved = editAtajosRows.splice(dragIdx, 1)[0];
+              editAtajosRows.splice(targetIdx, 0, moved);
+              dragIdx = targetIdx;
+              renderEditAtajos();
+              // Re-setup happened, need to re-attach global mousemove
+            }
+          };
+
+          const onMouseUp = () => {
+            document.body.style.userSelect = '';
+            dragIdx = null;
+            dragEl = null;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        });
+      });
+    }
+
+    function addNewAtajo() {
+      editAtajosRows.push({ slug: 'nuevo_' + Date.now(), label: 'Nuevo atajo', text: '', fixed: false });
+      renderEditAtajos();
+      setTimeout(() => { $('editAtajosBody').scrollTop = 99999; }, 50);
+    }
+
+    async function saveAtajosFromPanel() {
+      const toSave = editAtajosRows.map(r => ({ slug: r.slug, label: r.label, text: r.text.trim() }));
+      // Guardar todos (incluso los sin texto) para preservar el orden
+      socket.emit('save_quick_replies', { quickReplies: toSave });
+      quickReplies = toSave;
+      refreshQuickRepliesBar();
+      const msg = $('editAtajosMsg');
+      msg.textContent = '✅ Atajos guardados correctamente';
+      msg.style.display = 'block';
+      setTimeout(() => { msg.style.display = 'none'; closeEditAtajos(); }, 1500);
+    }
+
+    // ===== CHIP PREVIEW MODAL =====
+    let _chipPreviewSending = false;
+
+    function openChipPreview(label, text) {
+      $('resumenModal').style.display = 'none';
+      $('chipPreviewTitle').textContent = label;
+      $('chipPreviewText').value = text;
+      const modal = $('chipPreviewModal');
+      modal.style.display = 'flex';
+      setTimeout(() => $('chipPreviewText').focus(), 100);
+    }
+
+    function closeChipPreview() {
+      $('chipPreviewModal').style.display = 'none';
+    }
+
+    function sendChipPreview() {
+      const text = $('chipPreviewText').value.trim();
+      if (!text || !currentChat) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      closeChipPreview();
+    }
+
+    // ===== RESUMEN MODAL =====
+    const RESUMEN_FIELDS = [
+      { key: 'nombre',      label: '👤 Nombre' },
+      { key: 'telefono',    label: '📱 Teléfono' },
+      { key: 'provincia',   label: '🗺️ Provincia' },
+      { key: 'canton',      label: '🏘️ Cantón' },
+      { key: 'distrito',    label: '📍 Distrito' },
+      { key: 'direccion',   label: '🏠 Dirección exacta' },
+      { key: 'codigo',      label: '🏷️ Código producto' },
+      { key: 'descripcion', label: '👗 Descripción' },
+      { key: 'precio',      label: '💰 Precio' },
+      { key: 'envio',       label: '🚚 Costo de envío' },
+    ];
+
+    let resumenData = {};
+
+    function extractResumenFromChat() {
+      if (!currentChat) return {};
+      const chat = chats[currentChat]; // chats es objeto, no array
+      const msgs = (chat && chat.messages) || [];
+      const allText = msgs.map(m => m.text || '').join(' ');
+      const data = {};
+
+      // Teléfono - usar el waId formateado
+      data.telefono = formatPhone(currentChat) || '';
+
+      // Nombre del perfil
+      data.nombre = (chat && (chat.name || chat.pushName)) || '';
+
+      // Buscar en mensajes del cliente (direction 'in')
+      const clientMsgs = msgs.filter(m => m.direction === 'in' || m.from === 'client').map(m => m.text || '');
+      const clientText = clientMsgs.join(' ');
+
+      // Código producto - buscar patrón en TODO el texto
+      const codigoMatch = allText.match(/[Cc][oó]digo[:\s#]*([0-9]{3,7})|#([0-9]{3,7})\b/);
+      if (codigoMatch) data.codigo = codigoMatch[1] || codigoMatch[2] || '';
+
+      // Precio - buscar ₡ o "colones"
+      const precioMatch = allText.match(/₡\s*([0-9][0-9,.]{2,10})/);
+      if (precioMatch) data.precio = '₡' + precioMatch[1].trim();
+
+      // Descripción - buscar nombre de producto mencionado
+      const descMatch = allText.match(/interesad[oa] en ([^.?!]{5,60})/i)
+        || allText.match(/producto[:\s]+([^.?\n]{5,60})/i);
+      if (descMatch) data.descripcion = descMatch[1].trim();
+
+      // Dirección - buscar en mensajes del cliente
+      const provMatch = clientText.match(/[Pp]rovincia[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (provMatch) data.provincia = provMatch[1].trim();
+
+      const cantMatch = clientText.match(/[Cc]ant[oó]n[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (cantMatch) data.canton = cantMatch[1].trim();
+
+      const distMatch = clientText.match(/[Dd]istrito[:\s]+([A-Za-záéíóúÁÉÍÓÚñÑ ]{3,20})/);
+      if (distMatch) data.distrito = distMatch[1].trim();
+
+      // Dirección exacta - línea larga del cliente que no sea saludo
+      const dirMatch = clientText.match(/(?:direcci[oó]n|casa|vivo|exacta)[:\s]+([^.\n]{10,80})/i);
+      if (dirMatch) data.direccion = dirMatch[1].trim();
+
+      // Envío - buscar costo de envío en mensajes del bot (direction 'out')
+      const botText = msgs.filter(m => m.direction === 'out' || m.from === 'bot').map(m => m.text || '').join(' ');
+      const envioMatch = botText.match(/env[íi]o[:\s]+₡?\s*([0-9][0-9,.]{2,8})/i)
+        || allText.match(/costo.*env[íi]o.*₡\s*([0-9][0-9,.]{2,8})/i);
+      if (envioMatch) data.envio = '₡' + envioMatch[1].trim();
+
+      return data;
+    }
+
+    function openResumen() {
+      $('chipPreviewModal').style.display = 'none';
+      resumenData = extractResumenFromChat();
+      renderResumenFields();
+      updateResumenPreview();
+      $('resumenModal').style.display = 'flex';
+    }
+
+    function closeResumen() {
+      $('resumenModal').style.display = 'none';
+    }
+
+    function renderResumenFields() {
+      const container = $('resumenFields');
+      container.innerHTML = RESUMEN_FIELDS.map(f => `
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;">${f.label}</label>
+          <input id="res_${f.key}" value="${escapeHtml(resumenData[f.key] || '')}"
+            oninput="resumenData['${f.key}']=this.value; updateResumenPreview()"
+            placeholder="${f.key === 'envio' ? 'Ej: ₡2,500' : 'Sin datos aún'}"
+            style="padding:10px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:0.95rem;font-family:inherit;outline:none;"
+            onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'">
+        </div>
+      `).join('');
+    }
+
+    function updateResumenPreview() {
+      const d = resumenData;
+      const lines = [
+        '📋 *Resumen de tu pedido*',
+        '',
+        d.nombre      ? `👤 *Nombre:* ${d.nombre}` : '',
+        d.telefono    ? `📱 *Teléfono:* ${d.telefono}` : '',
+        '',
+        d.codigo      ? `🏷️ *Producto:* ${d.codigo}` : '',
+        d.descripcion ? `👗 *Descripción:* ${d.descripcion}` : '',
+        d.precio      ? `💰 *Precio:* ${d.precio}` : '',
+        d.envio       ? `🚚 *Envío:* ${d.envio}` : '',
+        '',
+        '📍 *Dirección de envío:*',
+        d.provincia   ? `Provincia: ${d.provincia}` : '',
+        d.canton      ? `Cantón: ${d.canton}` : '',
+        d.distrito    ? `Distrito: ${d.distrito}` : '',
+        d.direccion   ? `${d.direccion}` : '',
+      ].filter(l => l !== '').join('\n');
+
+      $('resumenPreview').value = lines;
+    }
+
+    function sendResumen() {
+      const text = $('resumenPreview').value.trim();
+      if (!text || !currentChat) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      closeResumen();
+    }
+
+
+
+    // ===== MODAL ESCRIBIR =====
+    // ===== MODAL CONTACTO =====
+    let contactModalWaId = null; // waId del contacto en edición
+
+    function openNewChat() {
+      // El + ahora abre el modal de contacto en modo "nuevo"
+      contactModalWaId = null;
+      $('contactModalTitle').textContent = 'Nuevo contacto';
+      $('contactModalSubtitle').textContent = 'Buscá un contacto existente o creá uno nuevo';
+      $('contactSearchBox').style.display = 'block';
+      $('contactSearch').value = '';
+      $('contactSearchResults').innerHTML = '';
+      $('contactName').value = '';
+      $('contactPhone').value = '';
+      $('contactNotes').value = '';
+      $('contactModalMsg').textContent = '';
+      $('contactModal').style.display = 'flex';
+      setTimeout(() => $('contactSearch').focus(), 100);
+    }
+
+    function openContactModal(waId) {
+      // Editar contacto existente desde el chat header
+      const chat = chats[waId] || {};
+      contactModalWaId = waId;
+      $('contactModalTitle').textContent = 'Editar contacto';
+      $('contactModalSubtitle').textContent = formatPhone(waId);
+      $('contactSearchBox').style.display = 'none';
+      $('contactName').value = chat.name || chat.pushName || '';
+      $('contactPhone').value = formatPhone(waId).replace(/[\s\-]/g, '');
+      $('contactNotes').value = chat.notes || '';
+      $('contactModalMsg').textContent = '';
+      $('contactModal').style.display = 'flex';
+      setTimeout(() => $('contactName').focus(), 100);
+    }
+
+    function closeContactModal() {
+      $('contactModal').style.display = 'none';
+      contactModalWaId = null;
+    }
+
+    // Alias para compatibilidad con código que llame closeNewChat
+    function closeNewChat() { closeContactModal(); }
+
+    function filterContactSearch(val) {
+      const box = $('contactSearchResults');
+      const query = val.trim().toLowerCase();
+      const digits = val.replace(/\D/g, '');
+      if (query.length < 2) { box.innerHTML = ''; return; }
+
+      const results = [];
+      const seen = new Set();
+      Object.keys(chats).forEach(waId => {
+        const c = chats[waId];
+        const name = (c.name || c.pushName || '').toLowerCase();
+        if ((name && name.includes(query)) || (digits.length >= 3 && waId.includes(digits))) {
+          if (!seen.has(waId)) {
+            seen.add(waId);
+            results.push({ waId, name: c.name || c.pushName || '', notes: c.notes || '' });
+          }
+        }
+      });
+
+      if (results.length === 0) {
+        box.innerHTML = digits.length >= 7
+          ? `<div style="padding:8px 12px;font-size:.85rem;color:#6b7280;">Número nuevo — completá los datos abajo y guardá</div>`
+          : `<div style="padding:8px 12px;font-size:.85rem;color:#9ca3af;">Sin resultados</div>`;
+        return;
+      }
+
+      box.innerHTML = results.slice(0, 6).map(r => `
+        <button onclick="selectExistingContact('${r.waId}')"
+          style="padding:10px 14px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;text-align:left;cursor:pointer;font-size:.9rem;font-family:inherit;width:100%;">
+          <strong>${escapeHtml(r.name || formatPhone(r.waId))}</strong>
+          <span style="color:#9ca3af;font-size:.8rem;margin-left:6px;">${formatPhone(r.waId)}</span>
+          ${r.notes ? `<div style="color:#6b7280;font-size:.78rem;margin-top:2px;">📝 ${escapeHtml(r.notes.slice(0, 50))}${r.notes.length > 50 ? '…' : ''}</div>` : ''}
+        </button>`
+      ).join('');
+    }
+
+    function selectExistingContact(waId) {
+      const chat = chats[waId] || {};
+      contactModalWaId = waId;
+      $('contactSearch').value = chat.name || chat.pushName || formatPhone(waId);
+      $('contactSearchResults').innerHTML = '';
+      $('contactName').value = chat.name || chat.pushName || '';
+      $('contactPhone').value = waId;
+      $('contactNotes').value = chat.notes || '';
+      $('contactName').focus();
+    }
+
+    function saveContact() {
+      const name = $('contactName').value.trim();
+      const phoneRaw = $('contactPhone').value.trim().replace(/\D/g, '');
+      const notes = $('contactNotes').value.trim();
+      const statusEl = $('contactModalMsg');
+
+      if (!phoneRaw || phoneRaw.length < 7) {
+        statusEl.textContent = '⚠️ Ingresá un número de teléfono válido';
+        statusEl.style.color = '#ef4444'; return;
+      }
+
+      const waId = phoneRaw.startsWith('506') ? phoneRaw : '506' + phoneRaw;
+      contactModalWaId = waId;
+
+      socket.emit('save_contact', { waId, name, phone: phoneRaw, notes });
+
+      statusEl.textContent = '✅ Guardado correctamente';
+      statusEl.style.color = '#16a34a';
+
+      // Actualizar localmente
+      if (!chats[waId]) chats[waId] = { messages: [], pending: null };
+      if (name) chats[waId].name = name;
+      if (notes) chats[waId].notes = notes;
+      renderChatList();
+      if (currentChat === waId) renderChat();
+
+      setTimeout(() => closeContactModal(), 1200);
+    }
+
+    // Escuchar confirmación del servidor
+    socket.on('contact_saved', data => {
+      if (data.success && data.contact) {
+        const c = data.contact;
+        const waId = c.waId;
+        if (!chats[waId]) chats[waId] = { messages: [], pending: null };
+        if (c.name) chats[waId].name = c.name;
+        if (c.notes) chats[waId].notes = c.notes;
+      }
+    });
+
+    function openWriteModal() {
+      if (!currentChat) return;
+      const overlay = document.getElementById('writeModalOverlay');
+      if (overlay) overlay.style.display = 'block';
+      var modal = document.getElementById('writeModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      setTimeout(function() {
+        var ta = document.getElementById('writeModalText');
+        if (ta) ta.focus();
+      }, 150);
+    }
+
+    function closeWriteModal() {
+      var modal = document.getElementById('writeModal');
+      if (modal) modal.style.display = 'none';
+      var overlay = document.getElementById('writeModalOverlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    function clearWriteModal() {
+      document.getElementById('writeModalText').value = '';
+      document.getElementById('writeModalText').focus();
+    }
+
+    function sendFromWriteModal() {
+      var text = document.getElementById('writeModalText').value.trim();
+      if (!text || !currentChat) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      document.getElementById('writeModalText').value = '';
+      closeWriteModal();
+    }
+
+    function openEmojiPickerInModal() {
+      var ta = document.getElementById('writeModalText');
+      var emojis = ['😊','👍','✅','🙏','❤️','🔥','💯','👏','😍','🎉','📦','🚚','💰','⏰','📱'];
+      var existing = document.getElementById('emojiPickerModal');
+      if (existing) { existing.remove(); return; }
+      var picker = document.createElement('div');
+      picker.id = 'emojiPickerModal';
+      picker.style.cssText = 'position:fixed;bottom:90px;left:10px;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;width:260px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.15);';
+      emojis.forEach(function(e) {
+        var btn = document.createElement('button');
+        btn.textContent = e;
+        btn.style.cssText = 'background:none;border:none;font-size:1.5rem;cursor:pointer;padding:4px;';
+        btn.onclick = function() { ta.value += e; ta.focus(); picker.remove(); };
+        picker.appendChild(btn);
+      });
+      document.body.appendChild(picker);
+      setTimeout(function() {
+        document.addEventListener('click', function handler(ev) {
+          if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', handler); }
+        });
+      }, 10);
+    }
+
+    function openEmojiPicker() {
+      const input = $('chatInputDisplay');
+      if (!input) return;
+      // Lista rápida de emojis frecuentes en ventas
+      const emojis = ['😊','👍','✅','🙏','❤️','🔥','💯','👏','😍','🎉','📦','🚚','💰','⏰','📱'];
+      let existing = $('emojiPicker');
+      if (existing) { existing.remove(); return; }
+      const picker = document.createElement('div');
+      picker.id = 'emojiPicker';
+      picker.style.cssText = 'position:fixed;bottom:110px;left:10px;background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;display:flex;flex-wrap:wrap;gap:6px;max-width:260px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:999;';
+      emojis.forEach(e => {
+        const btn = document.createElement('button');
+        btn.textContent = e;
+        btn.style.cssText = 'background:none;border:none;font-size:1.4rem;cursor:pointer;padding:2px;';
+        btn.onclick = () => { input.value += e; input.focus(); picker.remove(); };
+        picker.appendChild(btn);
+      });
+      document.body.appendChild(picker);
+      setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 100);
+    }
+
+    function openFileAttach() {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file || !currentChat) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const base64 = ev.target.result.split(',')[1];
+          socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: '', imageBase64: base64 } });
+          toast('📎 Imagen enviada', 'success');
+        };
+        reader.readAsDataURL(file);
+      };
+      fileInput.click();
+    }
+
+    function deleteChat() {
+      if (confirm('¿Borrar este chat?')) {
+        socket.emit('delete_chats', { waId: currentChat });
+        delete chats[currentChat];
+        closeChat();
+      }
+    }
+
+    // ===== SHIPPING MODAL =====
+    function setShip(val) { $('shipInput').value = val; }
+    function hideShipModal() { $('shippingModal').classList.remove('active'); }
+    function sendShipping() {
+      const val = parseInt($('shipInput').value) || 0;
+      if (val < 100) { toast('⚠️ Monto inválido', 'error'); return; }
+      // Deshabilitar botones del modal
+      const modalBtns = document.querySelectorAll('#shippingModal .modal-btn, #shippingModal .quick-price');
+      modalBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      socket.emit('action', { clientWaId: shipClient, actionType: 'ENVIO', payload: { shipping: val } });
+    }
+    function noShipping() {
+      const modalBtns = document.querySelectorAll('#shippingModal .modal-btn, #shippingModal .quick-price');
+      modalBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+      socket.emit('action', { clientWaId: shipClient, actionType: 'NO_ENVIO_ZONA' });
+      setTimeout(() => hideShipModal(), 500);
+    }
+
+    // ===== IMAGE VIEWER =====
+    function viewImage(src) {
+      $('viewerImage').src = src;
+      $('imageViewer').classList.add('active');
+    }
+    function hideImageViewer() {
+      $('imageViewer').classList.remove('active');
+    }
+
+    // ===== VENTAS =====
+    function showSales() {
+      const modal = $('salesModal');
+      const summary = $('salesSummary');
+      const list = $('salesList');
+      
+      // Calcular totales
+      const today = new Date().toISOString().slice(0,10);
+      const todaySales = allSales.filter(s => s.date && s.date.indexOf(today) === 0);
+      const todayRevenue = todaySales.reduce((sum,s) => sum + (s.total||0), 0);
+      
+      // Este mes
+      const thisMonth = new Date().toISOString().slice(0,7);
+      const monthSales = allSales.filter(s => s.date && s.date.indexOf(thisMonth) === 0);
+      const monthRevenue = monthSales.reduce((sum,s) => sum + (s.total||0), 0);
+      
+      const totalRevenue = allSales.reduce((sum,s) => sum + (s.total||0), 0);
+      
+      summary.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
+          <div>
+            <div style="font-size:11px;color:#666;">Hoy</div>
+            <div style="font-size:18px;font-weight:bold;color:#25d366;">${todaySales.length}</div>
+            <div style="font-size:12px;color:#333;">₡${todayRevenue.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#666;">Este mes</div>
+            <div style="font-size:18px;font-weight:bold;color:#25d366;">${monthSales.length}</div>
+            <div style="font-size:12px;color:#333;">₡${monthRevenue.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#666;">Total</div>
+            <div style="font-size:18px;font-weight:bold;color:#25d366;">${allSales.length}</div>
+            <div style="font-size:12px;color:#333;">₡${totalRevenue.toLocaleString()}</div>
+          </div>
+        </div>`;
+      
+      // Lista de ventas (más recientes primero)
+      const sorted = allSales.slice().reverse().slice(0, 50);
+      if(sorted.length === 0){
+        list.innerHTML = '<p style="text-align:center;color:#999;padding:20px;">No hay ventas registradas aún</p>';
+      } else {
+        list.innerHTML = sorted.map(s => {
+          const date = new Date(s.date);
+          const dateStr = date.toLocaleDateString('es-CR', {day:'2-digit',month:'short'});
+          const timeStr = date.toLocaleTimeString('es-CR', {hour:'2-digit',minute:'2-digit'});
+          const method = s.method === 'envio' ? '🚚' : '🏪';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #eee;">
+            ${s.foto_url ? `<img src="${s.foto_url}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="width:40px;height:40px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;">📦</div>'}
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.producto||'Producto'}</div>
+              <div style="font-size:11px;color:#666;">${s.name||formatPhone(s.waId||s.phone||'')} · ${s.talla_color||''}</div>
+              <div style="font-size:11px;color:#999;">${dateStr} ${timeStr} ${method} ${s.method==='envio'?(s.zone||''):'Retiro'}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:bold;color:#25d366;">₡${(s.total||0).toLocaleString()}</div>
+              <div style="font-size:10px;color:#999;">${s.id||''}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+      
+      modal.classList.add('active');
+    }
+    
+    function hideSales() {
+      $('salesModal').classList.remove('active');
+    }
+
+    // ===== BOT TOGGLE =====
+    $('botToggle').onclick = () => socket.emit('toggle_bot');
+    
+    // ===== ACTUALIZAR AL VOLVER A LA APP =====
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && socket) {
+        console.log('👁️ App visible - volviendo a lista principal...');
+        
+        // SIEMPRE volver a la lista de chats (no quedarse en un chat específico)
+        closeChat();
+        
+        // Si el socket está desconectado, reconectar
+        if (!socket.connected) {
+          socket.connect();
+        }
+        // Pedir datos frescos
+        const pin = localStorage.getItem('ticobot_pin');
+        if (pin) {
+          socket.emit('auth', pin);
+        }
+      }
+    });
+    
+    // También detectar cuando se desbloquea el teléfono
+    window.addEventListener('focus', () => {
+      console.log('👁️ Window focus');
+      
+      // Volver a lista principal
+      closeChat();
+      
+      if (socket && !socket.connected) {
+        console.log('👁️ Reconectando socket...');
+        socket.connect();
+        const pin = localStorage.getItem('ticobot_pin');
+        if (pin) {
+          setTimeout(() => socket.emit('auth', pin), 500);
+        }
+      }
+    // Forzar actualización
+      forceUpdate();
+    });
+
+    // ===== MANEJAR BOTÓN ATRÁS DEL NAVEGADOR =====
+    window.addEventListener('popstate', (e) => {
+      if (currentChat) {
+        closeChat();
+      }
+    });
+  
+    
+  </script>
+
+  <!-- ===== MODAL CONTACTO ===== -->
+  <div id="contactModal" onclick="if(event.target===this)closeContactModal()" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center;">
+    <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;padding:20px 16px 30px;box-sizing:border-box;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-weight:700;font-size:1.05rem;">📇 <span id="contactModalTitle">Nuevo contacto</span></div>
+        <button onclick="closeContactModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;">✕</button>
+      </div>
+      <div id="contactModalSubtitle" style="font-size:.8rem;color:#9ca3af;margin-bottom:16px;"></div>
+
+      <!-- Búsqueda de contacto existente (solo en modo nuevo) -->
+      <div id="contactSearchBox" style="margin-bottom:12px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Buscar contacto existente</label>
+        <input id="contactSearch" type="text" placeholder="Nombre o teléfono..."
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;box-sizing:border-box;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"
+          oninput="filterContactSearch(this.value)">
+        <div id="contactSearchResults" style="max-height:160px;overflow-y:auto;margin-top:6px;display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+
+      <div style="border-top:1px solid #f0f0f0;margin-bottom:14px;padding-top:14px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Nombre</label>
+        <input id="contactName" type="text" placeholder="Ej: María González"
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;box-sizing:border-box;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Teléfono</label>
+        <input id="contactPhone" type="tel" placeholder="Ej: 88887777 o 50688887777"
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;outline:none;box-sizing:border-box;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'">
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <label style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px;">Detalle / Notas</label>
+        <textarea id="contactNotes" rows="3" placeholder="Ej: Le gustan blusas blancas, demora en comprar, cliente frecuente..."
+          style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:1rem;font-family:inherit;resize:none;box-sizing:border-box;outline:none;line-height:1.5;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+      </div>
+
+      <button onclick="saveContact()" style="width:100%;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:8px;">💾 Guardar contacto</button>
+      <div id="contactModalMsg" style="text-align:center;font-size:.82rem;min-height:18px;"></div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL CHIP PREVIEW ===== -->
+  <div id="chipPreviewModal" style="display:none;position:fixed;top:0;left:0;right:0;height:50vh;z-index:998;background:#fff;flex-direction:column;box-shadow:0 4px 30px rgba(0,0,0,.25);border-radius:0 0 20px 20px;">
+    <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <button onclick="closeChipPreview()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;">←</button>
+      <div id="chipPreviewTitle" style="font-weight:700;font-size:1.05rem;"></div>
+      <div style="width:40px;"></div>
+    </div>
+    <div style="flex:1;padding:12px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:.72rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Mensaje — editá si querés:</div>
+      <textarea id="chipPreviewText"
+        style="flex:1;width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:12px;font-size:1rem;font-family:inherit;resize:none;box-sizing:border-box;line-height:1.5;outline:none;min-height:80px;"
+        onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+    </div>
+    <div style="padding:10px 16px 14px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;flex-shrink:0;">
+    <div style="padding:10px 16px 14px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;flex-shrink:0;">
+      <button onclick="closeChipPreview()" style="flex:1;padding:14px;background:#f3f4f6;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;color:#374151;">✕ Cancelar</button>
+      <button onclick="sendChipPreview()" style="flex:2;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;">➤ Enviar al cliente</button>
+  </div>
+
+  <!-- ===== MODAL RESUMEN PEDIDO ===== -->
+  <div id="resumenModal" style="display:none;position:fixed;inset:0;z-index:1002;background:#f4f5f7;flex-direction:column;">
+    <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <button onclick="closeResumen()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;">←</button>
+      <div style="font-weight:700;font-size:1.05rem;">📋 Resumen del Pedido</div>
+      <div style="width:40px;"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px;">
+      <div style="font-size:.78rem;color:#6b7280;margin-bottom:12px;">Datos recopilados del chat — editá lo que necesites:</div>
+      <div style="display:flex;flex-direction:column;gap:10px;" id="resumenFields">
+        <!-- Fields rendered by JS -->
+      </div>
+      <div style="margin-top:16px;">
+        <div style="font-size:.78rem;color:#6b7280;margin-bottom:6px;font-weight:600;">VISTA PREVIA DEL MENSAJE:</div>
+        <textarea id="resumenPreview" rows="8"
+          style="width:100%;padding:14px;border:2px solid #e5e7eb;border-radius:14px;font-size:0.95rem;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6;"
+          onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+      </div>
+    </div>
+    <div style="padding:12px 16px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;flex-shrink:0;">
+      <button onclick="closeResumen()" style="flex:1;padding:14px;background:#f3f4f6;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;color:#374151;">✕ Cancelar</button>
+      <button onclick="sendResumen()" style="flex:2;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;">➤ Enviar al cliente</button>
+    </div>
+  </div>
+
+  <!-- ===== MODAL ESCRIBIR MENSAJE ===== -->
+  <div id="writeModalOverlay" onclick="closeWriteModal()" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.4);"></div>
+  <div id="writeModal" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:1001;background:#fff;flex-direction:column;box-shadow:0 -4px 30px rgba(0,0,0,.2);border-radius:20px 20px 0 0;max-height:70vh;">
+    <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-radius:20px 20px 0 0;">
+      <button onclick="closeWriteModal()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;">✕</button>
+      <div style="font-weight:700;font-size:1rem;">✍️ Escribir mensaje</div>
+      <button onclick="sendFromWriteModal()" style="background:#22c55e;color:#fff;border:none;border-radius:20px;padding:8px 20px;font-weight:700;font-size:0.9rem;cursor:pointer;">➤ Enviar</button>
+    </div>
+    <div style="padding:12px 16px;display:flex;flex-direction:column;">
+      <textarea id="writeModalText"
+        placeholder="Escribí tu mensaje aquí..."
+        rows="4"
+        style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:14px;font-size:1rem;font-family:inherit;resize:none;box-sizing:border-box;line-height:1.5;outline:none;"
+        onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
+    </div>
+    <div style="padding:8px 16px 20px;display:flex;gap:8px;background:#fff;flex-shrink:0;">
+      <button onclick="openEmojiPickerInModal()" style="padding:10px 14px;background:#f3f4f6;border:none;border-radius:10px;font-size:1.2rem;cursor:pointer;">😊</button>
+      <button onclick="openFileAttach()" style="padding:10px 14px;background:#f3f4f6;border:none;border-radius:10px;font-size:1.2rem;cursor:pointer;">📎</button>
+      <button onclick="clearWriteModal()" style="flex:1;padding:10px;background:#f3f4f6;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;color:#6b7280;">🗑️ Borrar</button>
+    </div>
+  </div>
+
+  <div id="editAtajosModal" style="display:none;position:fixed;inset:0;z-index:999;background:#f4f5f7;flex-direction:column;">
+    <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <button onclick="closeEditAtajos()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;">←</button>
+      <div style="font-weight:700;font-size:1.05rem;">⚡ Editar Atajos</div>
+      <button onclick="saveAtajosFromPanel()" style="background:#22c55e;color:#fff;border:none;border-radius:20px;padding:7px 18px;font-weight:700;font-size:0.85rem;cursor:pointer;">💾 Guardar</button>
+    </div>
+    <div id="editAtajosBody" style="flex:1;overflow-y:auto;padding:14px 16px;"></div>
+    <div style="padding:10px 16px;background:#fff;border-top:1px solid #eee;flex-shrink:0;">
+      <button onclick="addNewAtajo()" style="width:100%;padding:12px;background:#f0f0f0;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-size:0.9rem;">➕ Agregar nuevo atajo</button>
+    </div>
+    <div id="editAtajosMsg" style="text-align:center;font-size:.82rem;padding:6px;color:#166534;background:#dcfce7;display:none;"></div>
+  </div>
+
+  </body></html>
