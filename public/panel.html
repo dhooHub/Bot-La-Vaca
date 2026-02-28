@@ -1846,10 +1846,7 @@ if (!location.search.includes('v=')) {
       if (!text || !currentChat) return;
       socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
       document.getElementById('writeModalText').value = '';
-      // Update display
-      // Update display
-      var display = document.getElementById('chatInputDisplay');
-      if (display) display.innerHTML = humanModeChats.indexOf(currentChat) >= 0 ? 'Escribí tu respuesta...' : 'Mensaje manual...';
+      closeWriteModal();
     }
 
     function openEmojiPickerInModal() {
@@ -2166,12 +2163,13 @@ if (!location.search.includes('v=')) {
       <div style="font-weight:700;font-size:1rem;">✍️ Escribir mensaje</div>
       <button onclick="sendFromWriteModal()" style="background:#22c55e;color:#fff;border:none;border-radius:20px;padding:8px 20px;font-weight:700;font-size:0.9rem;cursor:pointer;">➤ Enviar</button>
     </div>
-    <div style="flex:1;padding:12px 16px;display:flex;flex-direction:column;">
+    <div style="flex:1;padding:12px 16px;display:flex;flex-direction:column;overflow:hidden;">
       <textarea id="writeModalText"
         placeholder="Escribí tu mensaje aquí..."
         style="flex:1;width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:14px;font-size:1rem;font-family:inherit;resize:none;box-sizing:border-box;line-height:1.5;outline:none;"
         onfocus="this.style.borderColor='#22c55e'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
     </div>
+    <div style="padding:8px 16px 12px;display:flex;gap:8px;background:#fff;border-top:1px solid #f0f0f0;flex-shrink:0;">
       <button onclick="openEmojiPickerInModal()" style="padding:10px 14px;background:#f3f4f6;border:none;border-radius:10px;font-size:1.2rem;cursor:pointer;">😊</button>
       <button onclick="openFileAttach()" style="padding:10px 14px;background:#f3f4f6;border:none;border-radius:10px;font-size:1.2rem;cursor:pointer;">📎</button>
       <button onclick="clearWriteModal()" style="flex:1;padding:10px;background:#f3f4f6;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;color:#6b7280;">🗑️ Borrar</button>
