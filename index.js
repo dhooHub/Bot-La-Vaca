@@ -1353,7 +1353,8 @@ io.on('connection', (socket) => {
         humanModeChats: Array.from(sessions.entries()).filter(([,s]) => s.humanMode).map(([id]) => id),
         activeSessions,
         quickReplies,
-        banner
+        banner,
+        botPaused
       });
     } else {
       socket.emit('auth_error', 'PIN incorrecto');
@@ -1373,47 +1374,28 @@ io.on('connection', (socket) => {
   socket.on('toggle_bot', () => {
     botPaused = !botPaused;
     saveDataToDisk();
-
-    if (botPaused) {
-      // PAUSA GLOBAL → poner todos los chats en modo humano
-      const affected = [];
-      for (const [wId, s] of sessions.entries()) {
-        if (!s.humanMode) {
-          s.humanMode = true;
-          s.humanModeAt = s.humanModeAt || Date.now();
-          s.humanModeLastActivity = Date.now();
-          // Marcar que fue activado por pausa global (no manual) para poder revertir
-          s._pausedByGlobal = true;
-          affected.push(wId);
-        }
-      }
-      // Notificar al panel que todos están en modo humano
-      io.emit('bot_status', { paused: true, allHuman: true, affectedChats: affected });
-      console.log(`⏸️ Bot pausado globalmente. ${affected.length} chats → modo humano`);
-    } else {
-      // REANUDA → solo quitar humanMode a los que fueron activados por pausa global
-      const released = [];
-      for (const [wId, s] of sessions.entries()) {
-        if (s.humanMode && s._pausedByGlobal && !s.humanModeManual) {
-          s.humanMode = false;
-          s.humanModeAt = null;
-          s.humanModeLastActivity = null;
-          s._pausedByGlobal = false;
-          released.push(wId);
-        } else if (s._pausedByGlobal) {
-          s._pausedByGlobal = false; // Limpiar flag aunque no se revierta
-        }
-      }
-      io.emit('bot_status', { paused: false, released });
-      console.log(`▶️ Bot reanudado. ${released.length} chats → bot activo`);
-    }
-    saveDataToDisk();
+    io.emit('bot_status', { paused: botPaused });
+    console.log(`${botPaused ? '⏸️' : '▶️'} Bot ${botPaused ? 'pausado' : 'reanudado'} globalmente`);
   });
   socket.on('action', async (data) => {
     const result = await executeAction(data.clientWaId, data.actionType, data.payload || {});
     socket.emit('action_result', result);
   });
   socket.on('get_contacts', () => { socket.emit('contacts_list', { contacts: Array.from(profiles.values()) }); });
+
+  // Guardar/actualizar contacto desde el panel
+  socket.on('save_contact', (data) => {
+    if (!data.waId) return;
+    const id = normalizePhone(data.waId);
+    const p = getProfile(id);
+    if (data.name !== undefined) p.name = data.name.trim();
+    if (data.phone !== undefined && data.phone.trim()) p.phone = normalizePhone(data.phone);
+    if (data.notes !== undefined) p.notes = data.notes.trim();
+    saveDataToDisk();
+    io.emit('contact_updated', { contact: p });
+    socket.emit('contact_saved', { success: true, contact: p });
+    console.log(`📇 Contacto guardado: ${p.name || id} (${id})`);
+  });
   socket.on('toggle_block', (data) => {
     if (!data.waId) return;
     const p = getProfile(data.waId); p.blocked = data.block;
