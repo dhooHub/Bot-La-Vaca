@@ -989,10 +989,13 @@ if (!location.search.includes('v=')) {
         <div class="chat-input-area">
           <button class="chat-input-icon" onclick="openEmojiPicker()">😊</button>
           <button class="chat-input-icon" onclick="openFileAttach()">📎</button>
-          <div class="chat-input" id="chatInputDisplay" onclick="openWriteModal()" style="cursor:pointer;color:#9ca3af;display:flex;align-items:center;">
-            ${isHuman ? 'Escribí tu respuesta...' : 'Mensaje manual...'}
-          </div>
-          <button class="chat-send-btn" onclick="sendMessage()">➤</button>
+          <textarea id="chatInputDisplay" 
+            placeholder="${isHuman ? 'Escribí tu respuesta...' : 'Mensaje manual...'}"
+            rows="1"
+            style="flex:1;padding:10px 14px;border:none;border-radius:22px;background:var(--bg);font-size:1rem;font-family:inherit;outline:none;resize:none;line-height:1.4;max-height:100px;overflow-y:auto;"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDirectMessage();}"></textarea>
+          <button class="chat-send-btn" onclick="sendDirectMessage()">➤</button>
         </div>
         <div class="quick-replies-bar" id="quickRepliesBar">
           ${renderQuickRepliesBar()}
@@ -1297,7 +1300,19 @@ if (!location.search.includes('v=')) {
       }, 1000);
     }
 
-    function sendMessage() { openWriteModal(); }
+    function sendMessage() { sendDirectMessage(); }
+
+    function sendDirectMessage() {
+      if (!currentChat) return;
+      var ta = document.getElementById('chatInputDisplay');
+      if (!ta) return;
+      var text = ta.value.trim();
+      if (!text) return;
+      socket.emit('action', { clientWaId: currentChat, actionType: 'MENSAJE', payload: { texto: text } });
+      ta.value = '';
+      ta.style.height = 'auto';
+      ta.focus();
+    }
 
 
 
@@ -1874,7 +1889,7 @@ if (!location.search.includes('v=')) {
     }
 
     function openEmojiPicker() {
-      const input = $('chatInput');
+      const input = $('chatInputDisplay');
       if (!input) return;
       // Lista rápida de emojis frecuentes en ventas
       const emojis = ['😊','👍','✅','🙏','❤️','🔥','💯','👏','😍','🎉','📦','🚚','💰','⏰','📱'];
