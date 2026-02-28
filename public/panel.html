@@ -309,10 +309,6 @@
 
   <script src="/socket.io/socket.io.js"></script>
 <script>
-// Anti-caché: recargar si es versión vieja
-if (!location.search.includes('v=')) {
-  location.replace(location.pathname + '?v=' + Date.now());
-}
     // ===== GLOBALS =====
     let socket, currentChat = null, shipClient = null;
     let allSales = [];
@@ -601,6 +597,10 @@ if (!location.search.includes('v=')) {
 
     // ===== SOCKET CONNECTION =====
     function connect(pin) {
+      if (typeof io === 'undefined') {
+        console.error('Socket.io no disponible - abrí el panel desde el servidor');
+        return;
+      }
       socket = io({
         reconnection: true,
         reconnectionAttempts: Infinity,
@@ -2094,6 +2094,40 @@ if (!location.search.includes('v=')) {
         closeChat();
       }
     });
+
+    // ===== EXPONER FUNCIONES AL SCOPE GLOBAL =====
+    // Necesario para que los onclick inline dentro de innerHTML funcionen
+    window.useQuickReply = useQuickReply;
+    window.openEditAtajos = openEditAtajos;
+    window.openResumen = openResumen;
+    window.openChipPreview = openChipPreview;
+    window.closeChipPreview = closeChipPreview;
+    window.sendChipPreview = sendChipPreview;
+    window.closeResumen = closeResumen;
+    window.sendResumen = sendResumen;
+    window.sendDirectMessage = sendDirectMessage;
+    window.openWriteModal = openWriteModal;
+    window.closeWriteModal = closeWriteModal;
+    window.sendFromWriteModal = sendFromWriteModal;
+    window.clearWriteModal = clearWriteModal;
+    window.openEmojiPicker = openEmojiPicker;
+    window.openEmojiPickerInModal = openEmojiPickerInModal;
+    window.openFileAttach = openFileAttach;
+    window.tomarChat = tomarChat;
+    window.liberarChat = liberarChat;
+    window.deleteChat = deleteChat;
+    window.closeChat = closeChat;
+    window.openChat = openChat;
+    window.openContactModal = openContactModal;
+    window.closeContactModal = closeContactModal;
+    window.filterContactSearch = filterContactSearch;
+    window.selectExistingContact = selectExistingContact;
+    window.saveContact = saveContact;
+    window.closeEditAtajos = closeEditAtajos;
+    window.saveAtajosFromPanel = saveAtajosFromPanel;
+    window.addNewAtajo = addNewAtajo;
+    window.deleteAtajoRow = deleteAtajoRow;
+    window.openNewChat = openNewChat;
   
     
   </script>
