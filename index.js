@@ -1315,7 +1315,15 @@ async function connectWhatsApp() {
     for (const msg of messages) {
       if (msg.key.remoteJid?.endsWith('@g.us')) continue;
       if (msg.key.fromMe) {
-        const waId = fromJid(msg.key.remoteJid || '');
+        const remoteJid = msg.key.remoteJid || '';
+        let waId;
+        if (remoteJid.endsWith('@lid')) {
+          // Resolver @lid al número real usando el mapa ya existente
+          const lidId = fromJid(remoteJid);
+          waId = lidPhoneMap.has(lidId) ? lidPhoneMap.get(lidId) : lidId;
+        } else {
+          waId = fromJid(remoteJid);
+        }
         if (!waId) continue;
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
         if (text) addToChatHistory(waId, 'out', text);
