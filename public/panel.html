@@ -1315,17 +1315,34 @@ if (!location.search.includes('v=')) {
 
 
 
+    // Textos por defecto para cada slug
+    const TEXTS_DEFAULT = {
+      si_hay:      '✅ Sí tenemos ese producto disponible. ¿Te interesa?',
+      no_hay:      '❌ Lo sentimos, ese producto no está disponible en este momento.',
+      horario:     '🕐 Nuestro horario es de lunes a sábado de 9am a 6pm.',
+      direccion:   '📍 Nos encontramos en San José, Costa Rica. Te enviamos la ubicación exacta.',
+      info_envios: '🚚 Hacemos envíos a todo el país. El costo varía según la provincia. ¿A dónde necesitás el envío?',
+      datos_envio: '📦 Para coordinar el envío necesitamos:\n- Nombre completo\n- Provincia, cantón y distrito\n- Dirección exacta\n- Número de teléfono',
+      sinpe:       '💳 Hacemos transferencias por SINPE Móvil. Te damos el número cuando confirmés tu pedido.',
+      gracias:     '🙏 ¡Muchas gracias por su preferencia! Con gusto lo atendemos.',
+      cambios:     '🔄 Hacemos cambios dentro de los 8 días después de recibido el producto, en perfecto estado y con la factura.',
+      garantia:    '🛡️ Todos nuestros productos tienen garantía. Si tiene algún defecto lo cambiamos sin problema.',
+    };
+
     function useQuickReply(slug) {
       if (slug === 'resumen') { openResumen(); return; }
-      const found = quickReplies.find(r => r.slug === slug || r.name === slug);
-      const label = (found && found.label) || slug;
-      const text = (found && found.text) || '';
-      // Si el atajo no tiene texto configurado, abrir el editor en lugar de enviar vacío
-      if (!text.trim()) {
+      
+      // Buscar texto: primero en quickReplies guardados, luego en defaults
+      const saved = quickReplies.find(r => r.slug === slug || r.name === slug);
+      const label = (saved && saved.label) || (SLUGS_DEFAULT.find(d => d.slug === slug) || {}).label || slug;
+      const text = (saved && saved.text && saved.text.trim()) 
+                   || TEXTS_DEFAULT[slug] 
+                   || '';
+      
+      if (!text) {
+        // Solo si no hay texto en ningún lado, abrir editor
         openEditAtajos();
-        setTimeout(() => {
-          toast('⚠️ Este atajo no tiene texto. Configuralo aquí.', 'warning');
-        }, 300);
+        setTimeout(() => toast('⚠️ Configurá el texto de este atajo', 'warning'), 300);
         return;
       }
       openChipPreview(label, text);
