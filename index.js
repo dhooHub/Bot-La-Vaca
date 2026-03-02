@@ -670,6 +670,18 @@ async function handleIncomingMessage(msg) {
 
   const hasImage = !!(msg.message?.imageMessage || msg.message?.extendedTextMessage?.jpegThumbnail);
 
+  // Detectar tipo de mensaje para historial
+  let msgLabel = '(mensaje)';
+  if (text)                               msgLabel = text;
+  else if (hasImage)                      msgLabel = '(foto)';
+  else if (msg.message?.audioMessage)     msgLabel = '🎤 (audio)';
+  else if (msg.message?.videoMessage)     msgLabel = '🎥 (video)';
+  else if (msg.message?.stickerMessage)   msgLabel = '🎭 (sticker)';
+  else if (msg.message?.documentMessage)  msgLabel = '📄 (documento)';
+  else if (msg.message?.locationMessage)  msgLabel = '📍 (ubicación)';
+  else if (msg.message?.contactMessage)   msgLabel = '👤 (contacto)';
+  else if (msg.message?.reactionMessage)  msgLabel = '👍 (reacción: ' + (msg.message.reactionMessage.text || '') + ')';
+
   // Descargar imagen si existe
   let imageBase64 = null;
   if (hasImage) {
@@ -680,7 +692,7 @@ async function handleIncomingMessage(msg) {
   }
 
   const displayPhone = realPhone ? formatPhone(realPhone) : waId;
-  addToChatHistory(waId, 'in', text || (hasImage ? '(foto)' : '(mensaje)'), imageBase64);
+  addToChatHistory(waId, 'in', msgLabel, imageBase64);
   console.log(`📥 ${displayPhone}: ${text || (hasImage ? '(foto)' : '(mensaje)')}`);
 
   // ── Chequeos iniciales ──
