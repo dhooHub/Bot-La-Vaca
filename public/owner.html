@@ -935,10 +935,17 @@ function openChatModal(i) {
   $('chatModalCount').textContent = (c.messages?.length||0) + ' mensajes · ' + fmtDt(c.last);
   const msgs = (c.messages||[]).map(m => {
     const isBot = m.from==='bot'||m.role==='bot'||m.type==='bot';
-    const txt   = linkify(esc(m.text||'')).replace(/\n/g,'<br>');
     const ts    = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'}) : '';
+    let content = '';
+    if (m.imageBase64) {
+      content += '<img src="data:image/jpeg;base64,' + m.imageBase64 + '" style="max-width:220px;border-radius:10px;display:block;margin-bottom:4px;cursor:pointer" onclick="this.style.maxWidth=(this.style.maxWidth===\'100%\'?\'220px\':\'100%\')">';
+    }
+    if (m.text && m.text !== '(foto)') {
+      content += linkify(esc(m.text||'')).replace(/\n/g,'<br>');
+    }
+    if (!content) content = '<em style="opacity:0.6">(multimedia)</em>';
     return `<div class="cm-row ${isBot?'bot':'user'}">
-      <div class="cm-bub">${txt}</div>
+      <div class="cm-bub">${content}</div>
       <div class="cm-ts">${ts}</div>
     </div>`;
   }).join('');
