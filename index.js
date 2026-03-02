@@ -1580,6 +1580,28 @@ app.post('/api/admin/purge', adminAuth, express.json(), (req, res) => {
   res.json({ success: true, sessionsDeleted: sd, salesDeleted: vd, historyDeleted: hd });
 });
 
+app.get('/api/admin/chats', adminAuth, (req, res) => {
+  const { from, to, limit = 150 } = req.query;
+  let msgs = fullHistory.slice();
+  if (from) msgs = msgs.filter(m => m.timestamp >= from);
+  if (to)   msgs = msgs.filter(m => m.timestamp <= to + 'T23:59:59Z');
+  const map = new Map();
+  for (const m of msgs) {
+    const id = m.waId || m.phone || '';
+    if (!map.has(id)) {
+      const p = getProfile(id);
+      map.set(id, { waId: id, phone: m.phone || id, name: p.name || m.name || '', messages: [], last: m.timestamp });
+    }
+    const conv = map.get(id);
+    conv.messages.push({ text: m.text, from: m.direction, timestamp: m.timestamp });
+    if (m.timestamp > conv.last) conv.last = m.timestamp;
+  }
+  let convos = Array.from(map.values());
+  convos.sort((a, b) => b.last.localeCompare(a.last));
+  convos = convos.slice(0, parseInt(limit));
+  res.json({ total: convos.length, conversations: convos });
+});
+
 app.get('/api/admin/alerts', adminAuth, (req, res) => {
   const { limit } = req.query;
   let filtered = [...alertsLog].reverse();
