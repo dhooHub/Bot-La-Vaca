@@ -1518,6 +1518,29 @@ function adminAuth(req, res, next) {
 
 // ============ ENDPOINTS ============
 app.get('/health',  (req, res) => res.send('OK'));
+app.post('/api/admin/disconnect', adminAuth, async (req, res) => {
+  console.log('🔌 Desconectando WhatsApp via REST...');
+  try {
+    if (sock) await sock.logout();
+  } catch(e) {
+    console.log('⚠️ Error logout:', e.message);
+    if (sock) try { sock.end(); } catch(e2) {}
+  }
+  sock = null;
+  connectionStatus = 'disconnected';
+  qrCode = null;
+  connectedPhone = '';
+  io.emit('connection_status', { status: 'disconnected', phone: '' });
+  res.json({ success: true });
+});
+
+app.post('/api/admin/connect', adminAuth, (req, res) => {
+  console.log('🔌 Conectando WhatsApp via REST...');
+  if (connectionStatus === 'connected') return res.json({ success: true, status: 'already_connected' });
+  connectWhatsApp();
+  res.json({ success: true, status: 'connecting' });
+});
+
 app.get('/status',  (req, res) => res.json({ connection: connectionStatus, phone: connectedPhone, botPaused, storeOpen: isStoreOpen(), metrics: account.metrics }));
 
 app.get('/api/admin/dashboard', adminAuth, (req, res) => {
