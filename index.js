@@ -1335,14 +1335,26 @@ async function connectWhatsApp() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('contacts.upsert', (contacts) => {
-    for (const c of contacts) {
-      if (c.id?.endsWith('@lid') && c.phoneNumber) {
-        const lid = fromJid(c.id), phone = c.phoneNumber.replace(/[^\d]/g, '');
-        if (phone.length >= 8) { lidPhoneMap.set(lid, phone); if (profiles.has(lid)) { const p = profiles.get(lid); p.phone = phone; if ((c.notify || c.name) && !p.name) p.name = c.notify || c.name; } }
+    let changed = false;
+    for (const ct of contacts) {
+      // Resolver @lid → número real
+      if (ct.id?.endsWith('@lid') && ct.phoneNumber) {
+        const lid = fromJid(ct.id), phone = ct.phoneNumber.replace(/[^\d]/g, '');
+        if (phone.length >= 8) {
+          lidPhoneMap.set(lid, phone);
+          const p = getProfile(lid);
+          p.phone = phone;
+          if ((ct.notify || ct.name) && !p.name) { p.name = ct.notify || ct.name; changed = true; }
+        }
       }
-      const cId = fromJid(c.id || '');
-      if (cId && profiles.has(cId) && (c.notify || c.name)) { const p = profiles.get(cId); if (!p.name) p.name = c.notify || c.name; }
+      // Contacto normal → crear perfil si no existe, actualizar nombre
+      const cId = fromJid(ct.id || '');
+      if (!cId || cId.endsWith('@g.us')) continue;
+      const nombre = ct.notify || ct.name || '';
+      const p = getProfile(cId); // crea perfil aunque nunca haya escrito
+      if (nombre && !p.name) { p.name = nombre; changed = true; }
     }
+    if (changed) saveDataToDisk();
     saveLidMap();
   });
 
