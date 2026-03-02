@@ -180,6 +180,14 @@ function resetSession(session) {
   session.multi_total = null;
   session.saludo_enviado = false;
 }
+function activateHumanMode(session, waId, manual = false) {
+  session.humanMode = true;
+  session.humanModeManual = manual;
+  session.humanModeAt = Date.now();
+  session.humanModeLastActivity = Date.now();
+  io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true, manual });
+}
+
 function getProfile(waId) {
   const id = normalizePhone(waId);
   if (!profiles.has(id)) {
@@ -701,11 +709,7 @@ async function handleIncomingMessage(msg) {
 
   // Activar humanMode si el bot está desactivado para este contacto
   if (profile.botDisabled && !session.humanMode) {
-    session.humanMode = true;
-    session.humanModeManual = true;
-    session.humanModeAt = session.humanModeAt || Date.now();
-    session.humanModeLastActivity = Date.now();
-    io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true, manual: true });
+    activateHumanMode(session, waId, true);
   }
 
   // Auto-release humanMode por inactividad (30 min sin mensajes del cliente)
@@ -771,8 +775,7 @@ async function handleIncomingMessage(msg) {
 
     await sendTextWithTyping(waId, `¡Hola! Pura vida 🙌 Dame un momento, ya te ayudo 😊`);
     session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-    session.humanMode = true;
-    io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+    activateHumanMode(session, waId);
 
     const quote = {
       waId, phone: profile.phone || waId, name: profile.name || '',
@@ -802,8 +805,7 @@ async function handleIncomingMessage(msg) {
     );
 
     session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-    session.humanMode = true;
-    io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+    activateHumanMode(session, waId);
 
     const multiQuote = {
       waId, phone: profile.phone || waId, name: profile.name || '',
@@ -834,8 +836,7 @@ async function handleIncomingMessage(msg) {
     } else {
       msgCliente += ` Dame un momento, ya te confirmo disponibilidad 😊`;
       session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-      session.humanMode = true;
-      io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+      activateHumanMode(session, waId);
 
       const quote = {
         waId, phone: profile.phone || waId, name: profile.name || '',
@@ -858,9 +859,8 @@ async function handleIncomingMessage(msg) {
     const tallaColor = text.trim();
     const webD = session.producto_pendiente;
     session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-    session.humanMode = true;
     session.producto_pendiente = null;
-    io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+    activateHumanMode(session, waId);
 
     const quote = {
       waId, phone: profile.phone || waId, name: profile.name || '',
@@ -896,10 +896,9 @@ async function handleIncomingMessage(msg) {
         // No hay en catálogo → a humano
         await sendTextWithTyping(waId, `Dame un momento, ya te ayudo 🙌`);
         session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-        session.humanMode = true;
         session.ultimaCategoriaBuscada = null;
         session.generosPosCat = null;
-        io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+        activateHumanMode(session, waId);
 
         const quote = {
           waId, phone: profile.phone || waId, name: profile.name || '',
@@ -1014,8 +1013,7 @@ async function handleIncomingMessage(msg) {
     // No hay en catálogo → a humano
     await sendTextWithTyping(waId, `${saludo}Dame un momento, ya te ayudo 🙌`);
     session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-    session.humanMode = true;
-    io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+    activateHumanMode(session, waId);
 
     const quoteProducto = {
       waId, phone: profile.phone || waId, name: profile.name || '',
@@ -1088,8 +1086,7 @@ async function handleIncomingMessage(msg) {
   console.log(`⚠️ Sin match: "${text}" → pasando a humano`);
   await sendTextWithTyping(waId, `¡Hola! Dame un momento, ya te ayudo 🙌`);
   session.state = 'ESPERANDO_CONFIRMACION_VENDEDOR';
-  session.humanMode = true;
-  io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true });
+  activateHumanMode(session, waId);
 
   const quoteFallback = {
     waId, phone: profile.phone || waId, name: profile.name || '',
