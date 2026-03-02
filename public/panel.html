@@ -646,7 +646,8 @@
         if (data.status === 'connected') {
           badge.className = 'conn-badge on';
           badge.textContent = '🟢 CONECTADO';
-          badge.onclick = null;
+          badge.onclick = disconnectWhatsApp;
+          badge.title = 'Click para desconectar';
           hideQR();
         } else if (data.status === 'qr' || data.status === 'connecting') {
           badge.className = 'conn-badge wait';
@@ -863,6 +864,17 @@
     }
 
     // ===== QR =====
+    async function disconnectWhatsApp() {
+      if (!confirm('¿Desconectar WhatsApp? El bot dejará de funcionar hasta que reconectes.')) return;
+      const badge = $('connBadge');
+      badge.className = 'conn-badge wait';
+      badge.textContent = '🟡 Desconectando...';
+      badge.onclick = null;
+      try {
+        const BOT_URL = window.location.origin;
+        await fetch(BOT_URL + '/api/admin/disconnect?pwd=' + (window._pin || localStorage.getItem('ticobot_pin') || ''), { method: 'POST' });
+      } catch(e) { console.error('Error desconectando:', e); }
+    }
     function showQR() {
       $('qrOverlay').classList.add('active');
       socket.emit('connect_whatsapp');
