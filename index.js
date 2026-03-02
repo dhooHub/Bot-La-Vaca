@@ -1593,7 +1593,14 @@ app.get('/api/admin/chats', adminAuth, (req, res) => {
       map.set(id, { waId: id, phone: m.phone || id, name: p.name || m.name || '', messages: [], last: m.timestamp });
     }
     const conv = map.get(id);
-    conv.messages.push({ text: m.text, from: m.direction, timestamp: m.timestamp });
+    // direction 'out' = bot envió, 'in' = cliente envió
+    const fromRole = m.direction === 'out' ? 'bot' : 'user';
+    conv.messages.push({
+      text: m.text,
+      from: fromRole,
+      timestamp: m.timestamp,
+      imageBase64: m.imageBase64 || null
+    });
     if (m.timestamp > conv.last) conv.last = m.timestamp;
   }
   let convos = Array.from(map.values());
