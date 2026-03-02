@@ -1488,8 +1488,11 @@ io.on('connection', (socket) => {
     if (!data.waId) return;
     const n = normalizePhone(data.waId);
     chatHistory = chatHistory.filter(m => m.waId !== n);
-    sessions.delete(n); pendingQuotes.delete(n);
-    saveDataToDisk(); io.emit('chats_deleted', { waId: n });
+    fullHistory  = fullHistory.filter(m => m.waId !== n);
+    sessions.delete(n);
+    pendingQuotes.delete(n);
+    saveDataToDisk();
+    io.emit('chats_deleted', { waId: n });
   });
   socket.on('get_quick_replies', () => { socket.emit('quick_replies', { quickReplies }); });
   socket.on('save_quick_replies', (data) => {
