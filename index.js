@@ -1494,6 +1494,20 @@ io.on('connection', (socket) => {
     saveDataToDisk();
     io.emit('chats_deleted', { waId: n });
   });
+  socket.on('dismiss_pending', (data) => {
+    if (!data.waId) return;
+    const n = normalizePhone(data.waId);
+    pendingQuotes.delete(n);
+    // Marcar sesión para que no se recree el pending
+    const s = sessions.get(n);
+    if (s) {
+      s.pendingDismissed = true;
+      s.state = 'NEW'; // Resetear estado para que bot retome si cliente escribe
+    }
+    saveDataToDisk();
+    console.log('✓ Pending dismisseado:', n);
+  });
+
   socket.on('get_quick_replies', () => { socket.emit('quick_replies', { quickReplies }); });
   socket.on('save_quick_replies', (data) => {
     if (!Array.isArray(data.quickReplies)) return;
