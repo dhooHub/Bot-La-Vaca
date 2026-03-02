@@ -251,6 +251,26 @@ function loadDataFromDisk() {
   } catch(e) { console.log('⚠️ Error cargando:', e.message); }
 }
 setInterval(saveDataToDisk, 5 * 60 * 1000);
+// ============ CRON: AUTO-RELEASE HUMAN MODE ============
+// Cada 5 min revisa sesiones en modo humano y libera las que llevan 30+ min sin actividad
+setInterval(() => {
+  const HUMAN_TIMEOUT = 30 * 60 * 1000;
+  const now = Date.now();
+  for (const [waId, session] of sessions.entries()) {
+    if (!session.humanMode) continue;
+    const lastAct = session.humanModeLastActivity || session.humanModeAt || 0;
+    if (now - lastAct >= HUMAN_TIMEOUT) {
+      console.log(`⏰ Auto-release humanMode (cron): ${waId}`);
+      session.humanMode = false;
+      session.humanModeManual = false;
+      session.humanModeAt = null;
+      session.humanModeLastActivity = null;
+      io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: false, autoRelease: true });
+    }
+  }
+}, 5 * 60 * 1000);
+
+
 
 // ============ LID MAP ============
 function loadLidMap() {
@@ -676,27 +696,31 @@ async function handleIncomingMessage(msg) {
     io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: true, manual: true });
   }
 
-  // Modo humano → notificar al panel y pushover siempre
-  if (session.humanMode) {
-    console.log(`👤 Modo humano: ${displayPhone}`);
-    io.emit('human_mode_message', {
-      waId: normalizePhone(waId), phone: displayPhone,
-      text: text || (hasImage ? '(foto)' : '(mensaje)'),
-      timestamp: new Date().toISOString()
-    });
-    sendPushoverAlert('HUMANO_MENSAJE', { waId, phone: profile.phone || waId, name: profile.name || '', mensaje: text || '(foto)' });
-    return;
-  }
-
-  // Auto-release humanMode por inactividad (30 min)
+  // Auto-release humanMode por inactividad (30 min sin mensajes del cliente)
   const HUMAN_TIMEOUT = 30 * 60 * 1000;
-  if (session.humanMode && !session.humanModeManual) {
+  if (session.humanMode) {
     const lastAct = session.humanModeLastActivity || session.humanModeAt || 0;
     if (Date.now() - lastAct >= HUMAN_TIMEOUT) {
+      console.log(`⏰ humanMode expirado (30 min) para ${displayPhone}, regresando a bot`);
       session.humanMode = false;
+      session.humanModeManual = false;
       session.humanModeAt = null;
       session.humanModeLastActivity = null;
       io.emit('human_mode_changed', { waId: normalizePhone(waId), humanMode: false, autoRelease: true });
+      sendPushoverAlert('BOT_RETOMA', { waId, phone: profile.phone || waId, name: profile.name || '', mensaje: 'Bot retomó tras 30 min inactividad' });
+      await sendTextWithTyping(waId, 'Dame un momento, enseguida te ayudo 😊');
+      await sleep(600);
+      // Continuar flujo normal del bot
+    } else {
+      session.humanModeLastActivity = Date.now();
+      console.log(`👤 Modo humano activo: ${displayPhone}`);
+      io.emit('human_mode_message', {
+        waId: normalizePhone(waId), phone: displayPhone,
+        text: text || (hasImage ? '(foto)' : '(mensaje)'),
+        timestamp: new Date().toISOString()
+      });
+      sendPushoverAlert('HUMANO_MENSAJE', { waId, phone: profile.phone || waId, name: profile.name || '', mensaje: text || '(foto)' });
+      return;
     }
   }
 
@@ -1378,6 +1402,24 @@ io.on('connection', (socket) => {
   socket.on('connect_whatsapp', () => {
     if (connectionStatus === 'connected') { socket.emit('connection_status', { status: 'connected', phone: connectedPhone }); return; }
     connectWhatsApp();
+  });
+  socket.on('disconnect_whatsapp', async () => {
+    if (!authenticated) return;
+    console.log('🔌 Desconectando WhatsApp por solicitud del panel...');
+    try {
+      if (sock) {
+        await sock.logout();
+      }
+    } catch(e) {
+      console.log('⚠️ Error al desconectar:', e.message);
+      if (sock) try { sock.end(); } catch(e2) {}
+    }
+    sock = null;
+    connectionStatus = 'disconnected';
+    qrCode = null;
+    connectedPhone = '';
+    io.emit('connection_status', { status: 'disconnected', phone: '' });
+    console.log('✅ WhatsApp desconectado');
   });
   socket.on('toggle_bot', () => {
     botPaused = !botPaused;
