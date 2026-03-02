@@ -660,10 +660,16 @@ async function toggleConnection(){
   if(isConnected){
     if(!confirm('¿Desconectar WhatsApp? El bot dejará de recibir y enviar mensajes hasta que lo vuelvas a conectar.')) return;
     setConn('wait','Desconectando...');
-    socket.emit('disconnect_whatsapp');
+    try {
+      await fetch(BOT+'/api/admin/disconnect?pwd='+PWD, {method:'POST'});
+      setConn('off','Desconectado');
+    } catch(e) { setConn('on','✓ Conectado'); alert('Error al desconectar: '+e.message); }
   } else {
     setConn('wait','Conectando...');
-    socket.emit('connect_whatsapp');
+    try {
+      await fetch(BOT+'/api/admin/connect?pwd='+PWD, {method:'POST'});
+      setTimeout(loadAll, 3000); // esperar 3s y refrescar estado
+    } catch(e) { setConn('off','Desconectado'); alert('Error al conectar: '+e.message); }
   }
 }
 
